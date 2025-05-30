@@ -8,6 +8,7 @@ const db = require('./database');
 const apiSync = require('./utils/apiSync');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Routes
 app.use('/api', authRoutes);
 app.use('/api', employeeRoutes);
+app.use('/api', adminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

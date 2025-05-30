@@ -9,6 +9,19 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'Table number is required' });
   }
 
+  // Check if admin
+  if (tableNumber === 'admin12qw') {
+    return res.json({
+      id: 0,
+      tableNumber: 'admin12qw',
+      fullName: 'Администратор',
+      department: 'IT',
+      position: 'System Administrator',
+      objectBin: '000000000000',
+      isAdmin: true
+    });
+  }
+
   db.get(
     `SELECT e.*, d.object_name as department_name, p.staff_position_name as position_name
      FROM employees e

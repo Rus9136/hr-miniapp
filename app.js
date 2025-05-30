@@ -1,5 +1,6 @@
 // API configuration
 const API_BASE_URL = 'http://localhost:3030/api';
+window.API_BASE_URL = API_BASE_URL; // Export for admin.js
 
 // State management
 let currentEmployee = null;
@@ -38,25 +39,43 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         
         currentEmployee = await response.json();
         console.log('Current employee:', currentEmployee);
-        document.getElementById('employeeName').textContent = currentEmployee.fullName;
         
-        // Switch to main screen
-        console.log('Switching screens...');
-        console.log('Login screen classes before:', loginScreen.className);
-        console.log('Main screen classes before:', mainScreen.className);
-        
-        loginScreen.classList.remove('active');
-        mainScreen.classList.add('active');
-        
-        console.log('Login screen classes after:', loginScreen.className);
-        console.log('Main screen classes after:', mainScreen.className);
-        
-        // Force display style as backup
-        loginScreen.style.display = 'none';
-        mainScreen.style.display = 'block';
-        
-        // Load calendar data
-        await loadCalendarData();
+        // Check if admin
+        if (tableNumber === 'admin12qw') {
+            // Switch to admin panel
+            loginScreen.classList.remove('active');
+            loginScreen.style.display = 'none';
+            
+            const adminScreen = document.getElementById('adminScreen');
+            adminScreen.classList.add('active');
+            adminScreen.style.display = 'block';
+            
+            // Load admin data
+            if (window.loadAdminPanel) {
+                window.loadAdminPanel();
+            }
+        } else {
+            // Regular employee
+            document.getElementById('employeeName').textContent = currentEmployee.fullName;
+            
+            // Switch to main screen
+            console.log('Switching screens...');
+            console.log('Login screen classes before:', loginScreen.className);
+            console.log('Main screen classes before:', mainScreen.className);
+            
+            loginScreen.classList.remove('active');
+            mainScreen.classList.add('active');
+            
+            console.log('Login screen classes after:', loginScreen.className);
+            console.log('Main screen classes after:', mainScreen.className);
+            
+            // Force display style as backup
+            loginScreen.style.display = 'none';
+            mainScreen.style.display = 'block';
+            
+            // Load calendar data
+            await loadCalendarData();
+        }
     } catch (error) {
         console.error('Login error:', error);
         alert('Ошибка подключения к серверу: ' + error.message);

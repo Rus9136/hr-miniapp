@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Учет рабочего времени</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="admin.css">
 </head>
 <body>
     <!-- Экран входа -->
@@ -113,6 +114,198 @@
         </div>
     </div>
 
+    <!-- Админ панель -->
+    <div id="adminScreen" class="screen">
+        <div class="admin-layout">
+            <!-- Сайдбар -->
+            <aside class="admin-sidebar">
+                <div class="sidebar-header">
+                    <h2>Админ панель</h2>
+                    <button id="adminLogoutBtn" class="btn-logout">Выйти</button>
+                </div>
+                
+                <!-- Блок 1: Справочники -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Справочники</h3>
+                    <ul class="sidebar-menu">
+                        <li><a href="#" data-section="employees" class="menu-item active">Сотрудники</a></li>
+                        <li><a href="#" data-section="departments" class="menu-item">Подразделения</a></li>
+                        <li><a href="#" data-section="positions" class="menu-item">Должности</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Блок 2: Данные по табелю -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Данные по табелю</h3>
+                    <ul class="sidebar-menu">
+                        <li><a href="#" data-section="timesheet" class="menu-item">Входы/выходы</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Блок 3: Загрузка данных -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Загрузка данных</h3>
+                    <ul class="sidebar-menu">
+                        <li><a href="#" data-section="upload" class="menu-item">Импорт данных</a></li>
+                    </ul>
+                </div>
+            </aside>
+            
+            <!-- Основной контент -->
+            <main class="admin-content">
+                <!-- Секция: Сотрудники -->
+                <section id="employees-section" class="content-section active">
+                    <div class="section-header">
+                        <h2>Сотрудники</h2>
+                        <div class="section-controls">
+                            <input type="text" id="employees-search" class="search-input" placeholder="Поиск по ФИО или табельному номеру...">
+                            <span class="total-count">Всего: <span id="employees-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Табельный номер</th>
+                                    <th>ФИО</th>
+                                    <th>Подразделение</th>
+                                    <th>Должность</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employees-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Подразделения -->
+                <section id="departments-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Подразделения</h2>
+                        <div class="section-controls">
+                            <input type="text" id="departments-search" class="search-input" placeholder="Поиск по названию...">
+                            <span class="total-count">Всего: <span id="departments-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Код</th>
+                                    <th>Название</th>
+                                    <th>Компания</th>
+                                    <th>БИН</th>
+                                </tr>
+                            </thead>
+                            <tbody id="departments-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Должности -->
+                <section id="positions-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Должности</h2>
+                        <div class="section-controls">
+                            <input type="text" id="positions-search" class="search-input" placeholder="Поиск по названию...">
+                            <span class="total-count">Всего: <span id="positions-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Код</th>
+                                    <th>Название</th>
+                                    <th>БИН</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positions-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Данные по табелю (заглушка) -->
+                <section id="timesheet-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Данные по табелю</h2>
+                    </div>
+                    <div class="placeholder-content">
+                        <p>Функционал в разработке...</p>
+                        <p>Здесь будут отображаться данные о входах и выходах сотрудников</p>
+                    </div>
+                </section>
+                
+                <!-- Секция: Загрузка данных -->
+                <section id="upload-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Загрузка данных</h2>
+                    </div>
+                    
+                    <!-- Синхронизация справочников -->
+                    <div class="upload-block">
+                        <h3>Синхронизация справочников</h3>
+                        <div class="sync-buttons">
+                            <button id="sync-employees" class="btn btn--primary">
+                                <span class="btn-text">Синхронизировать сотрудников</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                            <button id="sync-departments" class="btn btn--primary">
+                                <span class="btn-text">Синхронизировать подразделения</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                            <button id="sync-positions" class="btn btn--primary">
+                                <span class="btn-text">Синхронизировать должности</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                        </div>
+                        <div id="sync-status" class="status-message"></div>
+                    </div>
+                    
+                    <!-- Загрузка табельных данных -->
+                    <div class="upload-block">
+                        <h3>Загрузка табельных данных</h3>
+                        <form id="timesheet-upload-form" class="upload-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="upload-table-number">Табельный номер</label>
+                                    <input type="text" id="upload-table-number" class="form-control" placeholder="Например: АП00-00358">
+                                </div>
+                                <div class="form-group">
+                                    <label for="upload-org">Организация</label>
+                                    <select id="upload-org" class="form-control">
+                                        <option value="">Все организации</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="upload-date-from">Дата начала</label>
+                                    <input type="date" id="upload-date-from" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="upload-date-to">Дата конца</label>
+                                    <input type="date" id="upload-date-to" class="form-control" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn--primary">
+                                <span class="btn-text">Загрузить табель</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                        </form>
+                        <div id="timesheet-status" class="status-message"></div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
     <!-- Модальное окно деталей дня -->
     <div id="dayModal" class="modal">
         <div class="modal-content">
@@ -144,5 +337,6 @@
     </div>
 
     <script src="app.js"></script>
+    <script src="admin.js"></script>
 </body>
 </html>
