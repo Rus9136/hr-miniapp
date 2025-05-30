@@ -1,125 +1,167 @@
-# Состояние проекта HR Time Tracking Mini App
+# HR Time Tracking Mini App - Project State
 
-## Текущий статус: MVP готов + Админ-панель ✅
+## Current Status: Development Phase
+**Last Updated**: 2025-05-30 14:30
 
-### Что реализовано:
-1. **Backend API** 
-   - Express сервер на порту 3030
-   - SQLite база данных с 6 таблицами
-   - Синхронизация с внешним API при запуске (загружено 2923 сотрудника)
-   - REST API для фронтенда (login, timesheet, statistics)
-   - API эндпоинты для админ-панели (employees, departments, positions)
+## Completed Features ✅
 
-2. **Frontend - Основное приложение**
-   - Три экрана: вход, календарь, статистика
-   - Адаптивный дизайн с готовой версткой
-   - Календарь с цветовой индикацией статусов
-   - Модальное окно с деталями дня
-   - Навигация между месяцами
+### Core Functionality
+- [x] Employee login by personnel number
+- [x] Personal dashboard with monthly calendar
+- [x] Time tracking display (arrival/departure times)
+- [x] Monthly statistics calculation
+- [x] Status indicators (on-time, late, early departure)
+- [x] Database schema with all required tables
+- [x] RESTful API endpoints
+- [x] Responsive UI design
 
-3. **Frontend - Админ-панель** ✨ NEW
-   - Вход по специальному табельному номеру: admin12qw
-   - Боковая панель с тремя блоками:
-     - Справочники (Сотрудники, Подразделения, Должности)
-     - Данные по табелю (заглушка)
-     - Загрузка данных ✅ РЕАЛИЗОВАНО
-   - Таблицы с данными и поиском/фильтрацией
-   - Административный дизайн с темной боковой панелью
-   - Responsive адаптация
-   
-4. **Админ-панель - Загрузка данных** ✅ NEW
-   - Ручная синхронизация справочников с внешним API
-   - Загрузка табельных данных из Excel файлов
-   - Отображение статуса последней синхронизации
-   - Прогресс-бар для длительных операций
-   - API эндпоинты для синхронизации и загрузки
+### Admin Panel Features
+- [x] Admin authentication
+- [x] Employee list view with department/position info
+- [x] Navigation between admin sections
+- [x] Basic employee data display
+- [x] Department hierarchy display
 
-5. **Интеграция**
-   - Подключение к внешнему API компании
-   - Автоматический расчет часов и статусов
-   - Кеширование данных в локальной БД
+### Data Management
+- [x] SQLite database setup
+- [x] Test data generation
+- [x] Time event recording
+- [x] Statistics aggregation
+- [x] Proper employee number handling
 
-6. **Тестовые данные**
-   - Создан скрипт seedTestData.js
-   - Сгенерированы данные для сотрудника АП00-00358 за май 2025
+### Recent Fixes (2025-05-30)
+- [x] Fixed timesheet data loading from database
+- [x] Corrected employee_number filtering in queries
+- [x] Implemented proper time event aggregation
+- [x] Added comprehensive test data
+- [x] Fixed admin panel employee list display
 
-## Требуется доработать:
+## In Progress 🔄
 
-### Высокий приоритет:
-1. **Админ-панель - Данные по табелю**
-   - Реализовать функционал просмотра входов/выходов
-   - Фильтрация по датам и сотрудникам
-   - Экспорт данных
+### External API Integration
+- [ ] Waiting for proper API configuration/authentication
+- [ ] API endpoints return empty arrays currently
+- [ ] Fallback to local test data implemented
 
-2. **Обработка ошибок API**
-   - Внешний API часто не возвращает данные
-   - Нужен механизм повторных попыток
-   - Индикатор загрузки данных
+### Work Schedules
+- [ ] Schedule assignment to employees
+- [ ] Flexible working hours support
+- [ ] Holiday calendar integration
 
-3. **Рабочие графики**
-   - Сейчас захардкожен график 9:00-18:00
-   - Нужна таблица с индивидуальными графиками
-   - Учет праздничных дней
+## Pending Features 📋
 
-4. **Безопасность**
-   - Добавить полноценную аутентификацию для админов
-   - Ограничить доступ к данным других сотрудников
-   - Валидация входных данных
-   - Защита API эндпоинтов
+### Admin Capabilities
+- [ ] Add/edit employee information
+- [ ] Manage departments and positions
+- [ ] Generate reports
+- [ ] Export functionality
+- [ ] Bulk operations
 
-### Средний приоритет:
-5. **UI/UX улучшения**
-   - Индикаторы загрузки
-   - Анимации переходов
-   - Мобильная адаптация календаря
-   - Экспорт данных в Excel/PDF
+### Employee Features
+- [ ] Request time off
+- [ ] View detailed attendance history
+- [ ] Print monthly reports
+- [ ] Mobile app version
 
-6. **Функционал**
-   - Фильтрация по подразделениям
-   - Поиск сотрудников
-   - Групповые отчеты для руководителей
-   - Уведомления об опозданиях
+### System Features
+- [ ] Real-time synchronization with fingerprint system
+- [ ] Email notifications for anomalies
+- [ ] Automated report generation
+- [ ] Data backup functionality
 
-7. **Производительность**
-   - Пагинация для больших списков
-   - Кеширование на фронтенде
-   - Оптимизация запросов к БД
+## Known Issues 🐛
 
-### Низкий приоритет:
-8. **Telegram Mini App**
-   - Адаптация под Telegram WebApp API
-   - Авторизация через Telegram
-   - Push-уведомления
+### Critical
+- **External API Empty Responses**: The fingerprint system API at http://tco.aqnietgroup.com:5555/v1 returns empty arrays for all endpoints. May require authentication or proper configuration.
 
-9. **Дополнительно**
-   - Темная тема
-   - Многоязычность (казахский язык)
-   - Интеграция с системой отпусков
-   - API документация (Swagger)
+### Minor
+- **Time Zone Handling**: Times are stored in UTC but display conversion needs refinement
+- **Work Schedule Logic**: Currently using hardcoded 9:00-18:00 schedule
+- **Absence Detection**: Needs more sophisticated logic for weekends/holidays
 
-## Технический долг:
-- Убрать console.log из продакшн кода
-- Добавить линтер (ESLint)
-- Написать тесты
-- Настроить CI/CD
-- Добавить логирование
-- Оптимизировать размер бандла
+### UI/UX
+- Calendar navigation could be improved with month/year selectors
+- Loading states need better visual feedback
+- Mobile responsiveness needs testing
 
-## Баги:
-- При первом входе может потребоваться обновление страницы
-- Не обрабатываются сетевые ошибки при загрузке календаря
-- Нет валидации формата табельного номера
+## Technical Debt 💳
 
-## Команда для быстрого старта:
+1. **Error Handling**: Need comprehensive error handling across all API endpoints
+2. **Testing**: No automated tests implemented
+3. **Documentation**: API documentation needs to be generated
+4. **Security**: Implement proper authentication tokens
+5. **Performance**: Add caching for frequently accessed data
+6. **Logging**: Implement proper logging system
+
+## Database State
+
+### Tables Created:
+- `departments` - Organizational structure
+- `positions` - Job positions
+- `employees` - Employee records with test data
+- `time_events` - Raw check-in/out events
+- `time_records` - Processed attendance records
+- `work_schedules` - Work schedule templates (empty)
+- `users` - System users for authentication
+
+### Test Data Available:
+- 5 departments with hierarchical structure
+- 8 position types
+- 10 employees with full information
+- Time events for May 2025
+- Admin user (admin/admin123)
+
+## Next Steps 🚀
+
+### Immediate Priority:
+1. Investigate external API authentication requirements
+2. Implement work schedule functionality
+3. Add report generation features
+4. Improve absence tracking logic
+
+### Short Term (1-2 weeks):
+1. Complete admin panel CRUD operations
+2. Add data export functionality
+3. Implement email notifications
+4. Create API documentation
+
+### Long Term (1+ month):
+1. Mobile application development
+2. Advanced analytics and reporting
+3. Integration with HR systems
+4. Multi-language support
+
+## Environment Configuration
+
+### Development Setup:
 ```bash
-cd /Users/rus/Projects/hr-miniapp && npm start
+Backend: http://localhost:3030
+Frontend: http://localhost:5555
+Database: ./backend/hr_tracker.db
 ```
 
-## Доступы для тестирования:
-- **Обычный сотрудник**: АП00-00358 (есть тестовые данные за май 2025)
-- **Администратор**: admin12qw (доступ к админ-панели)
+### External Dependencies:
+- Node.js v14+
+- SQLite3
+- Python 3 (for frontend server)
+- Access to fingerprint system API (currently not functional)
 
-## Новые файлы в проекте:
-- `admin.css` - стили для админ-панели
-- `admin.js` - логика админ-панели
-- `backend/routes/admin.js` - API эндпоинты для админ-панели
+## Testing Credentials
+
+### Employee Login:
+- Personnel Number: АП00-00358
+- Name: Суиндикова Сайраш Агабековна
+- Has test data for May 2025
+
+### Admin Login:
+- Username: admin
+- Password: admin123
+
+## Deployment Considerations
+
+1. **Database**: Migrate from SQLite to PostgreSQL for production
+2. **Authentication**: Implement JWT tokens with refresh mechanism
+3. **API Security**: Add rate limiting and request validation
+4. **Monitoring**: Set up application monitoring and alerting
+5. **Backup**: Implement automated database backups
+6. **SSL**: Configure HTTPS for all endpoints

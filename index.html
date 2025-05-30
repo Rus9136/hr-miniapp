@@ -138,7 +138,8 @@
                 <div class="sidebar-section">
                     <h3 class="section-title">Данные по табелю</h3>
                     <ul class="sidebar-menu">
-                        <li><a href="#" data-section="timesheet" class="menu-item">Входы/выходы</a></li>
+                        <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
+                        <li><a href="#" data-section="time-records" class="menu-item">Табель</a></li>
                     </ul>
                 </div>
                 
@@ -231,14 +232,81 @@
                     </div>
                 </section>
                 
-                <!-- Секция: Данные по табелю (заглушка) -->
-                <section id="timesheet-section" class="content-section">
+                <!-- Секция: Входы/выходы (time_events) -->
+                <section id="time-events-section" class="content-section">
                     <div class="section-header">
-                        <h2>Данные по табелю</h2>
+                        <h2>Входы/выходы</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <input type="text" id="events-employee-filter" class="search-input" placeholder="Табельный номер или ФИО">
+                                <input type="date" id="events-date-from" class="form-control">
+                                <input type="date" id="events-date-to" class="form-control">
+                                <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
+                                <button id="events-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            </div>
+                            <span class="total-count">Всего: <span id="events-total">0</span></span>
+                        </div>
                     </div>
-                    <div class="placeholder-content">
-                        <p>Функционал в разработке...</p>
-                        <p>Здесь будут отображаться данные о входах и выходах сотрудников</p>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Дата/время</th>
+                                    <th>Сотрудник</th>
+                                    <th>Табельный номер</th>
+                                    <th>Тип события</th>
+                                    <th>Подразделение</th>
+                                </tr>
+                            </thead>
+                            <tbody id="time-events-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Табель (time_records) -->
+                <section id="time-records-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Табель рабочего времени</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <input type="text" id="records-employee-filter" class="search-input" placeholder="Табельный номер или ФИО">
+                                <input type="month" id="records-month-filter" class="form-control">
+                                <select id="records-status-filter" class="form-control">
+                                    <option value="">Все статусы</option>
+                                    <option value="on_time">Вовремя</option>
+                                    <option value="late">Опоздание</option>
+                                    <option value="early_leave">Ранний уход</option>
+                                    <option value="absent">Отсутствие</option>
+                                </select>
+                                <button id="records-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
+                                <button id="records-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                <button id="records-recalculate-btn" class="btn btn--success btn--sm">
+                                    <span class="btn-text">Пересчет рабочего времени</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                            </div>
+                            <span class="total-count">Всего: <span id="records-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Сотрудник</th>
+                                    <th>Табельный номер</th>
+                                    <th>Приход</th>
+                                    <th>Уход</th>
+                                    <th>Часов</th>
+                                    <th>Статус</th>
+                                </tr>
+                            </thead>
+                            <tbody id="time-records-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
                     </div>
                 </section>
                 

@@ -231,20 +231,319 @@ async function syncAllData() {
 }
 
 // Load time events from external API
+// Enhanced version with progress tracking
+async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objectBin }, progressCallback = () => {}) {
+  try {
+    let allEvents = [];
+    
+    // Если указан конкретный табельный номер
+    if (tableNumber && tableNumber.trim() !== '') {
+      const params = {
+        dateStart: dateFrom,
+        dateStop: dateTo,
+        tableNumber: tableNumber
+      };
+      
+      // ВАЖНО: добавляем objectBIN если он указан
+      if (objectBin) {
+        params.objectBIN = objectBin;
+      }
+      
+      progressCallback({
+        message: `Загрузка данных для сотрудника ${tableNumber}...`,
+        currentDepartment: tableNumber,
+        totalEmployees: 1,
+        processedEmployees: 0
+      });
+      
+      console.log('Loading events for employee:', params);
+      
+      const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+      const events = response.data || [];
+      allEvents = events;
+      
+      progressCallback({
+        message: `Загружено ${events.length} событий для сотрудника ${tableNumber}`,
+        eventsLoaded: events.length,
+        processedEmployees: 1
+      });
+      
+    } else {
+      // Если табельный номер не указан, загружаем для всех сотрудников организации
+      const targetBin = objectBin || DEFAULT_BIN;
+      
+      progressCallback({
+        message: `Получение списка сотрудников организации ${targetBin}...`,
+        currentDepartment: 'Инициализация'
+      });
+      
+      console.log('Loading events for organization:', targetBin);
+      
+      // Получаем список сотрудников организации с информацией о подразделениях
+      const employees = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT DISTINCT e.table_number, d.object_name as department_name
+           FROM employees e 
+           LEFT JOIN departments d ON e.object_code = d.object_code
+           WHERE e.object_bin = ? AND e.status = 1
+           ORDER BY d.object_name, e.table_number
+           LIMIT 100`, // Ограничиваем для тестирования
+          [targetBin],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
+      
+      console.log(`Found ${employees.length} employees in organization ${targetBin}`);
+      
+      progressCallback({
+        message: `Найдено ${employees.length} сотрудников. Начинаем загрузку событий...`,
+        totalEmployees: employees.length,
+        processedEmployees: 0,
+        eventsLoaded: 0
+      });
+      
+      // Группируем сотрудников по подразделениям для лучшего отображения прогресса
+      const employeesByDept = {};
+      employees.forEach(emp => {
+        const deptName = emp.department_name || 'Без подразделения';
+        if (!employeesByDept[deptName]) {
+          employeesByDept[deptName] = [];
+        }
+        employeesByDept[deptName].push(emp);
+      });
+      
+      let processedCount = 0;
+      let totalEvents = 0;
+      
+      // Загружаем события для каждого подразделения
+      for (const [deptName, deptEmployees] of Object.entries(employeesByDept)) {
+        progressCallback({
+          message: `Загружается подразделение "${deptName}" - ${deptEmployees.length} сотрудников`,
+          currentDepartment: deptName,
+          processedEmployees: processedCount,
+          eventsLoaded: totalEvents
+        });
+        
+        for (const emp of deptEmployees) {
+          try {
+            const params = {
+              dateStart: dateFrom,
+              dateStop: dateTo,
+              tableNumber: emp.table_number,
+              objectBIN: targetBin // Добавляем BIN организации
+            };
+            
+            console.log(`Loading events for ${emp.table_number} (${deptName})...`);
+            
+            const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+            const events = response.data || [];
+            
+            if (events.length > 0) {
+              console.log(`Found ${events.length} events for ${emp.table_number}`);
+              // Добавляем table_number к каждому событию, так как API его не возвращает
+              const eventsWithTableNumber = events.map(e => ({
+                ...e,
+                table_number: emp.table_number
+              }));
+              allEvents.push(...eventsWithTableNumber);
+              totalEvents += events.length;
+            }
+            
+            processedCount++;
+            
+            // Обновляем прогресс каждые несколько сотрудников
+            if (processedCount % 5 === 0 || processedCount === employees.length) {
+              progressCallback({
+                message: `Подразделение "${deptName}" - обработано ${processedCount - employeesByDept[deptName].length + deptEmployees.indexOf(emp) + 1}/${deptEmployees.length} сотрудников`,
+                currentDepartment: deptName,
+                processedEmployees: processedCount,
+                eventsLoaded: totalEvents
+              });
+            }
+            
+            // Задержка между запросами чтобы не перегружать API
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (err) {
+            console.error(`Error loading events for ${emp.table_number}:`, err.message);
+          }
+        }
+        
+        progressCallback({
+          message: `Подразделение "${deptName}" завершено - загружено ${totalEvents} событий`,
+          currentDepartment: deptName,
+          processedEmployees: processedCount,
+          eventsLoaded: totalEvents
+        });
+      }
+    }
+    
+    const events = allEvents;
+    
+    console.log(`Loaded ${events.length} events from API`);
+    
+    // Save events to database
+    const stmt = db.prepare(`
+      INSERT OR IGNORE INTO time_events 
+      (employee_id, object_code, event_datetime, event_type, employee_number) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    let savedCount = 0;
+    
+    // Process and save events with progress updates
+    progressCallback({
+      message: 'Сохранение событий в базу данных...',
+      eventsLoaded: events.length
+    });
+    
+    for (const event of events) {
+      try {
+        // Определяем employee_id на основе table_number если он есть
+        let employeeId = null;
+        const tableNumber = event.table_number || tableNumber;
+        
+        if (tableNumber) {
+          const employee = await new Promise((resolve, reject) => {
+            db.get(
+              'SELECT id FROM employees WHERE table_number = ?', 
+              [tableNumber], 
+              (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              }
+            );
+          });
+          employeeId = employee?.id;
+        }
+        
+        // Определяем тип события на основе времени если он не указан
+        let eventType = event.event_type;
+        if (!eventType || eventType === '' || eventType === null) {
+          const eventTime = new Date(event.event_datetime);
+          const hour = eventTime.getHours();
+          // Логика: если время до 14:00 - это вход (1), после 14:00 - выход (2)
+          eventType = hour < 14 ? '1' : '2';
+        }
+        
+        console.log(`Saving event: ${event.event_datetime}, type: ${eventType}, table: ${tableNumber}`);
+        
+        stmt.run(
+          employeeId,
+          event.object_code,
+          event.event_datetime,
+          eventType,
+          tableNumber
+        );
+        savedCount++;
+      } catch (err) {
+        console.error('Error saving event:', err);
+      }
+    }
+    
+    stmt.finalize();
+    
+    progressCallback({
+      message: `Сохранено ${savedCount} событий в базу данных`,
+      eventsLoaded: events.length,
+      eventsSaved: savedCount
+    });
+    
+    return events;
+  } catch (error) {
+    console.error('Error loading time events:', error.message);
+    progressCallback({
+      message: 'Ошибка загрузки: ' + error.message,
+      error: error.message
+    });
+    throw error;
+  }
+}
+
+// Original function for backward compatibility
 async function loadTimeEvents({ tableNumber, dateFrom, dateTo, objectBin }) {
   try {
-    const params = {
-      dateStart: dateFrom,
-      dateStop: dateTo
-    };
+    let allEvents = [];
     
-    if (tableNumber) params.tableNumber = tableNumber;
-    if (objectBin) params.objectBIN = objectBin;
+    // Если указан конкретный табельный номер
+    if (tableNumber && tableNumber.trim() !== '') {
+      const params = {
+        dateStart: dateFrom,
+        dateStop: dateTo,
+        tableNumber: tableNumber
+      };
+      
+      // ВАЖНО: добавляем objectBIN если он указан
+      if (objectBin) {
+        params.objectBIN = objectBin;
+      }
+      
+      console.log('Loading events for employee:', params);
+      
+      const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+      const events = response.data || [];
+      allEvents = events;
+      
+    } else {
+      // Если табельный номер не указан, загружаем для всех сотрудников организации
+      const targetBin = objectBin || DEFAULT_BIN;
+      console.log('Loading events for organization:', targetBin);
+      
+      // Получаем список сотрудников организации
+      const employees = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT DISTINCT e.table_number 
+           FROM employees e 
+           WHERE e.object_bin = ? AND e.status = 1
+           LIMIT 100`, // Ограничиваем для тестирования
+          [targetBin],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
+      
+      console.log(`Found ${employees.length} employees in organization ${targetBin}`);
+      
+      // Загружаем события для каждого сотрудника
+      for (const emp of employees) {
+        try {
+          const params = {
+            dateStart: dateFrom,
+            dateStop: dateTo,
+            tableNumber: emp.table_number,
+            objectBIN: targetBin // Добавляем BIN организации
+          };
+          
+          console.log(`Loading events for ${emp.table_number}...`);
+          
+          const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+          const events = response.data || [];
+          
+          if (events.length > 0) {
+            console.log(`Found ${events.length} events for ${emp.table_number}`);
+            // Добавляем table_number к каждому событию, так как API его не возвращает
+            const eventsWithTableNumber = events.map(e => ({
+              ...e,
+              table_number: emp.table_number
+            }));
+            allEvents.push(...eventsWithTableNumber);
+          }
+          
+          // Задержка между запросами чтобы не перегружать API
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+        } catch (err) {
+          console.error(`Error loading events for ${emp.table_number}:`, err.message);
+        }
+      }
+    }
     
-    console.log('Loading events with params:', params);
-    
-    const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
-    const events = response.data || [];
+    const events = allEvents;
     
     console.log(`Loaded ${events.length} events from API`);
     
@@ -257,25 +556,59 @@ async function loadTimeEvents({ tableNumber, dateFrom, dateTo, objectBin }) {
     
     let savedCount = 0;
     
-    for (const event of events) {
-      // Find employee by table number
+    // Если загружаем для конкретного сотрудника, находим его ID
+    let employeeId = null;
+    if (tableNumber) {
       const employee = await new Promise((resolve, reject) => {
         db.get(
           'SELECT id FROM employees WHERE table_number = ?', 
-          [event.table_number || tableNumber], 
+          [tableNumber], 
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
           }
         );
       });
-      
       if (employee) {
+        employeeId = employee.id;
+      }
+    }
+    
+    for (const event of events) {
+      // Если employeeId еще не определен, пытаемся найти по table_number из события
+      let currentEmployeeId = employeeId;
+      
+      if (!currentEmployeeId && event.table_number) {
+        const employee = await new Promise((resolve, reject) => {
+          db.get(
+            'SELECT id FROM employees WHERE table_number = ?', 
+            [event.table_number], 
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+        if (employee) {
+          currentEmployeeId = employee.id;
+        }
+      }
+      
+      if (currentEmployeeId) {
+        // Определяем тип события на основе времени если он не указан
+        let eventType = event.event_type;
+        if (!eventType || eventType === '' || eventType === null) {
+          const eventTime = new Date(event.event_datetime);
+          const hour = eventTime.getHours();
+          // Логика: если время до 14:00 - это вход (1), после 14:00 - выход (2)
+          eventType = hour < 14 ? '1' : '2';
+        }
+        
         stmt.run(
-          employee.id,
+          currentEmployeeId,
           event.object_code,
           event.event_datetime,
-          event.event
+          eventType
         );
         savedCount++;
       }
@@ -295,41 +628,58 @@ async function loadTimeEvents({ tableNumber, dateFrom, dateTo, objectBin }) {
 async function processTimeRecords(events) {
   let processedCount = 0;
   
+  if (!events || events.length === 0) {
+    console.log('No events to process');
+    return 0;
+  }
+  
+  // Get all employee IDs from time_events that were just saved
+  const employeeEvents = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT DISTINCT te.employee_id, te.event_datetime, te.event_type, e.table_number
+       FROM time_events te
+       JOIN employees e ON te.employee_id = e.id
+       WHERE te.id IN (
+         SELECT id FROM time_events 
+         ORDER BY id DESC 
+         LIMIT ?
+       )`,
+      [Math.max(100, (events.length || 0) * 2)], // Берем с запасом, минимум 100
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+  
+  console.log(`Found ${employeeEvents.length} events in database to process`);
+  
   // Group events by employee and date
   const eventsByEmployeeDate = {};
   
-  for (const event of events) {
-    const employee = await new Promise((resolve, reject) => {
-      db.get(
-        'SELECT id FROM employees WHERE table_number = ?', 
-        [event.table_number], 
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
-    
-    if (!employee) continue;
-    
+  for (const event of employeeEvents) {
     const date = event.event_datetime.split(' ')[0];
-    const key = `${employee.id}_${date}`;
+    const key = `${event.employee_id}_${date}`;
     
     if (!eventsByEmployeeDate[key]) {
       eventsByEmployeeDate[key] = {
-        employeeId: employee.id,
+        employeeId: event.employee_id,
         date: date,
         events: []
       };
     }
     
-    eventsByEmployeeDate[key].events.push(event);
+    eventsByEmployeeDate[key].events.push({
+      event_datetime: event.event_datetime,
+      event_type: event.event_type,
+      table_number: event.table_number
+    });
   }
   
   // Process each employee's day
   for (const data of Object.values(eventsByEmployeeDate)) {
-    const checkIn = data.events.find(e => e.event === '1');
-    const checkOutEvents = data.events.filter(e => e.event === '2');
+    const checkIn = data.events.find(e => e.event_type == 1 || e.event_type === '1');
+    const checkOutEvents = data.events.filter(e => e.event_type == 2 || e.event_type === '2');
     const checkOut = checkOutEvents.length > 0 ? checkOutEvents[checkOutEvents.length - 1] : null;
     
     if (checkIn) {
@@ -395,5 +745,6 @@ module.exports = {
   syncEmployees,
   syncEmployeeEvents,
   loadTimeEvents,
+  loadTimeEventsWithProgress,
   processTimeRecords
 };
