@@ -1,0 +1,26 @@
+{
+  "name": "hr-miniapp",
+  "version": "1.0.0",
+  "description": "Web application for employee time tracking",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node backend/server.js",
+    "client": "http-server . -p 5555 -c-1",
+    "dev": "concurrently \"nodemon backend/server.js\" \"http-server . -p 5555 -c-1\"",
+    "install-all": "npm install"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5",
+    "axios": "^1.6.2",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2",
+    "http-server": "^14.1.1"
+  }
+}
