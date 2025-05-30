@@ -7,13 +7,18 @@ let currentEmployee = null;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let calendarData = [];
-let statisticsData = null;
+let timeEventsData = null;
 
 // DOM elements
 const loginScreen = document.getElementById('loginScreen');
+const menuScreen = document.getElementById('menuScreen');
 const mainScreen = document.getElementById('mainScreen');
-const statsScreen = document.getElementById('statsScreen');
+const newsScreen = document.getElementById('newsScreen');
+const salaryScreen = document.getElementById('salaryScreen');
+const vacationScreen = document.getElementById('vacationScreen');
+const hrScreen = document.getElementById('hrScreen');
 const dayModal = document.getElementById('dayModal');
+const statsModal = document.getElementById('statsModal');
 
 // Login functionality
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -51,30 +56,19 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             adminScreen.style.display = 'block';
             
             // Load admin data
-            if (window.loadAdminPanel) {
-                window.loadAdminPanel();
+            if (window.initAdminPanel) {
+                window.initAdminPanel();
             }
         } else {
-            // Regular employee
+            // Regular employee - show menu screen
+            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
             document.getElementById('employeeName').textContent = currentEmployee.fullName;
             
-            // Switch to main screen
-            console.log('Switching screens...');
-            console.log('Login screen classes before:', loginScreen.className);
-            console.log('Main screen classes before:', mainScreen.className);
-            
+            // Switch to menu screen
             loginScreen.classList.remove('active');
-            mainScreen.classList.add('active');
-            
-            console.log('Login screen classes after:', loginScreen.className);
-            console.log('Main screen classes after:', mainScreen.className);
-            
-            // Force display style as backup
             loginScreen.style.display = 'none';
-            mainScreen.style.display = 'block';
-            
-            // Load calendar data
-            await loadCalendarData();
+            menuScreen.classList.add('active');
+            menuScreen.style.display = 'block';
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -82,14 +76,42 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     }
 });
 
-// Logout functionality
-document.getElementById('logoutBtn').addEventListener('click', () => {
+// Navigation functions
+function showScreen(screenId) {
+    // Hide all screens
+    const screens = document.querySelectorAll('.screen');
+    screens.forEach(screen => {
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+    });
+    
+    // Show requested screen
+    const targetScreen = document.getElementById(screenId + 'Screen');
+    if (targetScreen) {
+        targetScreen.classList.add('active');
+        targetScreen.style.display = 'block';
+    }
+}
+
+// Navigation will be initialized after DOM loads
+
+// Logout functionality for all logout buttons
+function logout() {
     currentEmployee = null;
     document.getElementById('employeeId').value = '';
-    mainScreen.classList.remove('active');
-    statsScreen.classList.remove('active');
-    loginScreen.classList.add('active');
-});
+    showScreen('login');
+}
+
+// Add logout listeners
+const menuLogoutBtn = document.getElementById('menuLogoutBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+
+if (menuLogoutBtn) {
+    menuLogoutBtn.addEventListener('click', logout);
+}
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+}
 
 // Calendar navigation
 document.getElementById('prevMonth').addEventListener('click', () => {
@@ -112,15 +134,22 @@ document.getElementById('nextMonth').addEventListener('click', () => {
 
 // Statistics button
 document.getElementById('statsBtn').addEventListener('click', async () => {
-    mainScreen.classList.remove('active');
-    statsScreen.classList.add('active');
-    await loadStatistics();
+    await loadTimeEvents();
+    statsModal.classList.add('active');
 });
 
-// Back to calendar button
-document.getElementById('backToCalendar').addEventListener('click', () => {
-    statsScreen.classList.remove('active');
-    mainScreen.classList.add('active');
+// Close stats modal
+if (document.getElementById('closeStatsModal')) {
+    document.getElementById('closeStatsModal').addEventListener('click', () => {
+        statsModal.classList.remove('active');
+    });
+}
+
+// Click outside stats modal to close
+statsModal.addEventListener('click', (e) => {
+    if (e.target === statsModal) {
+        statsModal.classList.remove('active');
+    }
 });
 
 // Modal close button
@@ -220,7 +249,8 @@ function getStatusText(status) {
         'late': 'Опоздание',
         'absent': 'Отсутствие',
         'weekend': 'Выходной',
-        'early_leave': 'Ранний уход'
+        'early_leave': 'Ранний уход',
+        'no_exit': 'Нет выхода'
     };
     return statusMap[status] || '';
 }
@@ -257,81 +287,141 @@ function showDayDetails(day) {
     dayModal.classList.add('active');
 }
 
-// Load statistics
-async function loadStatistics() {
+// Load time events for the last 2 months
+async function loadTimeEvents() {
     if (!currentEmployee) return;
     
     try {
         const response = await fetch(
-            `${API_BASE_URL}/employee/${currentEmployee.id}/statistics/${currentYear}/${currentMonth + 1}`
+            `${API_BASE_URL}/employee/${currentEmployee.id}/time-events`
         );
         
         if (!response.ok) {
-            throw new Error('Failed to load statistics');
+            throw new Error('Failed to load time events');
         }
         
-        statisticsData = await response.json();
+        timeEventsData = await response.json();
         
         // Update period display
-        const monthNames = [
-            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-        ];
-        document.getElementById('statsPeriod').textContent = 
-            `${monthNames[currentMonth]} ${currentYear}`;
+        const formatDate = (dateStr) => {
+            const date = new Date(dateStr);
+            const monthNames = [
+                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+            ];
+            return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        };
         
-        // Update statistics
-        const stats = statisticsData.statistics;
-        document.getElementById('totalHours').textContent = stats.totalHours;
-        document.getElementById('workDays').textContent = stats.workDays;
-        document.getElementById('lateCount').textContent = stats.lateCount;
-        document.getElementById('earlyLeaves').textContent = stats.earlyLeaves;
+        document.getElementById('eventsPeriod').textContent = 
+            `${formatDate(timeEventsData.period.dateFrom)} - ${formatDate(timeEventsData.period.dateTo)}`;
         
-        // Render detailed list
-        renderDetailedStatistics();
+        // Render events table
+        renderTimeEvents();
     } catch (error) {
-        console.error('Error loading statistics:', error);
-        alert('Ошибка загрузки статистики');
+        console.error('Error loading time events:', error);
+        alert('Ошибка загрузки данных входов/выходов');
     }
 }
 
-// Render detailed statistics
-function renderDetailedStatistics() {
-    const detailedList = document.getElementById('detailedList');
-    detailedList.innerHTML = '';
+// Render time events table
+function renderTimeEvents() {
+    const eventsTableBody = document.getElementById('eventsTableBody');
+    eventsTableBody.innerHTML = '';
     
-    if (!statisticsData || !statisticsData.detailedRecords) return;
+    if (!timeEventsData || !timeEventsData.events || timeEventsData.events.length === 0) {
+        eventsTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Нет данных за выбранный период</td></tr>';
+        return;
+    }
     
-    statisticsData.detailedRecords.forEach(record => {
-        const date = new Date(record.date);
+    timeEventsData.events.forEach(event => {
+        const date = new Date(event.date);
         const monthNames = [
             'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
             'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
         ];
+        const weekDays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
         
         const formatTime = (datetime) => {
             if (!datetime) return '--:--';
-            const time = datetime.split(' ')[1];
+            const time = datetime.split(' ')[1] || datetime.split('T')[1];
             return time ? time.substring(0, 5) : '--:--';
         };
         
-        const item = document.createElement('div');
-        item.className = 'detail-item';
-        item.innerHTML = `
-            <div class="detail-date">${date.getDate()} ${monthNames[date.getMonth()]}</div>
-            <div class="detail-info">
-                <div class="detail-time">
-                    ${formatTime(record.checkIn)} - ${formatTime(record.checkOut)}
-                </div>
-                <div class="detail-time">
-                    ${record.hoursWorked ? record.hoursWorked.toFixed(1) + ' ч' : '--'}
-                </div>
-                <div class="detail-status status--${record.status}">
-                    ${getStatusText(record.status)}
-                </div>
-            </div>
+        const row = document.createElement('tr');
+        if (date.getDay() === 0 || date.getDay() === 6) {
+            row.style.backgroundColor = '#f8f9fa';
+        }
+        
+        row.innerHTML = `
+            <td>${date.getDate()} ${monthNames[date.getMonth()]} (${weekDays[date.getDay()]})</td>
+            <td>${formatTime(event.firstEntry)}</td>
+            <td>${formatTime(event.lastExit)}</td>
+            <td>${event.hoursWorked ? event.hoursWorked + ' ч' : '--'}</td>
+            <td>
+                <span class="detail-status status--${event.status}">
+                    ${getStatusText(event.status)}
+                </span>
+            </td>
         `;
         
-        detailedList.appendChild(item);
+        eventsTableBody.appendChild(row);
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Set up all modals to close on outside click
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+    });
+    
+    // Re-initialize navigation after DOM is loaded
+    initializeNavigation();
+});
+
+// Initialize navigation handlers
+function initializeNavigation() {
+    // Menu navigation
+    document.querySelectorAll('.menu-card').forEach(card => {
+        card.addEventListener('click', async () => {
+            const section = card.dataset.section;
+            
+            switch(section) {
+                case 'news':
+                    showScreen('news');
+                    break;
+                case 'attendance':
+                    showScreen('main');
+                    await loadCalendarData();
+                    break;
+                case 'salary':
+                    showScreen('salary');
+                    break;
+                case 'vacation':
+                    showScreen('vacation');
+                    break;
+                case 'hr':
+                    showScreen('hr');
+                    break;
+            }
+        });
+    });
+
+    // Back navigation
+    document.querySelectorAll('.btn-back, .breadcrumb-item').forEach(btn => {
+        if (btn.dataset.back) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = btn.dataset.back;
+                if (target === 'menu') {
+                    showScreen('menu');
+                }
+            });
+        }
     });
 }

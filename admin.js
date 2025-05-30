@@ -17,7 +17,7 @@ let positionsData = [];
 let menuClickHandler = null;
 let logoutHandler = null;
 
-// Initialize admin panel
+// Initialize admin panel (for internal use)
 function initAdminPanel() {
     // Get DOM elements after admin screen is shown
     menuItems = document.querySelectorAll('.menu-item');
@@ -26,39 +26,8 @@ function initAdminPanel() {
     console.log('Menu items found:', menuItems.length);
     console.log('Content sections found:', contentSections.length);
     
-    // Create click handler
-    menuClickHandler = (e) => {
-        e.preventDefault();
-        const section = e.currentTarget.dataset.section;
-        console.log('Menu clicked, switching to section:', section);
-        switchSection(section);
-    };
-    
-    // Menu navigation - remove old listeners and add new ones
-    menuItems.forEach(item => {
-        // Remove any existing listeners
-        item.removeEventListener('click', menuClickHandler);
-        // Add new listener
-        item.addEventListener('click', menuClickHandler);
-    });
-
-    // Logout button
-    const logoutBtn = document.getElementById('adminLogoutBtn');
-    if (logoutBtn) {
-        logoutHandler = () => {
-            adminScreen.classList.remove('active');
-            adminScreen.style.display = 'none';
-            document.getElementById('loginScreen').classList.add('active');
-            document.getElementById('loginScreen').style.display = 'block';
-            document.getElementById('employeeId').value = '';
-        };
-        
-        logoutBtn.removeEventListener('click', logoutHandler);
-        logoutBtn.addEventListener('click', logoutHandler);
-    }
-
-    // Search inputs
-    initSearchInputs();
+    // Setup event handlers
+    setupAdminEventHandlers();
 }
 
 // Switch between sections
@@ -99,19 +68,36 @@ function switchSection(sectionName) {
     }
 }
 
+// Track if search inputs have been initialized
+let searchInputsInitialized = false;
+
 // Initialize search inputs
 function initSearchInputs() {
-    document.getElementById('employees-search').addEventListener('input', (e) => {
-        filterEmployees(e.target.value);
-    });
+    if (searchInputsInitialized) return;
+    
+    const employeesSearch = document.getElementById('employees-search');
+    const departmentsSearch = document.getElementById('departments-search');
+    const positionsSearch = document.getElementById('positions-search');
+    
+    if (employeesSearch) {
+        employeesSearch.addEventListener('input', (e) => {
+            filterEmployees(e.target.value);
+        });
+    }
 
-    document.getElementById('departments-search').addEventListener('input', (e) => {
-        filterDepartments(e.target.value);
-    });
+    if (departmentsSearch) {
+        departmentsSearch.addEventListener('input', (e) => {
+            filterDepartments(e.target.value);
+        });
+    }
 
-    document.getElementById('positions-search').addEventListener('input', (e) => {
-        filterPositions(e.target.value);
-    });
+    if (positionsSearch) {
+        positionsSearch.addEventListener('input', (e) => {
+            filterPositions(e.target.value);
+        });
+    }
+    
+    searchInputsInitialized = true;
 }
 
 // Load employees
@@ -271,7 +257,7 @@ function filterPositions(searchTerm) {
 // }
 
 // Export for use in app.js
-window.loadAdminPanel = function() {
+window.initAdminPanel = function() {
     console.log('loadAdminPanel called');
     // Перезагружаем DOM элементы
     menuItems = document.querySelectorAll('.menu-item');
@@ -279,15 +265,57 @@ window.loadAdminPanel = function() {
     console.log('Found menu items:', menuItems.length);
     console.log('Found content sections:', contentSections.length);
     
-    // Переинициализируем обработчики
-    initAdminPanel();
+    // Инициализируем обработчики событий
+    setupAdminEventHandlers();
     
     // Загружаем первую секцию
     switchSection('employees');
 };
 
+// Setup admin event handlers (extracted from initAdminPanel to avoid recursion)
+function setupAdminEventHandlers() {
+    // Create click handler
+    menuClickHandler = (e) => {
+        e.preventDefault();
+        const section = e.currentTarget.dataset.section;
+        console.log('Menu clicked, switching to section:', section);
+        switchSection(section);
+    };
+    
+    // Menu navigation - remove old listeners and add new ones
+    menuItems.forEach(item => {
+        // Remove any existing listeners
+        item.removeEventListener('click', menuClickHandler);
+        // Add new listener
+        item.addEventListener('click', menuClickHandler);
+    });
+
+    // Logout button
+    const logoutBtn = document.getElementById('adminLogoutBtn');
+    if (logoutBtn) {
+        logoutHandler = () => {
+            adminScreen.classList.remove('active');
+            adminScreen.style.display = 'none';
+            document.getElementById('loginScreen').classList.add('active');
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('employeeId').value = '';
+        };
+        
+        logoutBtn.removeEventListener('click', logoutHandler);
+        logoutBtn.addEventListener('click', logoutHandler);
+    }
+
+    // Search inputs
+    initSearchInputs();
+}
+
+// Track if upload section has been initialized
+let uploadSectionInitialized = false;
+
 // Initialize upload section
 function initUploadSection() {
+    if (uploadSectionInitialized) return;
+    
     // Load organizations for dropdown
     loadOrganizations();
     
@@ -306,6 +334,8 @@ function initUploadSection() {
     
     document.getElementById('upload-date-from').value = firstDay.toISOString().split('T')[0];
     document.getElementById('upload-date-to').value = lastDay.toISOString().split('T')[0];
+    
+    uploadSectionInitialized = true;
 }
 
 // Load organizations for dropdown
@@ -509,12 +539,19 @@ function updateProgressDisplay(progress, statusDiv) {
     `;
 }
 
-// Time events data
-let timeEventsData = [];
-let timeRecordsData = [];
+// Admin time events data
+let adminTimeEventsData = [];
+let adminTimeRecordsData = [];
+let timeEventsInitialized = false;
 
 // Initialize time events section
 function initTimeEventsSection() {
+    if (timeEventsInitialized) {
+        // Just load data if already initialized
+        loadTimeEvents();
+        return;
+    }
+    
     // Set default dates to show available data (May 2025)
     const dateFrom = new Date('2025-05-01');
     const dateTo = new Date('2025-05-31');
@@ -525,6 +562,8 @@ function initTimeEventsSection() {
     // Event listeners
     document.getElementById('events-filter-btn').addEventListener('click', loadTimeEvents);
     document.getElementById('events-clear-btn').addEventListener('click', clearEventsFilter);
+    
+    timeEventsInitialized = true;
     
     // Load initial data
     loadTimeEvents();
@@ -548,9 +587,9 @@ async function loadTimeEvents() {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-events?${params}`);
         if (!response.ok) throw new Error('Failed to load time events');
         
-        timeEventsData = await response.json();
-        displayTimeEvents(timeEventsData);
-        document.getElementById('events-total').textContent = timeEventsData.length;
+        adminTimeEventsData = await response.json();
+        displayTimeEvents(adminTimeEventsData);
+        document.getElementById('events-total').textContent = adminTimeEventsData.length;
     } catch (error) {
         console.error('Error loading time events:', error);
         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
@@ -596,8 +635,17 @@ function clearEventsFilter() {
     loadTimeEvents();
 }
 
+// Track if time records section has been initialized
+let timeRecordsInitialized = false;
+
 // Initialize time records section
 function initTimeRecordsSection() {
+    if (timeRecordsInitialized) {
+        // Just load data if already initialized
+        loadTimeRecords();
+        return;
+    }
+    
     // Set default month to May 2025 (where we have data)
     document.getElementById('records-month-filter').value = '2025-05';
     
@@ -605,6 +653,8 @@ function initTimeRecordsSection() {
     document.getElementById('records-filter-btn').addEventListener('click', loadTimeRecords);
     document.getElementById('records-clear-btn').addEventListener('click', clearRecordsFilter);
     document.getElementById('records-recalculate-btn').addEventListener('click', recalculateTimeRecords);
+    
+    timeRecordsInitialized = true;
     
     // Load initial data
     loadTimeRecords();
@@ -628,9 +678,9 @@ async function loadTimeRecords() {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-records?${params}`);
         if (!response.ok) throw new Error('Failed to load time records');
         
-        timeRecordsData = await response.json();
-        displayTimeRecords(timeRecordsData);
-        document.getElementById('records-total').textContent = timeRecordsData.length;
+        adminTimeRecordsData = await response.json();
+        displayTimeRecords(adminTimeRecordsData);
+        document.getElementById('records-total').textContent = adminTimeRecordsData.length;
     } catch (error) {
         console.error('Error loading time records:', error);
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
@@ -763,5 +813,8 @@ async function recalculateTimeRecords() {
     }
 }
 
-// Export switchSection for debugging
+// Export functions for debugging
 window.switchSection = switchSection;
+window.loadEmployees = loadEmployees;
+window.loadDepartments = loadDepartments;
+window.loadPositions = loadPositions;
