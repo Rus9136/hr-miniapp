@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест цветов статусов</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Тест отображения статусов календаря</h1>
+        
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; max-width: 700px; margin: 20px 0;">
+            
+            <!-- Статус: Вовремя -->
+            <div class="calendar-day calendar-day--on-time">
+                <div class="day-number">5</div>
+                <div class="day-status">Вовремя</div>
+            </div>
+            
+            <!-- Статус: Опоздание -->
+            <div class="calendar-day calendar-day--late">
+                <div class="day-number">6</div>
+                <div class="day-status">Опоздание</div>
+            </div>
+            
+            <!-- Статус: Отсутствие -->
+            <div class="calendar-day calendar-day--absent">
+                <div class="day-number">7</div>
+                <div class="day-status">Отсутствие</div>
+            </div>
+            
+            <!-- Статус: Ранний уход -->
+            <div class="calendar-day calendar-day--early-leave">
+                <div class="day-number">8</div>
+                <div class="day-status">Ранний уход</div>
+            </div>
+            
+            <!-- Статус: Нет выхода -->
+            <div class="calendar-day calendar-day--no-exit">
+                <div class="day-number">9</div>
+                <div class="day-status">Нет выхода</div>
+            </div>
+            
+            <!-- Статус: Выходной -->
+            <div class="calendar-day calendar-day--weekend">
+                <div class="day-number">10</div>
+                <div class="day-status">Выходной</div>
+            </div>
+            
+            <!-- Пустая ячейка для красоты -->
+            <div></div>
+            
+        </div>
+        
+        <h2>Проверочная информация:</h2>
+        <ul>
+            <li><strong>Вовремя</strong> - должен быть ЗЕЛЕНЫМ (#28a745)</li>
+            <li><strong>Опоздание</strong> - должен быть желтоватым (#fff3cd)</li>
+            <li><strong>Отсутствие</strong> - должен быть красноватым (#f8d7da)</li>
+            <li><strong>Ранний уход</strong> - должен быть оранжевым (#ffe0b2)</li>
+            <li><strong>Нет выхода</strong> - должен быть розовым (#ffcdd2)</li>
+            <li><strong>Выходной</strong> - должен быть серым (#e9ecef)</li>
+        </ul>
+        
+        <h2>Инструкция:</h2>
+        <ol>
+            <li>Проверьте, что "Вовремя" отображается зеленым цветом</li>
+            <li>Если все статусы отображаются корректно, протестируйте с сотрудником 911027402151</li>
+            <li>Войдите на <a href="http://localhost:5555" target="_blank">http://localhost:5555</a></li>
+            <li>Введите табельный номер: <strong>911027402151</strong></li>
+            <li>Перейдите в раздел "Проверить посещаемость"</li>
+            <li>Убедитесь, что дни со статусом "Вовремя" отображаются зеленым</li>
+        </ol>
+        
+        <div style="margin-top: 30px; padding: 15px; background: #d1ecf1; border-radius: 5px;">
+            <h3>Технические детали исправления:</h3>
+            <p>Проблема была в том, что сервер возвращает статус "on_time" (с подчеркиванием), 
+            а CSS класс определен как "calendar-day--on-time" (с дефисом). 
+            Добавлено преобразование подчеркиваний в дефисы при создании CSS классов.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -231,7 +231,9 @@ function renderCalendar() {
     // Add days
     calendarData.forEach(day => {
         const dayElement = document.createElement('div');
-        dayElement.className = `calendar-day calendar-day--${day.status}`;
+        // Convert underscores to dashes for CSS class names
+        const cssStatus = day.status.replace(/_/g, '-');
+        dayElement.className = `calendar-day calendar-day--${cssStatus}`;
         dayElement.innerHTML = `
             <div class="day-number">${day.day}</div>
             <div class="day-status">${getStatusText(day.status)}</div>
