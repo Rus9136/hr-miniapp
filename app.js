@@ -152,6 +152,13 @@ statsModal.addEventListener('click', (e) => {
     }
 });
 
+// ESC key to close stats modal
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && statsModal.classList.contains('active')) {
+        statsModal.classList.remove('active');
+    }
+});
+
 // Modal close button
 document.getElementById('closeModal').addEventListener('click', () => {
     dayModal.classList.remove('active');
@@ -354,13 +361,16 @@ function renderTimeEvents() {
             row.style.backgroundColor = '#f8f9fa';
         }
         
+        // Convert underscores to dashes for CSS class
+        const cssStatus = event.status ? event.status.replace(/_/g, '-') : '';
+        
         row.innerHTML = `
             <td>${date.getDate()} ${monthNames[date.getMonth()]} (${weekDays[date.getDay()]})</td>
             <td>${formatTime(event.firstEntry)}</td>
             <td>${formatTime(event.lastExit)}</td>
             <td>${event.hoursWorked ? event.hoursWorked + ' ч' : '--'}</td>
             <td>
-                <span class="detail-status status--${event.status}">
+                <span class="detail-status status--${cssStatus}">
                     ${getStatusText(event.status)}
                 </span>
             </td>
