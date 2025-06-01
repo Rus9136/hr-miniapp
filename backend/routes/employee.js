@@ -186,4 +186,114 @@ router.get('/employee/:id/statistics/:year/:month', async (req, res) => {
   }
 });
 
+// Get employee time events for the last 2 months
+router.get('/employee/:id/time-events', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // Get employee info
+    const employee = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM employees WHERE id = ?', [id], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    // Calculate date range (last 2 months)
+    const today = new Date();
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(today.getMonth() - 2);
+    
+    const dateFrom = twoMonthsAgo.toISOString().split('T')[0];
+    const dateTo = today.toISOString().split('T')[0];
+
+    // Get time events grouped by date
+    const timeEvents = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT 
+          date(event_datetime) as date,
+          MIN(CASE WHEN event_type = '1' THEN event_datetime END) as first_entry,
+          MAX(CASE WHEN event_type = '2' THEN event_datetime END) as last_exit,
+          GROUP_CONCAT(
+            CASE 
+              WHEN event_type = '1' THEN 'Вход: ' || time(event_datetime)
+              WHEN event_type = '2' THEN 'Выход: ' || time(event_datetime)
+              ELSE 'Событие: ' || time(event_datetime)
+            END, ' | '
+          ) as all_events,
+          COUNT(*) as event_count
+        FROM time_events
+        WHERE employee_number = ?
+        AND date(event_datetime) BETWEEN ? AND ?
+        GROUP BY date(event_datetime)
+        ORDER BY date DESC`,
+        [employee.table_number, dateFrom, dateTo],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+
+    // Calculate hours worked for each day
+    const processedEvents = timeEvents.map(day => {
+      let hoursWorked = null;
+      let status = 'absent';
+      
+      if (day.first_entry && day.last_exit) {
+        const inTime = new Date(day.first_entry);
+        const outTime = new Date(day.last_exit);
+        hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
+        
+        // Determine status
+        const inHour = inTime.getHours();
+        const inMinute = inTime.getMinutes();
+        const outHour = outTime.getHours();
+        
+        if (inHour < 9 || (inHour === 9 && inMinute === 0)) {
+          status = 'on_time';
+        } else {
+          status = 'late';
+        }
+        
+        if (outHour < 18) {
+          status = 'early_leave';
+        }
+      } else if (day.first_entry) {
+        status = 'no_exit';
+      }
+      
+      return {
+        date: day.date,
+        firstEntry: day.first_entry,
+        lastExit: day.last_exit,
+        hoursWorked: hoursWorked ? Math.round(hoursWorked * 10) / 10 : null,
+        status,
+        allEvents: day.all_events,
+        eventCount: day.event_count
+      };
+    });
+
+    res.json({
+      employee: {
+        id: employee.id,
+        fullName: employee.full_name,
+        tableNumber: employee.table_number
+      },
+      period: {
+        dateFrom,
+        dateTo
+      },
+      events: processedEvents
+    });
+  } catch (error) {
+    console.error('Error getting time events:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

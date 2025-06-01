@@ -26,15 +26,106 @@
         </div>
     </div>
 
-    <!-- Главный экран с календарем -->
+    <!-- Главное меню -->
+    <div id="menuScreen" class="screen">
+        <header class="app-header">
+            <button id="menuLogoutBtn" class="btn-header">Выйти</button>
+            <h2 id="menuEmployeeName">Имя сотрудника</h2>
+            <div></div>
+        </header>
+
+        <div class="container">
+            <nav class="breadcrumb">
+                <span class="breadcrumb-item active">Главное меню</span>
+            </nav>
+            
+            <div class="menu-grid">
+                <div class="menu-card" data-section="news">
+                    <div class="menu-card-icon">📰</div>
+                    <h3 class="menu-card-title">Новости компании</h3>
+                    <p class="menu-card-description">Корпоративные новости и объявления</p>
+                </div>
+                
+                <div class="menu-card" data-section="attendance">
+                    <div class="menu-card-icon">📅</div>
+                    <h3 class="menu-card-title">Проверить посещаемость</h3>
+                    <p class="menu-card-description">Календарь входа/выхода с детальной статистикой</p>
+                </div>
+                
+                <div class="menu-card" data-section="salary">
+                    <div class="menu-card-icon">💰</div>
+                    <h3 class="menu-card-title">Расчет предварительной заработной платы</h3>
+                    <p class="menu-card-description">Калькулятор ЗП с учетом отработанных часов</p>
+                </div>
+                
+                <div class="menu-card" data-section="vacation">
+                    <div class="menu-card-icon">🏖️</div>
+                    <h3 class="menu-card-title">Просмотр графика отпусков</h3>
+                    <p class="menu-card-description">График работы и запланированные отпуска</p>
+                </div>
+                
+                <div class="menu-card" data-section="hr">
+                    <div class="menu-card-icon">👥</div>
+                    <h3 class="menu-card-title">HR</h3>
+                    <p class="menu-card-description">Обращение к HR отделу</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Экран новостей -->
+    <div id="newsScreen" class="screen">
+        <header class="app-header">
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
+            <h2>Новости компании</h2>
+            <div></div>
+        </header>
+        
+        <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Новости компании</span>
+            </nav>
+            
+            <div class="news-container">
+                <div class="news-item">
+                    <div class="news-date">30 мая 2025</div>
+                    <h3 class="news-title">Обновление системы учета рабочего времени</h3>
+                    <p class="news-content">Запущена новая версия системы учета рабочего времени с улучшенным интерфейсом...</p>
+                    <button class="btn btn--outline btn--sm" disabled>Читать далее</button>
+                </div>
+                
+                <div class="news-item">
+                    <div class="news-date">25 мая 2025</div>
+                    <h3 class="news-title">График работы в праздничные дни</h3>
+                    <p class="news-content">Информируем о графике работы компании в предстоящие праздничные дни...</p>
+                    <button class="btn btn--outline btn--sm" disabled>Читать далее</button>
+                </div>
+                
+                <div class="placeholder-message">
+                    <p>🚧 Раздел находится в разработке</p>
+                    <p>Здесь будут отображаться последние новости и объявления компании</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Экран посещаемости (текущий календарь) -->
     <div id="mainScreen" class="screen">
         <header class="app-header">
-            <button id="logoutBtn" class="btn-header">Выйти</button>
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
             <h2 id="employeeName">Имя сотрудника</h2>
             <button id="statsBtn" class="btn-header">Статистика</button>
         </header>
 
         <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Проверить посещаемость</span>
+            </nav>
+            
             <div class="month-navigation">
                 <button id="prevMonth" class="btn btn--outline btn--sm">&larr;</button>
                 <h3 id="currentMonth">Май 2025</h3>
@@ -62,53 +153,166 @@
         </div>
     </div>
 
-    <!-- Экран статистики -->
-    <div id="statsScreen" class="screen">
+    <!-- Экран калькулятора зарплаты -->
+    <div id="salaryScreen" class="screen">
         <header class="app-header">
-            <button id="backToCalendar" class="btn-header">&larr; Назад</button>
-            <h2>Статистика</h2>
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
+            <h2>Расчет заработной платы</h2>
             <div></div>
         </header>
-
+        
         <div class="container">
-            <div class="stats-period">
-                <h3 id="statsPeriod">Май 2025</h3>
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Расчет заработной платы</span>
+            </nav>
+            
+            <div class="salary-calculator">
+                <div class="card">
+                    <div class="card__body">
+                        <h3>Предварительный расчет за май 2025</h3>
+                        
+                        <div class="salary-item">
+                            <span>Оклад:</span>
+                            <span class="salary-value">150 000 ₸</span>
+                        </div>
+                        <div class="salary-item">
+                            <span>Отработано часов:</span>
+                            <span class="salary-value">168 из 176</span>
+                        </div>
+                        <div class="salary-item">
+                            <span>Начислено:</span>
+                            <span class="salary-value">143 181 ₸</span>
+                        </div>
+                        <div class="salary-item">
+                            <span>Удержания:</span>
+                            <span class="salary-value text-error">-14 318 ₸</span>
+                        </div>
+                        <div class="salary-item salary-total">
+                            <span>К выплате:</span>
+                            <span class="salary-value">128 863 ₸</span>
+                        </div>
+                        
+                        <button class="btn btn--primary btn--full-width" disabled>Детальный расчет</button>
+                    </div>
+                </div>
+                
+                <div class="placeholder-message">
+                    <p>🚧 Раздел находится в разработке</p>
+                    <p>Здесь будет доступен детальный расчет заработной платы</p>
+                </div>
             </div>
+        </div>
+    </div>
 
-            <div class="stats-cards">
+    <!-- Экран графика отпусков -->
+    <div id="vacationScreen" class="screen">
+        <header class="app-header">
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
+            <h2>График отпусков</h2>
+            <div></div>
+        </header>
+        
+        <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">График отпусков</span>
+            </nav>
+            
+            <div class="vacation-schedule">
                 <div class="card">
                     <div class="card__body">
-                        <div class="stat-number" id="totalHours">0</div>
-                        <div class="stat-label">Всего часов</div>
+                        <h3>Ваш график отпусков на 2025 год</h3>
+                        
+                        <div class="vacation-item">
+                            <div class="vacation-period">15 июля - 28 июля 2025</div>
+                            <div class="vacation-type">Основной отпуск (14 дней)</div>
+                            <div class="vacation-status status--approved">Утвержден</div>
+                        </div>
+                        
+                        <div class="vacation-item">
+                            <div class="vacation-period">23 декабря - 31 декабря 2025</div>
+                            <div class="vacation-type">Дополнительный отпуск (9 дней)</div>
+                            <div class="vacation-status status--pending">На согласовании</div>
+                        </div>
+                        
+                        <button class="btn btn--primary btn--full-width" disabled>Запросить изменение</button>
                     </div>
                 </div>
-
-                <div class="card">
-                    <div class="card__body">
-                        <div class="stat-number" id="workDays">0</div>
-                        <div class="stat-label">Рабочих дней</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card__body">
-                        <div class="stat-number text-warning" id="lateCount">0</div>
-                        <div class="stat-label">Опозданий</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card__body">
-                        <div class="stat-number text-error" id="earlyLeaves">0</div>
-                        <div class="stat-label">Ранних уходов</div>
-                    </div>
+                
+                <div class="placeholder-message">
+                    <p>🚧 Раздел находится в разработке</p>
+                    <p>Здесь будет отображаться полный график отпусков и возможность подачи заявок</p>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="detailed-stats">
-                <h4>Подробная статистика</h4>
-                <div id="detailedList" class="detailed-list">
-                    <!-- Детальная статистика будет заполнена через JavaScript -->
+    <!-- Экран HR -->
+    <div id="hrScreen" class="screen">
+        <header class="app-header">
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
+            <h2>HR отдел</h2>
+            <div></div>
+        </header>
+        
+        <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">HR отдел</span>
+            </nav>
+            
+            <div class="hr-services">
+                <div class="hr-card">
+                    <h3>📋 Запросить отпуск</h3>
+                    <p>Подать заявление на отпуск</p>
+                    <button class="btn btn--primary btn--full-width">Создать заявку</button>
+                </div>
+                
+                <div class="hr-card">
+                    <h3>📄 Запросить расчетный лист</h3>
+                    <p>Получить детализацию заработной платы</p>
+                    <button class="btn btn--primary btn--full-width">Запросить</button>
+                </div>
+                
+                <div class="placeholder-message">
+                    <p>🚧 Раздел находится в разработке</p>
+                    <p>Функционал подачи заявок будет доступен в ближайшее время</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно статистики -->
+    <div id="statsModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3>Входы и выходы</h3>
+                <button id="closeStatsModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <p id="eventsPeriod" style="color: #666; font-size: 14px;">Период</p>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Первый вход</th>
+                                <th>Последний выход</th>
+                                <th>Отработано</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsTableBody">
+                            <!-- Данные будут заполнены через JavaScript -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

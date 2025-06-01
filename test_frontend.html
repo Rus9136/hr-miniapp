@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend</title>
+    <script>
+        async function testLogin() {
+            try {
+                const response = await fetch('http://localhost:3030/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableNumber: 'АП00-00358' })
+                });
+                
+                if (response.ok) {
+                    const employee = await response.json();
+                    console.log('Login successful:', employee);
+                    return employee;
+                } else {
+                    console.error('Login failed:', response.status);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                return null;
+            }
+        }
+        
+        async function testNavigation() {
+            console.log('Testing navigation elements...');
+            
+            // Test if menu cards exist
+            const menuCards = document.querySelectorAll('.menu-card');
+            console.log('Menu cards found:', menuCards.length);
+            
+            // Test if screens exist
+            const screens = ['menuScreen', 'mainScreen', 'newsScreen', 'salaryScreen', 'vacationScreen', 'hrScreen'];
+            screens.forEach(screenId => {
+                const screen = document.getElementById(screenId);
+                console.log(`${screenId}:`, screen ? 'exists' : 'missing');
+            });
+        }
+        
+        window.onload = async () => {
+            console.log('Starting frontend tests...');
+            await testLogin();
+            testNavigation();
+        };
+    </script>
+</head>
+<body>
+    <h1>Frontend Test Page</h1>
+    <p>Check browser console for test results</p>
+    <button onclick="window.open('http://localhost:5555', '_blank')">Open Main App</button>
+</body>
+</html>

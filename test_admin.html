@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Админ Панели</title>
+</head>
+<body>
+    <div style="padding: 20px;">
+        <h1>Тест Админ Панели</h1>
+        <p>Откройте консоль браузера (F12) и выполните следующие команды для тестирования:</p>
+        
+        <h2>Тестовые команды:</h2>
+        <pre id="commands">
+// 1. Проверить доступность API
+fetch('http://localhost:3030/api/admin/employees').then(r => r.json()).then(console.log);
+
+// 2. Открыть главную страницу админ-панели
+window.open('http://localhost:5555', '_blank');
+
+// 3. После входа в админ-панель с табельным номером "admin12qw", 
+//    проверить инициализацию в консоли:
+document.querySelectorAll('.menu-item').length
+document.querySelectorAll('.content-section').length
+
+// 4. Проверить переключение секций:
+window.switchSection('departments')
+window.switchSection('positions')
+
+// 5. Проверить функции загрузки данных:
+window.loadEmployees()
+window.loadDepartments() 
+window.loadPositions()
+        </pre>
+        
+        <h2>Проверочный лист:</h2>
+        <ul>
+            <li>✓ Backend API работает на порту 3030</li>
+            <li>✓ Frontend работает на порту 5555</li> 
+            <li>⚠️ Админ-панель требует тестирования</li>
+        </ul>
+        
+        <h2>Инструкция по тестированию:</h2>
+        <ol>
+            <li>Откройте <a href="http://localhost:5555" target="_blank">http://localhost:5555</a></li>
+            <li>Введите табельный номер: <strong>admin12qw</strong></li>
+            <li>Нажмите "Войти"</li>
+            <li>Проверьте работу кнопок в левой панели</li>
+            <li>Проверьте загрузку данных в таблицах</li>
+        </ol>
+    </div>
+    
+    <script>
+        // Export functions for testing
+        window.testAPI = async function() {
+            try {
+                const response = await fetch('http://localhost:3030/api/admin/employees');
+                const data = await response.json();
+                console.log('API Test Success:', data.length, 'employees loaded');
+                return data;
+            } catch (error) {
+                console.error('API Test Failed:', error);
+                return null;
+            }
+        };
+        
+        console.log('Тестовая страница загружена. Выполните window.testAPI() для проверки API.');
+    </script>
+</body>
+</html>
