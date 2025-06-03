@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const db = require('../database_pg');
 const apiSync = require('../utils/apiSync');
 
 // Get all employees with department and position info
@@ -16,12 +16,11 @@ router.get('/admin/employees', (req, res) => {
         ORDER BY e.full_name
     `;
 
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            console.error('Error fetching employees:', err);
-            return res.status(500).json({ error: 'Internal server error' });
-        }
+    db.queryRows(query).then(rows => {
         res.json(rows);
+    }).catch(err => {
+        console.error('Error fetching employees:', err);
+        res.status(500).json({ error: 'Internal server error' });
     });
 });
 

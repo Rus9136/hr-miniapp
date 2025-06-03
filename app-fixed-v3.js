@@ -1,4 +1,5 @@
-console.log('🚀 HR Mini App FINAL v4.0 - CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App FIXED v3.0 - FALLBACK VERSION LOADED!');
+console.log('📅 Loaded at:', new Date().toISOString());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -435,7 +436,7 @@ dayModal.addEventListener('click', (e) => {
 
 // Load calendar data
 async function loadCalendarData() {
-    console.log('🔧 Loading calendar data...');
+    console.log('🔧 FALLBACK VERSION - Loading calendar data...');
     console.log('🔧 Current employee:', currentEmployee);
     
     if (!currentEmployee) {
@@ -454,7 +455,7 @@ async function loadCalendarData() {
     try {
         // Try new API first (by table number)
         let url = `${API_BASE_URL}/employee/by-number/${tableNumber}/timesheet/${currentYear}/${currentMonth + 1}`;
-        console.log('🚀 FINAL v4.0 - NEW API:', url);
+        console.log('🔧 Trying new API:', url);
         
         let response = await fetch(url + '?v=' + Date.now());
         

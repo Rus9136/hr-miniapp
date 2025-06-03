@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Telegram Integration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .result {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Тест интеграции Telegram Mini App</h1>
+    
+    <div class="test-section">
+        <h3>1. Проверка состояния серверов</h3>
+        <button onclick="testServers()">Проверить серверы</button>
+        <div id="server-status"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Тест API авторизации</h3>
+        <button onclick="testLogin()">Тест входа (АП00-00358)</button>
+        <button onclick="testAdminLogin()">Тест админ входа</button>
+        <div id="login-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Telegram WebApp SDK</h3>
+        <button onclick="testTelegramSDK()">Проверить SDK</button>
+        <div id="telegram-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Навигация и UI</h3>
+        <button onclick="testNavigation()">Тест навигации</button>
+        <a href="/" target="_blank">
+            <button>Открыть основное приложение</button>
+        </a>
+        <div id="navigation-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Результаты тестов</h3>
+        <div id="test-summary"></div>
+    </div>
+
+    <script>
+        let testResults = {
+            servers: false,
+            login: false,
+            telegram: false,
+            navigation: false
+        };
+
+        async function testServers() {
+            const statusDiv = document.getElementById('server-status');
+            statusDiv.innerHTML = '<div class="info">Проверяем серверы...</div>';
+            
+            let results = [];
+            
+            try {
+                // Test backend
+                const backendResponse = await fetch('http://localhost:3030/api/health');
+                if (backendResponse.ok) {
+                    results.push('<div class="success">✅ Backend (порт 3030): OK</div>');
+                    testResults.servers = true;
+                } else {
+                    results.push('<div class="error">❌ Backend: Ошибка ' + backendResponse.status + '</div>');
+                }
+            } catch (error) {
+                results.push('<div class="error">❌ Backend: ' + error.message + '</div>');
+            }
+            
+            try {
+                // Test frontend
+                const frontendResponse = await fetch('http://localhost:5555/index.html');
+                if (frontendResponse.ok) {
+                    results.push('<div class="success">✅ Frontend (порт 5555): OK</div>');
+                } else {
+                    results.push('<div class="error">❌ Frontend: Ошибка ' + frontendResponse.status + '</div>');
+                }
+            } catch (error) {
+                results.push('<div class="error">❌ Frontend: ' + error.message + '</div>');
+            }
+            
+            statusDiv.innerHTML = results.join('');
+            updateSummary();
+        }
+
+        async function testLogin() {
+            const resultDiv = document.getElementById('login-result');
+            resultDiv.innerHTML = '<div class="info">Тестируем авторизацию...</div>';
+            
+            try {
+                // Test regular login
+                const response = await fetch('http://localhost:3030/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableNumber: 'АП00-00358' })
+                });
+                
+                if (response.ok) {
+                    const employee = await response.json();
+                    
+                    // Test Telegram linking
+                    const linkResponse = await fetch('http://localhost:3030/api/telegram/link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ initData: 'dev_mode', employeeNumber: 'АП00-00358' })
+                    });
+                    
+                    let telegramResult = '';
+                    if (linkResponse.ok) {
+                        const linkData = await linkResponse.json();
+                        telegramResult = '<div class="success">✅ Telegram привязка работает</div>';
+                        
+                        // Test Telegram auth
+                        const authResponse = await fetch('http://localhost:3030/api/telegram/auth', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ initData: 'dev_mode' })
+                        });
+                        
+                        if (authResponse.ok) {
+                            const authData = await authResponse.json();
+                            telegramResult += '<div class="success">✅ Telegram авторизация работает</div>';
+                        }
+                    } else {
+                        telegramResult = '<div class="error">❌ Ошибка Telegram привязки</div>';
+                    }
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ Обычная авторизация успешна</div>
+                        <div class="result">
+                            <strong>Сотрудник:</strong> ${employee.fullName}<br>
+                            <strong>Подразделение:</strong> ${employee.department}<br>
+                            <strong>Должность:</strong> ${employee.position}
+                        </div>
+                        ${telegramResult}
+                    `;
+                    testResults.login = true;
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка авторизации: ${error.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+            
+            updateSummary();
+        }
+
+        async function testAdminLogin() {
+            const resultDiv = document.getElementById('login-result');
+            
+            try {
+                const response = await fetch('http://localhost:3030/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableNumber: 'admin12qw' })
+                });
+                
+                if (response.ok) {
+                    const admin = await response.json();
+                    resultDiv.innerHTML += `
+                        <div class="success">✅ Админ вход работает</div>
+                        <div class="result">
+                            <strong>Админ:</strong> ${admin.fullName}<br>
+                            <strong>isAdmin:</strong> ${admin.isAdmin}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML += `<div class="error">❌ Ошибка админ входа: ${error.message}</div>`;
+            }
+        }
+
+        function testTelegramSDK() {
+            const resultDiv = document.getElementById('telegram-result');
+            
+            if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Telegram WebApp SDK загружен</div>
+                    <div class="result">
+                        <strong>Platform:</strong> ${window.Telegram.WebApp.platform}<br>
+                        <strong>Version:</strong> ${window.Telegram.WebApp.version}<br>
+                        <strong>In Telegram:</strong> ${window.Telegram.WebApp.initData ? 'Да' : 'Нет (эмуляция в браузере)'}
+                    </div>
+                `;
+                testResults.telegram = true;
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ Telegram WebApp SDK не загружен</div>';
+            }
+            
+            updateSummary();
+        }
+
+        function testNavigation() {
+            const resultDiv = document.getElementById('navigation-result');
+            
+            if (typeof showScreen === 'function') {
+                resultDiv.innerHTML = '<div class="success">✅ Функции навигации загружены</div>';
+                testResults.navigation = true;
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ Функции навигации не найдены</div>';
+            }
+            
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const summaryDiv = document.getElementById('test-summary');
+            const passed = Object.values(testResults).filter(Boolean).length;
+            const total = Object.keys(testResults).length;
+            
+            let status = 'info';
+            if (passed === total) status = 'success';
+            else if (passed === 0) status = 'error';
+            
+            summaryDiv.innerHTML = `
+                <div class="${status}">
+                    <strong>Результат тестов: ${passed}/${total} пройдено</strong><br>
+                    ${passed === total ? '🎉 Все тесты прошли успешно!' : 
+                      passed > 0 ? '⚠️ Частичная готовность' : '❌ Требуется настройка'}
+                </div>
+            `;
+        }
+
+        // Auto-run basic tests
+        window.addEventListener('load', () => {
+            testTelegramSDK();
+            testNavigation();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR App Final Test</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .loading { background: #fff3cd; border-color: #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>🚀 HR Mini App Final Test</h1>
+    
+    <div id="api-test" class="test loading">
+        <h3>API Test</h3>
+        <div id="api-result">Testing...</div>
+    </div>
+    
+    <div id="calendar-test" class="test loading">
+        <h3>Calendar Test</h3>
+        <div id="calendar-result">Testing...</div>
+    </div>
+    
+    <div id="login-test" class="test loading">
+        <h3>Login Test</h3>
+        <div id="login-result">Testing...</div>
+    </div>
+
+    <script>
+        console.log('🚀 Final Test Started');
+        
+        async function testAPI() {
+            try {
+                // Test health
+                const health = await fetch('https://madlen.space/api/health');
+                const healthData = await health.json();
+                
+                // Test calendar
+                const calendar = await fetch('https://madlen.space/api/employee/by-number/АП00-00358/timesheet/2025/5');
+                const calendarData = await calendar.json();
+                
+                // Test login
+                const login = await fetch('https://madlen.space/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({tableNumber: 'АП00-00358'})
+                });
+                const loginData = await login.json();
+                
+                // Update results
+                document.getElementById('api-test').className = 'test success';
+                document.getElementById('api-result').innerHTML = `✅ Health: ${healthData.status}`;
+                
+                document.getElementById('calendar-test').className = 'test success';
+                document.getElementById('calendar-result').innerHTML = `✅ Calendar: ${calendarData.calendar.length} days, First status: ${calendarData.calendar[0].status}`;
+                
+                document.getElementById('login-test').className = 'test success';
+                document.getElementById('login-result').innerHTML = `✅ Login: ${loginData.fullName}`;
+                
+                console.log('🎉 All tests passed!');
+                
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+                document.querySelectorAll('.test').forEach(el => {
+                    el.className = 'test error';
+                    el.querySelector('div').innerHTML = `❌ Error: ${error.message}`;
+                });
+            }
+        }
+        
+        testAPI();
+    </script>
+</body>
+</html>

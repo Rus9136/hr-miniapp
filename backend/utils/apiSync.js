@@ -1,5 +1,5 @@
 const axios = require('axios');
-const db = require('../database');
+const db = require('../database_pg');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://tco.aqnietgroup.com:5555/v1';
 const DEFAULT_BIN = process.env.DEFAULT_BIN || '104992300122';

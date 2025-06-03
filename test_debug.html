@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR App Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <h1>HR App Debug Console</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        const API_BASE_URL = 'http://localhost:3030/api';
+        const resultsDiv = document.getElementById('results');
+        
+        async function runTest(name, testFn) {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'test-result';
+            resultDiv.innerHTML = `<h3>${name}</h3><div>Running...</div>`;
+            resultsDiv.appendChild(resultDiv);
+            
+            try {
+                const result = await testFn();
+                resultDiv.className = 'test-result success';
+                resultDiv.innerHTML = `<h3>✅ ${name}</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `<h3>❌ ${name}</h3><pre>Error: ${error.message}</pre>`;
+            }
+        }
+        
+        async function fetchAPI(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`${response.status}: ${errorText}`);
+            }
+            return response.json();
+        }
+        
+        // Test suite
+        async function runTests() {
+            await runTest('Health Check', () => fetchAPI(`${API_BASE_URL}/health`));
+            
+            await runTest('Find Test Employee', () => fetchAPI(`${API_BASE_URL}/employee/debug/АП00-00358`));
+            
+            await runTest('Calendar May 2025', () => fetchAPI(`${API_BASE_URL}/employee/by-number/АП00-00358/timesheet/2025/5`));
+            
+            await runTest('Calendar June 2025', () => fetchAPI(`${API_BASE_URL}/employee/by-number/АП00-00358/timesheet/2025/6`));
+            
+            await runTest('Time Events', () => fetchAPI(`${API_BASE_URL}/employee/by-number/АП00-00358/time-events`));
+            
+            await runTest('Login Test', async () => {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tableNumber: 'АП00-00358' })
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`${response.status}: ${errorText}`);
+                }
+                return response.json();
+            });
+        }
+        
+        // Platform detection debug
+        const platformInfo = {
+            userAgent: navigator.userAgent,
+            isTelegram: !!window.Telegram,
+            hasTgWebApp: !!window.Telegram?.WebApp,
+            location: window.location.href,
+            hasLocalStorage: !!window.localStorage,
+            hasSessionStorage: !!window.sessionStorage
+        };
+        
+        const platformDiv = document.createElement('div');
+        platformDiv.className = 'test-result';
+        platformDiv.innerHTML = `<h3>Platform Info</h3><pre>${JSON.stringify(platformInfo, null, 2)}</pre>`;
+        resultsDiv.appendChild(platformDiv);
+        
+        // Run tests
+        runTests();
+    </script>
+</body>
+</html>

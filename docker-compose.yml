@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hr-postgres
+    environment:
+      POSTGRES_DB: hr_tracker
+      POSTGRES_USER: hr_user
+      POSTGRES_PASSWORD: hr_secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - hr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hr_user -d hr_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hr-app:
+    build: .
+    container_name: hr-miniapp
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env.production
+    command: ["node", "backend/server.js"]
+    ports:
+      - "3030:3030"
+    volumes:
+      - /root/projects/infra/infra/certbot/conf:/etc/letsencrypt:ro
+      - logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: hr-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /root/projects/infra/infra/certbot/conf:/etc/letsencrypt:ro
+      - /root/projects/infra/infra/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - hr-app
+    networks:
+      - hr-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  hr-network:
+    driver: bridge

@@ -1,0 +1,32 @@
+Server running on port 3030
+✅ PostgreSQL database initialized successfully
+Database initialized successfully
+Starting initial data sync...
+Starting data synchronization...
+Synced 535 departments
+Synced 6606 positions
+Synced 2916 employees
+Sync completed: 535 departments, 6606 positions, 2916 employees
+Initial data sync completed
+Telegram data validation error: Error: Invalid hash
+    at validateTelegramData (/root/projects/hr-miniapp/backend/routes/telegram.js:32:19)
+    at /root/projects/hr-miniapp/backend/routes/telegram.js:208:18
+    at Layer.handle [as handle_request] (/root/projects/hr-miniapp/node_modules/express/lib/router/layer.js:95:5)
+    at next (/root/projects/hr-miniapp/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/root/projects/hr-miniapp/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/root/projects/hr-miniapp/node_modules/express/lib/router/layer.js:95:5)
+    at /root/projects/hr-miniapp/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:346:12)
+    at next (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:175:3)
+Telegram data validation error: Error: Invalid hash
+    at validateTelegramData (/root/projects/hr-miniapp/backend/routes/telegram.js:32:19)
+    at /root/projects/hr-miniapp/backend/routes/telegram.js:87:18
+    at Layer.handle [as handle_request] (/root/projects/hr-miniapp/node_modules/express/lib/router/layer.js:95:5)
+    at next (/root/projects/hr-miniapp/node_modules/express/lib/router/route.js:149:13)
+    at Route.dispatch (/root/projects/hr-miniapp/node_modules/express/lib/router/route.js:119:3)
+    at Layer.handle [as handle_request] (/root/projects/hr-miniapp/node_modules/express/lib/router/layer.js:95:5)
+    at /root/projects/hr-miniapp/node_modules/express/lib/router/index.js:284:15
+    at Function.process_params (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:346:12)
+    at next (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:280:10)
+    at Function.handle (/root/projects/hr-miniapp/node_modules/express/lib/router/index.js:175:3)
