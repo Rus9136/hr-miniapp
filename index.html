@@ -372,6 +372,9 @@
                     <div class="section-header">
                         <h2>Сотрудники</h2>
                         <div class="section-controls">
+                            <select id="employees-company-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                <option value="">Все организации</option>
+                            </select>
                             <input type="text" id="employees-search" class="search-input" placeholder="Поиск по ФИО или табельному номеру...">
                             <span class="total-count">Всего: <span id="employees-total">0</span></span>
                         </div>
@@ -399,6 +402,9 @@
                     <div class="section-header">
                         <h2>Подразделения</h2>
                         <div class="section-controls">
+                            <select id="departments-company-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                <option value="">Все компании</option>
+                            </select>
                             <input type="text" id="departments-search" class="search-input" placeholder="Поиск по названию...">
                             <span class="total-count">Всего: <span id="departments-total">0</span></span>
                         </div>
@@ -451,7 +457,12 @@
                         <h2>Входы/выходы</h2>
                         <div class="section-controls">
                             <div class="filter-controls">
-                                <input type="text" id="events-employee-filter" class="search-input" placeholder="Табельный номер или ФИО">
+                                <select id="events-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
+                                <select id="events-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все подразделения</option>
+                                </select>
                                 <input type="date" id="events-date-from" class="form-control">
                                 <input type="date" id="events-date-to" class="form-control">
                                 <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
@@ -484,7 +495,12 @@
                         <h2>Табель рабочего времени</h2>
                         <div class="section-controls">
                             <div class="filter-controls">
-                                <input type="text" id="records-employee-filter" class="search-input" placeholder="Табельный номер или ФИО">
+                                <select id="records-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
+                                <select id="records-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все подразделения</option>
+                                </select>
                                 <input type="month" id="records-month-filter" class="form-control">
                                 <select id="records-status-filter" class="form-control">
                                     <option value="">Все статусы</option>
@@ -619,6 +635,6 @@
 
     <script src="telegram.js?v=final"></script>
     <script src="app-ultimate-fix.js?v=final4&ts=20250602-final"></script>
-    <script src="admin.js?v=final"></script>
+    <script src="admin.js?v=final9&ts=20250603-timeevents-filters"></script>
 </body>
 </html>
