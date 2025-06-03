@@ -328,7 +328,12 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       
       const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
       const events = response.data || [];
-      allEvents = events;
+      
+      // Добавляем table_number к каждому событию, так как API его не возвращает
+      allEvents = events.map(e => ({
+        ...e,
+        table_number: tableNumber
+      }));
       
       progressCallback({
         message: `Загружено ${events.length} событий для сотрудника ${tableNumber}`,
@@ -454,35 +459,83 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
 }
 
 async function saveTimeEvents(events) {
+  if (!events || events.length === 0) return;
+  
+  // Группируем события по сотрудникам и датам
+  const eventsByEmployee = {};
   for (const event of events) {
-    // Преобразуем данные из внешнего API в формат нашей БД
     const tableNumber = event.table_number || event.tableNumber;
-    const objectCode = event.objectСode || event.object_code || 'UNKNOWN';
-    const eventDatetime = event.eventTime || event.event_datetime;
-    const eventType = event.passDirection || event.event_type || '0';
+    if (!tableNumber) continue;
     
-    if (!tableNumber || !eventDatetime) {
-      console.warn('Skipping event with missing data:', event);
-      continue;
+    if (!eventsByEmployee[tableNumber]) {
+      eventsByEmployee[tableNumber] = {
+        events: [],
+        minDate: null,
+        maxDate: null
+      };
     }
     
-    try {
-      // Проверяем, существует ли уже такая запись
-      const existing = await db.queryRows(`
-        SELECT id FROM time_events 
-        WHERE employee_number = $1 
-        AND event_datetime = $2 
-        AND event_type = $3
-      `, [tableNumber, eventDatetime, eventType]);
+    const eventDatetime = event.event_datetime || event.eventTime;
+    if (eventDatetime) {
+      eventsByEmployee[tableNumber].events.push(event);
+      const date = new Date(eventDatetime);
       
-      if (existing.length === 0) {
+      if (!eventsByEmployee[tableNumber].minDate || date < eventsByEmployee[tableNumber].minDate) {
+        eventsByEmployee[tableNumber].minDate = date;
+      }
+      if (!eventsByEmployee[tableNumber].maxDate || date > eventsByEmployee[tableNumber].maxDate) {
+        eventsByEmployee[tableNumber].maxDate = date;
+      }
+    }
+  }
+  
+  // Для каждого сотрудника удаляем старые записи и вставляем новые
+  for (const [employeeNumber, data] of Object.entries(eventsByEmployee)) {
+    if (data.events.length === 0) continue;
+    
+    try {
+      // Начинаем транзакцию
+      await db.query('BEGIN');
+      
+      // Удаляем существующие записи за этот период
+      const minDateStr = data.minDate.toISOString().split('T')[0];
+      const maxDateStr = data.maxDate.toISOString().split('T')[0] + ' 23:59:59';
+      
+      const deleteResult = await db.query(`
+        DELETE FROM time_events 
+        WHERE employee_number = $1 
+        AND event_datetime >= $2::timestamp
+        AND event_datetime <= $3::timestamp
+      `, [employeeNumber, minDateStr, maxDateStr]);
+      
+      console.log(`Удалено ${deleteResult.rowCount || 0} старых записей для сотрудника ${employeeNumber}`);
+      
+      // Вставляем новые записи
+      let insertCount = 0;
+      for (const event of data.events) {
+        const tableNumber = event.table_number || event.tableNumber;
+        const objectCode = event.object_code || event.objectСode || 'UNKNOWN';
+        const eventDatetime = event.event_datetime || event.eventTime;
+        const eventType = event.event || event.event_type || event.passDirection || '0';
+        
+        if (!eventDatetime) continue;
+        
         await db.query(`
           INSERT INTO time_events (employee_number, object_code, event_datetime, event_type)
           VALUES ($1, $2, $3, $4)
         `, [tableNumber, objectCode, eventDatetime, eventType]);
+        
+        insertCount++;
       }
+      
+      // Коммитим транзакцию
+      await db.query('COMMIT');
+      console.log(`Вставлено ${insertCount} новых записей для сотрудника ${employeeNumber}`);
+      
     } catch (error) {
-      console.error('Error saving time event:', error);
+      // Откатываем транзакцию при ошибке
+      await db.query('ROLLBACK');
+      console.error(`Error saving time events for employee ${employeeNumber}:`, error);
     }
   }
 }
@@ -494,5 +547,6 @@ module.exports = {
   syncEmployeeEvents,
   syncAllData,
   processTimeRecords,
-  loadTimeEventsWithProgress
+  loadTimeEventsWithProgress,
+  saveTimeEvents
 };
