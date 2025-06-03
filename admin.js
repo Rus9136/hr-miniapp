@@ -16,6 +16,7 @@ let contentSections = [];
 let employeesData = [];
 let departmentsData = [];
 let positionsData = [];
+let organizationsData = [];
 
 // Store event handlers to avoid duplicates
 let menuClickHandler = null;
@@ -32,6 +33,83 @@ function initAdminPanel() {
     
     // Setup event handlers
     setupAdminEventHandlers();
+}
+
+// Load organizations for filters
+window.loadOrganizations = async function loadOrganizations() {
+    console.log('=== loadOrganizations function called ===');
+    try {
+        console.log('Loading organizations...');
+        console.log('API URL:', `${ADMIN_API_BASE_URL}/admin/organizations`);
+        
+        // Проверяем, что API_BASE_URL определен
+        if (!ADMIN_API_BASE_URL) {
+            throw new Error('ADMIN_API_BASE_URL is not defined');
+        }
+        
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Raw response data:', data);
+        
+        if (!Array.isArray(data)) {
+            throw new Error('Response is not an array');
+        }
+        
+        organizationsData = data;
+        console.log('Organizations loaded:', organizationsData.length);
+        
+        // Ждем немного, чтобы DOM точно был готов
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Populate organization filters
+        const employeesFilter = document.getElementById('employees-company-filter');
+        const departmentsFilter = document.getElementById('departments-company-filter');
+        
+        console.log('Employees filter element:', employeesFilter);
+        console.log('Departments filter element:', departmentsFilter);
+        
+        if (employeesFilter) {
+            const optionsHtml = '<option value="">Все организации</option>' +
+                organizationsData.map(org => 
+                    `<option value="${org.object_bin}">${org.object_company} (${org.object_bin})</option>`
+                ).join('');
+            employeesFilter.innerHTML = optionsHtml;
+            console.log('Employees filter populated with', organizationsData.length, 'options');
+        } else {
+            console.warn('Employees filter element not found!');
+        }
+        
+        if (departmentsFilter) {
+            const optionsHtml = '<option value="">Все компании</option>' +
+                organizationsData.map(org => 
+                    `<option value="${org.object_bin}">${org.object_company} (${org.object_bin})</option>`
+                ).join('');
+            departmentsFilter.innerHTML = optionsHtml;
+            console.log('Departments filter populated with', organizationsData.length, 'options');
+        } else {
+            console.warn('Departments filter element not found!');
+        }
+        
+        console.log('=== loadOrganizations completed successfully ===');
+        return true;
+        
+    } catch (error) {
+        console.error('Error loading organizations:', error);
+        console.error('Error stack:', error.stack);
+        return false;
+    }
+}
+
+// Добавляем тестовую функцию для отладки
+window.testLoadOrganizations = function() {
+    console.log('=== MANUAL TEST: testLoadOrganizations called ===');
+    return window.loadOrganizations();
 }
 
 // Switch between sections
@@ -52,10 +130,34 @@ function switchSection(sectionName) {
     // Load data for the section
     switch (sectionName) {
         case 'employees':
-            loadEmployees();
+            console.log('Switching to employees section');
+            loadEmployees().then(() => {
+                console.log('Calling loadOrganizations for employees');
+                // Принудительно вызываем функцию через window
+                return window.loadOrganizations ? window.loadOrganizations() : loadOrganizations();
+            }).catch(error => {
+                console.error('Error in employees section:', error);
+                // Резервный вызов через setTimeout
+                setTimeout(() => {
+                    console.log('Fallback: calling window.loadOrganizations via setTimeout');
+                    window.loadOrganizations();
+                }, 1000);
+            });
             break;
         case 'departments':
-            loadDepartments();
+            console.log('Switching to departments section');
+            loadDepartments().then(() => {
+                console.log('Calling loadOrganizations for departments');
+                // Принудительно вызываем функцию через window
+                return window.loadOrganizations ? window.loadOrganizations() : loadOrganizations();
+            }).catch(error => {
+                console.error('Error in departments section:', error);
+                // Резервный вызов через setTimeout
+                setTimeout(() => {
+                    console.log('Fallback: calling window.loadOrganizations via setTimeout');
+                    window.loadOrganizations();
+                }, 1000);
+            });
             break;
         case 'positions':
             loadPositions();
@@ -82,16 +184,30 @@ function initSearchInputs() {
     const employeesSearch = document.getElementById('employees-search');
     const departmentsSearch = document.getElementById('departments-search');
     const positionsSearch = document.getElementById('positions-search');
+    const employeesCompanyFilter = document.getElementById('employees-company-filter');
+    const departmentsCompanyFilter = document.getElementById('departments-company-filter');
     
     if (employeesSearch) {
         employeesSearch.addEventListener('input', (e) => {
-            filterEmployees(e.target.value);
+            filterEmployees();
+        });
+    }
+    
+    if (employeesCompanyFilter) {
+        employeesCompanyFilter.addEventListener('change', (e) => {
+            filterEmployees();
         });
     }
 
     if (departmentsSearch) {
         departmentsSearch.addEventListener('input', (e) => {
-            filterDepartments(e.target.value);
+            filterDepartments();
+        });
+    }
+    
+    if (departmentsCompanyFilter) {
+        departmentsCompanyFilter.addEventListener('change', (e) => {
+            filterDepartments();
         });
     }
 
@@ -150,11 +266,17 @@ function displayEmployees(employees) {
 }
 
 // Filter employees
-function filterEmployees(searchTerm) {
-    const filtered = employeesData.filter(emp => 
-        emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.table_number.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+function filterEmployees() {
+    const searchTerm = document.getElementById('employees-search').value || '';
+    const selectedBin = document.getElementById('employees-company-filter').value || '';
+    
+    const filtered = employeesData.filter(emp => {
+        const matchesSearch = emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            emp.table_number.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesBin = !selectedBin || emp.object_bin === selectedBin;
+        return matchesSearch && matchesBin;
+    });
+    
     displayEmployees(filtered);
     document.getElementById('employees-total').textContent = filtered.length;
 }
@@ -197,11 +319,17 @@ function displayDepartments(departments) {
 }
 
 // Filter departments
-function filterDepartments(searchTerm) {
-    const filtered = departmentsData.filter(dept => 
-        dept.object_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        dept.object_code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+function filterDepartments() {
+    const searchTerm = document.getElementById('departments-search').value || '';
+    const selectedBin = document.getElementById('departments-company-filter').value || '';
+    
+    const filtered = departmentsData.filter(dept => {
+        const matchesSearch = dept.object_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            dept.object_code.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesBin = !selectedBin || dept.object_bin === selectedBin;
+        return matchesSearch && matchesBin;
+    });
+    
     displayDepartments(filtered);
     document.getElementById('departments-total').textContent = filtered.length;
 }
@@ -321,7 +449,7 @@ function initUploadSection() {
     if (uploadSectionInitialized) return;
     
     // Load organizations for dropdown
-    loadOrganizations();
+    loadOrganizationsForUpload();
     
     // Sync buttons
     document.getElementById('sync-employees').addEventListener('click', () => syncData('employees'));
@@ -342,23 +470,45 @@ function initUploadSection() {
     uploadSectionInitialized = true;
 }
 
-// Load organizations for dropdown
-async function loadOrganizations() {
+// Load organizations for upload dropdown
+async function loadOrganizationsForUpload() {
+    console.log('=== loadOrganizationsForUpload called ===');
     try {
+        console.log('Loading organizations for upload form...');
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
-        if (!response.ok) throw new Error('Failed to load organizations');
+        console.log('Upload organizations response status:', response.status);
+        
+        if (!response.ok) throw new Error(`Failed to load organizations: ${response.status}`);
         
         const organizations = await response.json();
-        const select = document.getElementById('upload-org');
+        console.log('Upload organizations loaded:', organizations.length);
         
+        const select = document.getElementById('upload-org');
+        console.log('Upload org select element:', select);
+        
+        if (!select) {
+            console.error('Upload org select element not found!');
+            return;
+        }
+        
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add organizations
         organizations.forEach(org => {
             const option = document.createElement('option');
             option.value = org.object_bin;
-            option.textContent = org.object_company;
+            option.textContent = `${org.object_company} (${org.object_bin})`;
             select.appendChild(option);
         });
+        
+        console.log('Upload organizations dropdown populated with', organizations.length, 'items');
+        
     } catch (error) {
-        console.error('Error loading organizations:', error);
+        console.error('Error loading organizations for upload:', error);
+        console.error('Error stack:', error.stack);
     }
 }
 
@@ -548,6 +698,54 @@ let adminTimeEventsData = [];
 let adminTimeRecordsData = [];
 let timeEventsInitialized = false;
 
+// Load organizations for time events filter
+async function loadOrganizationsForTimeEvents() {
+    console.log('=== loadOrganizationsForTimeEvents called ===');
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error(`Failed to load organizations: ${response.status}`);
+        
+        const organizations = await response.json();
+        console.log('Time events organizations loaded:', organizations.length);
+        
+        const select = document.getElementById('events-organization-filter');
+        if (!select) {
+            console.error('Events organization filter element not found!');
+            return;
+        }
+        
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add organizations
+        organizations.forEach(org => {
+            const option = document.createElement('option');
+            option.value = org.object_bin;
+            option.textContent = `${org.object_company} (${org.object_bin})`;
+            select.appendChild(option);
+        });
+        
+        console.log('Time events organizations filter populated');
+        
+    } catch (error) {
+        console.error('Error loading organizations for time events:', error);
+    }
+}
+
+// Handle organization change for cascading department filter in time events
+function onTimeEventsOrganizationChange() {
+    const organizationBin = document.getElementById('events-organization-filter').value;
+    console.log('Time events organization changed to:', organizationBin);
+    
+    // Clear department selection
+    document.getElementById('events-department-filter').value = '';
+    
+    // Reload departments filtered by organization
+    loadDepartmentsForTimeEventsFilter(organizationBin || null);
+}
+
 // Initialize time events section
 function initTimeEventsSection() {
     if (timeEventsInitialized) {
@@ -563,14 +761,63 @@ function initTimeEventsSection() {
     document.getElementById('events-date-from').value = dateFrom.toISOString().split('T')[0];
     document.getElementById('events-date-to').value = dateTo.toISOString().split('T')[0];
     
+    // Load organizations and departments for filters
+    loadOrganizationsForTimeEvents();
+    loadDepartmentsForTimeEventsFilter();
+    
     // Event listeners
     document.getElementById('events-filter-btn').addEventListener('click', loadTimeEvents);
     document.getElementById('events-clear-btn').addEventListener('click', clearEventsFilter);
+    
+    // Organization filter change event for cascading departments
+    document.getElementById('events-organization-filter').addEventListener('change', onTimeEventsOrganizationChange);
     
     timeEventsInitialized = true;
     
     // Load initial data
     loadTimeEvents();
+}
+
+// Load departments for time events filter
+async function loadDepartmentsForTimeEventsFilter(organizationBin = null) {
+    console.log('=== loadDepartmentsForTimeEventsFilter called ===', 'organizationBin:', organizationBin);
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
+        if (!response.ok) throw new Error('Failed to load departments');
+        
+        const allDepartments = await response.json();
+        console.log('All departments loaded for time events:', allDepartments.length);
+        
+        // Filter departments by organization if specified
+        const departments = organizationBin 
+            ? allDepartments.filter(dept => dept.object_bin === organizationBin)
+            : allDepartments;
+            
+        console.log('Filtered departments for time events:', departments.length);
+        
+        const departmentFilter = document.getElementById('events-department-filter');
+        
+        if (departmentFilter) {
+            // Clear existing options except the first one
+            while (departmentFilter.children.length > 1) {
+                departmentFilter.removeChild(departmentFilter.lastChild);
+            }
+            
+            // Add departments
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.object_code;
+                option.textContent = dept.object_name;
+                departmentFilter.appendChild(option);
+            });
+            
+            console.log('Time events departments filter populated with', departments.length, 'items');
+        } else {
+            console.error('Events department filter element not found!');
+        }
+    } catch (error) {
+        console.error('Error loading departments for time events filter:', error);
+    }
 }
 
 // Load time events
@@ -579,11 +826,13 @@ async function loadTimeEvents() {
     tbody.innerHTML = '<tr><td colspan="5" class="loading">Загрузка данных...</td></tr>';
     
     const params = new URLSearchParams();
-    const employee = document.getElementById('events-employee-filter').value;
+    const organization = document.getElementById('events-organization-filter').value;
+    const department = document.getElementById('events-department-filter').value;
     const dateFrom = document.getElementById('events-date-from').value;
     const dateTo = document.getElementById('events-date-to').value;
     
-    if (employee) params.append('employee', employee);
+    if (organization) params.append('organization', organization);
+    if (department) params.append('department', department);
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     
@@ -627,7 +876,8 @@ function displayTimeEvents(events) {
 
 // Clear events filter
 function clearEventsFilter() {
-    document.getElementById('events-employee-filter').value = '';
+    document.getElementById('events-organization-filter').value = '';
+    document.getElementById('events-department-filter').value = '';
     
     // Reset to default dates (May 2025)
     const dateFrom = new Date('2025-05-01');
@@ -636,11 +886,105 @@ function clearEventsFilter() {
     document.getElementById('events-date-from').value = dateFrom.toISOString().split('T')[0];
     document.getElementById('events-date-to').value = dateTo.toISOString().split('T')[0];
     
+    // Reset departments to show all when organization is cleared
+    loadDepartmentsForTimeEventsFilter();
+    
     loadTimeEvents();
 }
 
 // Track if time records section has been initialized
 let timeRecordsInitialized = false;
+
+// Load organizations for time records filter
+async function loadOrganizationsForTimeRecords() {
+    console.log('=== loadOrganizationsForTimeRecords called ===');
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error(`Failed to load organizations: ${response.status}`);
+        
+        const organizations = await response.json();
+        console.log('Time records organizations loaded:', organizations.length);
+        
+        const select = document.getElementById('records-organization-filter');
+        if (!select) {
+            console.error('Records organization filter element not found!');
+            return;
+        }
+        
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add organizations
+        organizations.forEach(org => {
+            const option = document.createElement('option');
+            option.value = org.object_bin;
+            option.textContent = `${org.object_company} (${org.object_bin})`;
+            select.appendChild(option);
+        });
+        
+        console.log('Time records organizations filter populated');
+        
+    } catch (error) {
+        console.error('Error loading organizations for time records:', error);
+    }
+}
+
+// Load departments for time records filter
+async function loadDepartmentsForTimeRecords(organizationBin = null) {
+    console.log('=== loadDepartmentsForTimeRecords called ===', 'organizationBin:', organizationBin);
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
+        if (!response.ok) throw new Error(`Failed to load departments: ${response.status}`);
+        
+        const allDepartments = await response.json();
+        console.log('All departments loaded:', allDepartments.length);
+        
+        // Filter departments by organization if specified
+        const departments = organizationBin 
+            ? allDepartments.filter(dept => dept.object_bin === organizationBin)
+            : allDepartments;
+            
+        console.log('Filtered departments:', departments.length);
+        
+        const select = document.getElementById('records-department-filter');
+        if (!select) {
+            console.error('Records department filter element not found!');
+            return;
+        }
+        
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add departments
+        departments.forEach(dept => {
+            const option = document.createElement('option');
+            option.value = dept.object_code;
+            option.textContent = dept.object_name;
+            select.appendChild(option);
+        });
+        
+        console.log('Time records departments filter populated with', departments.length, 'items');
+        
+    } catch (error) {
+        console.error('Error loading departments for time records:', error);
+    }
+}
+
+// Handle organization change for cascading department filter
+function onTimeRecordsOrganizationChange() {
+    const organizationBin = document.getElementById('records-organization-filter').value;
+    console.log('Organization changed to:', organizationBin);
+    
+    // Clear department selection
+    document.getElementById('records-department-filter').value = '';
+    
+    // Reload departments filtered by organization
+    loadDepartmentsForTimeRecords(organizationBin || null);
+}
 
 // Initialize time records section
 function initTimeRecordsSection() {
@@ -653,10 +997,17 @@ function initTimeRecordsSection() {
     // Set default month to May 2025 (where we have data)
     document.getElementById('records-month-filter').value = '2025-05';
     
+    // Load organizations and departments for filters
+    loadOrganizationsForTimeRecords();
+    loadDepartmentsForTimeRecords();
+    
     // Event listeners
     document.getElementById('records-filter-btn').addEventListener('click', loadTimeRecords);
     document.getElementById('records-clear-btn').addEventListener('click', clearRecordsFilter);
     document.getElementById('records-recalculate-btn').addEventListener('click', recalculateTimeRecords);
+    
+    // Organization filter change event for cascading departments
+    document.getElementById('records-organization-filter').addEventListener('change', onTimeRecordsOrganizationChange);
     
     timeRecordsInitialized = true;
     
@@ -670,11 +1021,13 @@ async function loadTimeRecords() {
     tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка данных...</td></tr>';
     
     const params = new URLSearchParams();
-    const employee = document.getElementById('records-employee-filter').value;
+    const organization = document.getElementById('records-organization-filter').value;
+    const department = document.getElementById('records-department-filter').value;
     const month = document.getElementById('records-month-filter').value;
     const status = document.getElementById('records-status-filter').value;
     
-    if (employee) params.append('employee', employee);
+    if (organization) params.append('organization', organization);
+    if (department) params.append('department', department);
     if (month) params.append('month', month);
     if (status) params.append('status', status);
     
@@ -710,7 +1063,7 @@ function displayTimeRecords(records) {
         
         const checkInTime = record.check_in ? formatTime(record.check_in) : '-';
         const checkOutTime = record.check_out ? formatTime(record.check_out) : '-';
-        const hoursWorked = record.hours_worked ? record.hours_worked.toFixed(1) : '-';
+        const hoursWorked = record.hours_worked ? parseFloat(record.hours_worked).toFixed(1) : '-';
         
         return `
             <tr>
@@ -728,11 +1081,15 @@ function displayTimeRecords(records) {
 
 // Clear records filter
 function clearRecordsFilter() {
-    document.getElementById('records-employee-filter').value = '';
+    document.getElementById('records-organization-filter').value = '';
+    document.getElementById('records-department-filter').value = '';
     document.getElementById('records-status-filter').value = '';
     
     // Reset to May 2025 (where we have data)
     document.getElementById('records-month-filter').value = '2025-05';
+    
+    // Reset departments to show all when organization is cleared
+    loadDepartmentsForTimeRecords();
     
     loadTimeRecords();
 }

@@ -9,7 +9,8 @@ router.get('/admin/employees', (req, res) => {
         SELECT 
             e.*,
             d.object_name as department_name,
-            p.staff_position_name as position_name
+            p.staff_position_name as position_name,
+            e.object_bin
         FROM employees e
         LEFT JOIN departments d ON e.object_code = d.object_code
         LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
@@ -252,14 +253,16 @@ router.get('/admin/organizations', async (req, res) => {
 
 // Get time events with filters
 router.get('/admin/time-events', (req, res) => {
-    const { employee, dateFrom, dateTo } = req.query;
+    const { organization, department, dateFrom, dateTo } = req.query;
     
     let query = `
         SELECT 
             te.*,
             e.full_name,
             e.table_number,
-            d.object_name as department_name
+            e.object_bin,
+            d.object_name as department_name,
+            d.object_code as department_code
         FROM time_events te
         LEFT JOIN employees e ON te.employee_number = e.table_number
         LEFT JOIN departments d ON e.object_code = d.object_code
@@ -268,9 +271,14 @@ router.get('/admin/time-events', (req, res) => {
     
     const params = [];
     
-    if (employee) {
-        query += ` AND (e.table_number LIKE $${params.length + 1} OR e.full_name LIKE $${params.length + 2})`;
-        params.push(`%${employee}%`, `%${employee}%`);
+    if (organization) {
+        query += ` AND e.object_bin = $${params.length + 1}`;
+        params.push(organization);
+    }
+    
+    if (department) {
+        query += ` AND d.object_code = $${params.length + 1}`;
+        params.push(department);
     }
     
     if (dateFrom) {
@@ -295,14 +303,16 @@ router.get('/admin/time-events', (req, res) => {
 
 // Get time records with filters
 router.get('/admin/time-records', (req, res) => {
-    const { employee, month, status } = req.query;
+    const { organization, department, month, status } = req.query;
     
     let query = `
         SELECT 
             tr.*,
             e.full_name,
             e.table_number,
-            d.object_name as department_name
+            e.object_bin,
+            d.object_name as department_name,
+            d.object_code as department_code
         FROM time_records tr
         LEFT JOIN employees e ON tr.employee_number = e.table_number
         LEFT JOIN departments d ON e.object_code = d.object_code
@@ -311,9 +321,14 @@ router.get('/admin/time-records', (req, res) => {
     
     const params = [];
     
-    if (employee) {
-        query += ` AND (e.table_number LIKE $${params.length + 1} OR e.full_name LIKE $${params.length + 2})`;
-        params.push(`%${employee}%`, `%${employee}%`);
+    if (organization) {
+        query += ` AND e.object_bin = $${params.length + 1}`;
+        params.push(organization);
+    }
+    
+    if (department) {
+        query += ` AND d.object_code = $${params.length + 1}`;
+        params.push(department);
     }
     
     if (month) {
@@ -383,12 +398,36 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
             const dayData = groupedEvents[key];
             const events = dayData.events.sort((a, b) => new Date(a.event_datetime) - new Date(b.event_datetime));
             
-            // Find first entry (type 1) and last exit (type 2)
+            // Определяем вход и выход по времени события
+            // Если есть события с типами 1 и 2, используем их
+            // Иначе используем первое событие как вход, последнее как выход (для типа 0)
+            let checkIn = null;
+            let checkOut = null;
+            
             const entryEvents = events.filter(e => e.event_type === '1');
             const exitEvents = events.filter(e => e.event_type === '2');
             
-            const checkIn = entryEvents.length > 0 ? entryEvents[0].event_datetime : null;
-            const checkOut = exitEvents.length > 0 ? exitEvents[exitEvents.length - 1].event_datetime : null;
+            if (entryEvents.length > 0 || exitEvents.length > 0) {
+                // Используем типы 1 и 2 если они есть
+                checkIn = entryEvents.length > 0 ? entryEvents[0].event_datetime : null;
+                checkOut = exitEvents.length > 0 ? exitEvents[exitEvents.length - 1].event_datetime : null;
+            } else if (events.length > 0) {
+                // Для событий типа 0 определяем по времени
+                // Первое событие дня - вход, последнее - выход
+                if (events.length === 1) {
+                    // Если только одно событие, проверяем время
+                    const hour = new Date(events[0].event_datetime).getHours();
+                    if (hour < 12) {
+                        checkIn = events[0].event_datetime;
+                    } else {
+                        checkOut = events[0].event_datetime;
+                    }
+                } else {
+                    // Если несколько событий, первое - вход, последнее - выход
+                    checkIn = events[0].event_datetime;
+                    checkOut = events[events.length - 1].event_datetime;
+                }
+            }
             
             // Calculate hours worked
             let hoursWorked = null;
