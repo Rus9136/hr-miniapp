@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database_pg');
-const apiSync = require('../utils/apiSync');
+const apiSync = require('../utils/apiSync_pg');
 
 // Get all employees with department and position info
 router.get('/admin/employees', (req, res) => {
@@ -25,33 +25,25 @@ router.get('/admin/employees', (req, res) => {
 });
 
 // Get all departments
-router.get('/admin/departments', (req, res) => {
-    db.all(
-        'SELECT * FROM departments ORDER BY object_name',
-        [],
-        (err, rows) => {
-            if (err) {
-                console.error('Error fetching departments:', err);
-                return res.status(500).json({ error: 'Internal server error' });
-            }
-            res.json(rows);
-        }
-    );
+router.get('/admin/departments', async (req, res) => {
+    try {
+        const rows = await db.queryRows('SELECT * FROM departments ORDER BY object_name');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching departments:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Get all positions
-router.get('/admin/positions', (req, res) => {
-    db.all(
-        'SELECT * FROM positions ORDER BY staff_position_name',
-        [],
-        (err, rows) => {
-            if (err) {
-                console.error('Error fetching positions:', err);
-                return res.status(500).json({ error: 'Internal server error' });
-            }
-            res.json(rows);
-        }
-    );
+router.get('/admin/positions', async (req, res) => {
+    try {
+        const rows = await db.queryRows('SELECT * FROM positions ORDER BY staff_position_name');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching positions:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Admin login check (for now, just check if it's admin12qw)
@@ -246,18 +238,16 @@ async function loadTimesheetWithProgress(loadingId, params) {
 }
 
 // Get organizations for dropdown
-router.get('/admin/organizations', (req, res) => {
-    db.all(
-        'SELECT DISTINCT object_bin, object_company FROM departments WHERE object_company IS NOT NULL ORDER BY object_company',
-        [],
-        (err, rows) => {
-            if (err) {
-                console.error('Error fetching organizations:', err);
-                return res.status(500).json({ error: 'Internal server error' });
-            }
-            res.json(rows);
-        }
-    );
+router.get('/admin/organizations', async (req, res) => {
+    try {
+        const rows = await db.queryRows(
+            'SELECT DISTINCT object_bin, object_company FROM departments WHERE object_company IS NOT NULL ORDER BY object_company'
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error fetching organizations:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Get time events with filters
@@ -279,28 +269,27 @@ router.get('/admin/time-events', (req, res) => {
     const params = [];
     
     if (employee) {
-        query += ` AND (e.table_number LIKE ? OR e.full_name LIKE ?)`;
+        query += ` AND (e.table_number LIKE $${params.length + 1} OR e.full_name LIKE $${params.length + 2})`;
         params.push(`%${employee}%`, `%${employee}%`);
     }
     
     if (dateFrom) {
-        query += ` AND date(te.event_datetime) >= ?`;
+        query += ` AND te.event_datetime::date >= $${params.length + 1}`;
         params.push(dateFrom);
     }
     
     if (dateTo) {
-        query += ` AND date(te.event_datetime) <= ?`;
+        query += ` AND te.event_datetime::date <= $${params.length + 1}`;
         params.push(dateTo);
     }
     
     query += ` ORDER BY te.event_datetime DESC LIMIT 1000`;
     
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Error fetching time events:', err);
-            return res.status(500).json({ error: 'Internal server error' });
-        }
+    db.queryRows(query, params).then(rows => {
         res.json(rows);
+    }).catch(err => {
+        console.error('Error fetching time events:', err);
+        res.status(500).json({ error: 'Internal server error' });
     });
 });
 
@@ -323,28 +312,27 @@ router.get('/admin/time-records', (req, res) => {
     const params = [];
     
     if (employee) {
-        query += ` AND (e.table_number LIKE ? OR e.full_name LIKE ?)`;
+        query += ` AND (e.table_number LIKE $${params.length + 1} OR e.full_name LIKE $${params.length + 2})`;
         params.push(`%${employee}%`, `%${employee}%`);
     }
     
     if (month) {
-        query += ` AND strftime('%Y-%m', tr.date) = ?`;
+        query += ` AND to_char(tr.date, 'YYYY-MM') = $${params.length + 1}`;
         params.push(month);
     }
     
     if (status) {
-        query += ` AND tr.status = ?`;
+        query += ` AND tr.status = $${params.length + 1}`;
         params.push(status);
     }
     
     query += ` ORDER BY tr.date DESC, e.full_name ASC LIMIT 1000`;
     
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Error fetching time records:', err);
-            return res.status(500).json({ error: 'Internal server error' });
-        }
+    db.queryRows(query, params).then(rows => {
         res.json(rows);
+    }).catch(err => {
+        console.error('Error fetching time records:', err);
+        res.status(500).json({ error: 'Internal server error' });
     });
 });
 
@@ -354,31 +342,21 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
         console.log('Starting time records recalculation...');
         
         // Clear existing time_records
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM time_records', (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
+        await db.query('DELETE FROM time_records');
         
         // Get all time events grouped by employee and date
-        const timeEvents = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT 
-                    te.employee_number,
-                    date(te.event_datetime) as date,
-                    te.event_datetime,
-                    te.event_type,
-                    e.id as employee_id
-                FROM time_events te
-                LEFT JOIN employees e ON te.employee_number = e.table_number
-                WHERE te.employee_number IS NOT NULL
-                ORDER BY te.employee_number, te.event_datetime
-            `, (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
+        const timeEvents = await db.queryRows(`
+            SELECT 
+                te.employee_number,
+                to_char(te.event_datetime::date, 'YYYY-MM-DD') as date,
+                te.event_datetime,
+                te.event_type,
+                e.id as employee_id
+            FROM time_events te
+            LEFT JOIN employees e ON te.employee_number = e.table_number
+            WHERE te.employee_number IS NOT NULL
+            ORDER BY te.employee_number, te.event_datetime
+        `);
         
         console.log(`Found ${timeEvents.length} time events to process`);
         
@@ -398,13 +376,6 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
         });
         
         console.log(`Processing ${Object.keys(groupedEvents).length} employee-day combinations`);
-        
-        // Process each employee-day combination
-        const insertStmt = db.prepare(`
-            INSERT OR REPLACE INTO time_records 
-            (employee_id, employee_number, date, check_in, check_out, hours_worked, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        `);
         
         let processedCount = 0;
         
@@ -450,7 +421,17 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                 }
             }
             
-            insertStmt.run(
+            await db.query(`
+                INSERT INTO time_records 
+                (employee_id, employee_number, date, check_in, check_out, hours_worked, status, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                ON CONFLICT (employee_number, date) DO UPDATE SET
+                    check_in = EXCLUDED.check_in,
+                    check_out = EXCLUDED.check_out,
+                    hours_worked = EXCLUDED.hours_worked,
+                    status = EXCLUDED.status,
+                    updated_at = NOW()
+            `, [
                 dayData.employee_id,
                 dayData.employee_number,
                 dayData.date,
@@ -458,12 +439,10 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                 checkOut,
                 hoursWorked,
                 status
-            );
+            ]);
             
             processedCount++;
         }
-        
-        insertStmt.finalize();
         
         console.log(`Recalculation completed. Processed ${processedCount} records`);
         
