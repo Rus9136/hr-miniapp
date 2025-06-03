@@ -301,11 +301,190 @@ async function syncAllData() {
   }
 }
 
+async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objectBin }, progressCallback) {
+  try {
+    let allEvents = [];
+    
+    if (tableNumber) {
+      // Если указан табельный номер конкретного сотрудника
+      const params = {
+        dateStart: dateFrom,
+        dateStop: dateTo,
+        tableNumber: tableNumber
+      };
+      
+      if (objectBin) {
+        params.objectBIN = objectBin;
+      }
+      
+      progressCallback({
+        message: `Загрузка данных для сотрудника ${tableNumber}...`,
+        currentDepartment: tableNumber,
+        totalEmployees: 1,
+        processedEmployees: 0
+      });
+      
+      console.log('Loading events for employee:', params);
+      
+      const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+      const events = response.data || [];
+      allEvents = events;
+      
+      progressCallback({
+        message: `Загружено ${events.length} событий для сотрудника ${tableNumber}`,
+        eventsLoaded: events.length,
+        processedEmployees: 1
+      });
+      
+    } else {
+      // Если табельный номер не указан, загружаем для всех сотрудников организации
+      const targetBin = objectBin || DEFAULT_BIN;
+      
+      progressCallback({
+        message: `Получение списка сотрудников организации ${targetBin}...`,
+        currentDepartment: 'Инициализация'
+      });
+      
+      console.log('Loading events for organization:', targetBin);
+      
+      // Получаем список сотрудников организации с информацией о подразделениях
+      const employees = await db.queryRows(`
+        SELECT DISTINCT e.table_number, d.object_name as department_name
+        FROM employees e 
+        LEFT JOIN departments d ON e.object_code = d.object_code
+        WHERE e.object_bin = $1 AND e.status = 1
+        ORDER BY d.object_name, e.table_number
+        LIMIT 100
+      `, [targetBin]);
+      
+      console.log(`Found ${employees.length} employees in organization ${targetBin}`);
+      
+      progressCallback({
+        message: `Найдено ${employees.length} сотрудников. Начинаем загрузку событий...`,
+        totalEmployees: employees.length,
+        processedEmployees: 0,
+        eventsLoaded: 0
+      });
+      
+      // Группируем сотрудников по подразделениям для лучшего отображения прогресса
+      const employeesByDept = {};
+      employees.forEach(emp => {
+        const deptName = emp.department_name || 'Без подразделения';
+        if (!employeesByDept[deptName]) {
+          employeesByDept[deptName] = [];
+        }
+        employeesByDept[deptName].push(emp);
+      });
+      
+      let processedCount = 0;
+      let totalEvents = 0;
+      
+      // Загружаем события для каждого подразделения
+      for (const [deptName, deptEmployees] of Object.entries(employeesByDept)) {
+        progressCallback({
+          message: `Загружается подразделение "${deptName}" - ${deptEmployees.length} сотрудников`,
+          currentDepartment: deptName,
+          processedEmployees: processedCount,
+          eventsLoaded: totalEvents
+        });
+        
+        for (const emp of deptEmployees) {
+          try {
+            const params = {
+              dateStart: dateFrom,
+              dateStop: dateTo,
+              tableNumber: emp.table_number,
+              objectBIN: targetBin // Добавляем BIN организации
+            };
+            
+            console.log(`Loading events for ${emp.table_number} (${deptName})...`);
+            
+            const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
+            const events = response.data || [];
+            
+            if (events.length > 0) {
+              console.log(`Found ${events.length} events for ${emp.table_number}`);
+              // Добавляем table_number к каждому событию, так как API его не возвращает
+              const eventsWithTableNumber = events.map(e => ({
+                ...e,
+                table_number: emp.table_number
+              }));
+              allEvents = allEvents.concat(eventsWithTableNumber);
+              totalEvents += events.length;
+            }
+            
+            processedCount++;
+            
+            progressCallback({
+              message: `Обработано ${processedCount}/${employees.length} сотрудников из "${deptName}"`,
+              currentDepartment: deptName,
+              processedEmployees: processedCount,
+              eventsLoaded: totalEvents
+            });
+            
+            // Небольшая задержка между запросами
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (error) {
+            console.error(`Error loading events for ${emp.table_number}:`, error.message);
+            processedCount++;
+            // Продолжаем загрузку для остальных сотрудников
+          }
+        }
+      }
+      
+      progressCallback({
+        message: `Загрузка завершена. Всего ${totalEvents} событий от ${processedCount} сотрудников`,
+        processedEmployees: processedCount,
+        eventsLoaded: totalEvents
+      });
+    }
+    
+    // Сохраняем события в базу данных
+    if (allEvents.length > 0) {
+      console.log(`Saving ${allEvents.length} events to database...`);
+      await saveTimeEvents(allEvents);
+    }
+    
+    return allEvents;
+    
+  } catch (error) {
+    console.error('Error loading time events:', error);
+    throw error;
+  }
+}
+
+async function saveTimeEvents(events) {
+  for (const event of events) {
+    // Преобразуем данные из внешнего API в формат нашей БД
+    const tableNumber = event.table_number || event.tableNumber;
+    const objectCode = event.objectСode || event.object_code || 'UNKNOWN';
+    const eventDatetime = event.eventTime || event.event_datetime;
+    const eventType = event.passDirection || event.event_type || '0';
+    
+    if (!tableNumber || !eventDatetime) {
+      console.warn('Skipping event with missing data:', event);
+      continue;
+    }
+    
+    try {
+      await db.query(`
+        INSERT INTO time_events (employee_number, object_code, event_datetime, event_type)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (employee_number, event_datetime, event_type) DO NOTHING
+      `, [tableNumber, objectCode, eventDatetime, eventType]);
+    } catch (error) {
+      console.error('Error saving time event:', error);
+    }
+  }
+}
+
 module.exports = {
   syncDepartments,
   syncPositions,
   syncEmployees,
   syncEmployeeEvents,
   syncAllData,
-  processTimeRecords
+  processTimeRecords,
+  loadTimeEventsWithProgress
 };
