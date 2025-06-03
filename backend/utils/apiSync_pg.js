@@ -354,7 +354,6 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
         LEFT JOIN departments d ON e.object_code = d.object_code
         WHERE e.object_bin = $1 AND e.status = 1
         ORDER BY d.object_name, e.table_number
-        LIMIT 100
       `, [targetBin]);
       
       console.log(`Found ${employees.length} employees in organization ${targetBin}`);
@@ -468,11 +467,20 @@ async function saveTimeEvents(events) {
     }
     
     try {
-      await db.query(`
-        INSERT INTO time_events (employee_number, object_code, event_datetime, event_type)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (employee_number, event_datetime, event_type) DO NOTHING
-      `, [tableNumber, objectCode, eventDatetime, eventType]);
+      // Проверяем, существует ли уже такая запись
+      const existing = await db.queryRows(`
+        SELECT id FROM time_events 
+        WHERE employee_number = $1 
+        AND event_datetime = $2 
+        AND event_type = $3
+      `, [tableNumber, eventDatetime, eventType]);
+      
+      if (existing.length === 0) {
+        await db.query(`
+          INSERT INTO time_events (employee_number, object_code, event_datetime, event_type)
+          VALUES ($1, $2, $3, $4)
+        `, [tableNumber, objectCode, eventDatetime, eventType]);
+      }
     } catch (error) {
       console.error('Error saving time event:', error);
     }
