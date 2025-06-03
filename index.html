@@ -347,7 +347,16 @@
                     </ul>
                 </div>
                 
-                <!-- Блок 2: Данные по табелю -->
+                <!-- Блок 2: Графики работы -->
+                <div class="sidebar-section">
+                    <h3 class="section-title">Графики работы</h3>
+                    <ul class="sidebar-menu">
+                        <li><a href="#" data-section="schedules" class="menu-item">Шаблоны графиков</a></li>
+                        <li><a href="#" data-section="schedule-assign" class="menu-item">Назначение графиков</a></li>
+                    </ul>
+                </div>
+                
+                <!-- Блок 3: Данные по табелю -->
                 <div class="sidebar-section">
                     <h3 class="section-title">Данные по табелю</h3>
                     <ul class="sidebar-menu">
@@ -356,7 +365,7 @@
                     </ul>
                 </div>
                 
-                <!-- Блок 3: Загрузка данных -->
+                <!-- Блок 4: Загрузка данных -->
                 <div class="sidebar-section">
                     <h3 class="section-title">Загрузка данных</h3>
                     <ul class="sidebar-menu">
@@ -599,6 +608,112 @@
                         <div id="timesheet-status" class="status-message"></div>
                     </div>
                 </section>
+                
+                <!-- Секция: Шаблоны графиков -->
+                <section id="schedules-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Шаблоны графиков работы</h2>
+                        <div class="section-controls">
+                            <button id="create-schedule-btn" class="btn btn--primary">
+                                <span class="btn-text">Создать график</span>
+                            </button>
+                            <span class="total-count">Всего: <span id="schedules-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Название</th>
+                                    <th>Тип</th>
+                                    <th>Сотрудников</th>
+                                    <th>Организации</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedules-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Назначение графиков -->
+                <section id="schedule-assign-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Назначение графиков сотрудникам</h2>
+                    </div>
+                    
+                    <div class="assign-container">
+                        <!-- Выбор графика -->
+                        <div class="assign-block">
+                            <h3>1. Выберите график</h3>
+                            <select id="assign-template-select" class="form-control" style="width: 400px;">
+                                <option value="">-- Выберите график --</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Фильтры для выбора сотрудников -->
+                        <div class="assign-block">
+                            <h3>2. Фильтры для выбора сотрудников</h3>
+                            <div class="filter-controls">
+                                <select id="assign-organization-filter" class="form-control" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
+                                <select id="assign-department-filter" class="form-control" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все подразделения</option>
+                                </select>
+                                <select id="assign-position-filter" class="form-control" style="width: 250px;">
+                                    <option value="">Все должности</option>
+                                </select>
+                                <button id="assign-filter-btn" class="btn btn--primary btn--sm">Применить фильтр</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Список сотрудников -->
+                        <div class="assign-block">
+                            <h3>3. Выберите сотрудников</h3>
+                            <div class="employee-selection-controls">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="assign-select-all">
+                                    <span>Выбрать всех</span>
+                                </label>
+                                <span class="selected-count">Выбрано: <span id="assign-selected-count">0</span></span>
+                            </div>
+                            <div class="employees-list-container">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" id="assign-header-checkbox">
+                                            </th>
+                                            <th>ФИО</th>
+                                            <th>Табельный номер</th>
+                                            <th>Подразделение</th>
+                                            <th>Текущий график</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="assign-employees-tbody">
+                                        <!-- Сотрудники будут загружены динамически -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Дата начала и кнопка назначения -->
+                        <div class="assign-block">
+                            <h3>4. Дата начала действия графика</h3>
+                            <div class="assign-actions">
+                                <input type="date" id="assign-start-date" class="form-control" style="width: 200px;">
+                                <button id="assign-submit-btn" class="btn btn--primary" disabled>
+                                    <span class="btn-text">Назначить график</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                            </div>
+                            <div id="assign-status" class="status-message" style="margin-top: 10px;"></div>
+                        </div>
+                    </div>
+                </section>
             </main>
         </div>
     </div>
@@ -633,8 +748,123 @@
         </div>
     </div>
 
+    <!-- Модальное окно создания/редактирования графика -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 id="scheduleModalTitle">Создание графика работы</h3>
+                <button id="closeScheduleModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <input type="hidden" id="scheduleId">
+                    
+                    <!-- Основная информация -->
+                    <div class="form-group">
+                        <label for="scheduleName">Название графика</label>
+                        <input type="text" id="scheduleName" class="form-control" placeholder="Например: Пятидневка 9-18" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="scheduleDescription">Описание</label>
+                        <textarea id="scheduleDescription" class="form-control" rows="3" placeholder="Описание графика работы"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="scheduleType">Тип графика</label>
+                            <select id="scheduleType" class="form-control" required>
+                                <option value="fixed">Фиксированный (пн-пт)</option>
+                                <option value="rotating">Сменный (2/2, 3/3 и т.д.)</option>
+                                <option value="flexible">Гибкий</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="cycleDaysGroup" style="flex: 1; display: none;">
+                            <label for="cycleDays">Дней в цикле</label>
+                            <input type="number" id="cycleDays" class="form-control" min="2" max="30" placeholder="Например: 4 для 2/2">
+                        </div>
+                    </div>
+                    
+                    <!-- Правила графика -->
+                    <h4>Правила графика</h4>
+                    <div id="scheduleRules" class="schedule-rules-container">
+                        <!-- Правила будут добавлены динамически -->
+                    </div>
+                    
+                    <button type="button" id="addRuleBtn" class="btn btn--outline btn--sm">+ Добавить день</button>
+                    
+                    <div class="modal-footer">
+                        <button type="button" id="cancelScheduleBtn" class="btn btn--outline">Отмена</button>
+                        <button type="submit" class="btn btn--primary">
+                            <span class="btn-text">Сохранить</span>
+                            <span class="spinner" style="display: none;">⏳</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно детальной информации о графике -->
+    <div id="scheduleDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 id="scheduleDetailsTitle">График работы</h3>
+                <button id="closeScheduleDetailsModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="schedule-details-tabs">
+                    <button class="tab-btn active" data-tab="rules">Правила</button>
+                    <button class="tab-btn" data-tab="employees">Сотрудники</button>
+                </div>
+                
+                <div id="rulesTab" class="tab-content active">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>День</th>
+                                <th>Рабочий день</th>
+                                <th>Время входа</th>
+                                <th>Время выхода</th>
+                                <th>Обед (мин)</th>
+                                <th>Допустимое опоздание</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailsRulesBody">
+                            <!-- Правила будут загружены динамически -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="employeesTab" class="tab-content" style="display: none;">
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>ФИО</th>
+                                    <th>Табельный номер</th>
+                                    <th>Подразделение</th>
+                                    <th>Организация</th>
+                                    <th>Дата назначения</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detailsEmployeesBody">
+                                <!-- Сотрудники будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button id="editScheduleBtn" class="btn btn--primary">Редактировать</button>
+                    <button id="closeDetailsBtn" class="btn btn--outline">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="telegram.js?v=final"></script>
     <script src="app-ultimate-fix.js?v=final4&ts=20250602-final"></script>
-    <script src="admin.js?v=final9&ts=20250603-timeevents-filters"></script>
+    <script src="admin.js?v=final10&ts=20250603-schedules"></script>
 </body>
 </html>
