@@ -501,4 +501,300 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
     }
 });
 
+// ==================== WORK SCHEDULES ENDPOINTS ====================
+
+// Get all schedule templates
+router.get('/admin/schedules/templates', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                t.*,
+                COUNT(DISTINCT esh.employee_id) as employee_count,
+                STRING_AGG(DISTINCT d.object_company, ', ') as organizations
+            FROM work_schedule_templates t
+            LEFT JOIN employee_schedule_history esh ON t.id = esh.template_id AND esh.end_date IS NULL
+            LEFT JOIN employees e ON esh.employee_id = e.id
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            WHERE t.is_active = true
+            GROUP BY t.id
+            ORDER BY t.name
+        `;
+        
+        const templates = await db.queryRows(query);
+        res.json(templates);
+    } catch (error) {
+        console.error('Error fetching schedule templates:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get single schedule template with rules
+router.get('/admin/schedules/templates/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Get template
+        const template = await db.queryRow(
+            'SELECT * FROM work_schedule_templates WHERE id = $1',
+            [id]
+        );
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Get rules
+        const rules = await db.queryRows(
+            'SELECT * FROM work_schedule_rules WHERE template_id = $1 ORDER BY day_number',
+            [id]
+        );
+        
+        // Get assigned employees with departments
+        const employees = await db.queryRows(`
+            SELECT 
+                e.id,
+                e.full_name,
+                e.table_number,
+                d.object_name as department_name,
+                d.object_company as organization,
+                esh.start_date
+            FROM employee_schedule_history esh
+            JOIN employees e ON esh.employee_id = e.id
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            WHERE esh.template_id = $1 AND esh.end_date IS NULL
+            ORDER BY d.object_company, d.object_name, e.full_name
+        `, [id]);
+        
+        res.json({ template, rules, employees });
+    } catch (error) {
+        console.error('Error fetching schedule template:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Create new schedule template
+router.post('/admin/schedules/templates', async (req, res) => {
+    try {
+        const { name, description, schedule_type, cycle_days, rules } = req.body;
+        
+        // Start transaction
+        await db.query('BEGIN');
+        
+        // Create template
+        const templateResult = await db.queryRow(`
+            INSERT INTO work_schedule_templates 
+            (name, description, schedule_type, cycle_days, is_active)
+            VALUES ($1, $2, $3, $4, true)
+            RETURNING *
+        `, [name, description, schedule_type, cycle_days || null]);
+        
+        // Create rules
+        if (rules && rules.length > 0) {
+            for (const rule of rules) {
+                await db.query(`
+                    INSERT INTO work_schedule_rules
+                    (template_id, day_number, is_workday, check_in_time, check_out_time, 
+                     break_duration_minutes, tolerance_late_minutes, tolerance_early_minutes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `, [
+                    templateResult.id,
+                    rule.day_number,
+                    rule.is_workday,
+                    rule.check_in_time,
+                    rule.check_out_time,
+                    rule.break_duration_minutes || 60,
+                    rule.tolerance_late_minutes || 15,
+                    rule.tolerance_early_minutes || 5
+                ]);
+            }
+        }
+        
+        await db.query('COMMIT');
+        res.json({ success: true, template: templateResult });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Error creating schedule template:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update schedule template
+router.put('/admin/schedules/templates/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, description, is_active, rules } = req.body;
+        
+        await db.query('BEGIN');
+        
+        // Update template
+        const templateResult = await db.queryRow(`
+            UPDATE work_schedule_templates 
+            SET name = $1, description = $2, is_active = $3, updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+        `, [name, description, is_active, id]);
+        
+        if (!templateResult) {
+            await db.query('ROLLBACK');
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Update rules if provided
+        if (rules) {
+            // Delete existing rules
+            await db.query('DELETE FROM work_schedule_rules WHERE template_id = $1', [id]);
+            
+            // Insert new rules
+            for (const rule of rules) {
+                await db.query(`
+                    INSERT INTO work_schedule_rules
+                    (template_id, day_number, is_workday, check_in_time, check_out_time, 
+                     break_duration_minutes, tolerance_late_minutes, tolerance_early_minutes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `, [
+                    id,
+                    rule.day_number,
+                    rule.is_workday,
+                    rule.check_in_time,
+                    rule.check_out_time,
+                    rule.break_duration_minutes || 60,
+                    rule.tolerance_late_minutes || 15,
+                    rule.tolerance_early_minutes || 5
+                ]);
+            }
+        }
+        
+        await db.query('COMMIT');
+        res.json({ success: true, template: templateResult });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Error updating schedule template:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Assign schedule to employees
+router.post('/admin/schedules/assign', async (req, res) => {
+    try {
+        const { template_id, employee_ids, start_date, assigned_by } = req.body;
+        
+        if (!template_id || !employee_ids || !start_date) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        
+        await db.query('BEGIN');
+        
+        let assignedCount = 0;
+        
+        for (const employee_id of employee_ids) {
+            // Get employee number
+            const employee = await db.queryRow(
+                'SELECT table_number FROM employees WHERE id = $1',
+                [employee_id]
+            );
+            
+            if (!employee) continue;
+            
+            // End current schedule if exists
+            await db.query(`
+                UPDATE employee_schedule_history 
+                SET end_date = $1::date - INTERVAL '1 day'
+                WHERE employee_id = $2 AND end_date IS NULL
+            `, [start_date, employee_id]);
+            
+            // Create new schedule assignment
+            await db.query(`
+                INSERT INTO employee_schedule_history
+                (employee_id, employee_number, template_id, start_date, assigned_by)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [employee_id, employee.table_number, template_id, start_date, assigned_by || 'admin']);
+            
+            assignedCount++;
+        }
+        
+        await db.query('COMMIT');
+        res.json({ 
+            success: true, 
+            message: `График назначен ${assignedCount} сотрудникам`,
+            assignedCount 
+        });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Error assigning schedule:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get employees for schedule assignment (with filters)
+router.get('/admin/schedules/available-employees', async (req, res) => {
+    try {
+        const { organization, department, position } = req.query;
+        
+        let query = `
+            SELECT 
+                e.id,
+                e.full_name,
+                e.table_number,
+                d.object_name as department_name,
+                p.staff_position_name as position_name,
+                d.object_company as organization,
+                wst.name as current_schedule
+            FROM employees e
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
+            LEFT JOIN employee_schedule_history esh ON e.id = esh.employee_id AND esh.end_date IS NULL
+            LEFT JOIN work_schedule_templates wst ON esh.template_id = wst.id
+            WHERE e.status = 1
+        `;
+        
+        const params = [];
+        
+        if (organization) {
+            query += ` AND e.object_bin = $${params.length + 1}`;
+            params.push(organization);
+        }
+        
+        if (department) {
+            query += ` AND e.object_code = $${params.length + 1}`;
+            params.push(department);
+        }
+        
+        if (position) {
+            query += ` AND e.staff_position_code = $${params.length + 1}`;
+            params.push(position);
+        }
+        
+        query += ` ORDER BY d.object_company, d.object_name, e.full_name`;
+        
+        const employees = await db.queryRows(query, params);
+        res.json(employees);
+    } catch (error) {
+        console.error('Error fetching available employees:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get employee schedule history
+router.get('/admin/schedules/employee/:employeeId/history', async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        
+        const history = await db.queryRows(`
+            SELECT 
+                esh.*,
+                wst.name as template_name,
+                wst.schedule_type
+            FROM employee_schedule_history esh
+            JOIN work_schedule_templates wst ON esh.template_id = wst.id
+            WHERE esh.employee_id = $1
+            ORDER BY esh.start_date DESC
+        `, [employeeId]);
+        
+        res.json(history);
+    } catch (error) {
+        console.error('Error fetching employee schedule history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
