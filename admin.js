@@ -1,7 +1,11 @@
 // Admin Panel JavaScript
 
 // Use API_BASE_URL from app.js if available, otherwise define it
-const ADMIN_API_BASE_URL = window.API_BASE_URL || 'http://localhost:3030/api';
+const ADMIN_API_BASE_URL = window.API_BASE_URL || (
+    window.location.hostname === 'localhost' 
+        ? 'http://localhost:3030/api' 
+        : 'https://madlen.space/api'
+);
 
 // DOM elements
 const adminScreen = document.getElementById('adminScreen');

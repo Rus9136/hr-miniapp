@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database');
+const db = require('../database_pg');
 
 router.post('/login', (req, res) => {
   const { tableNumber } = req.body;
@@ -22,33 +22,30 @@ router.post('/login', (req, res) => {
     });
   }
 
-  db.get(
+  db.queryRow(
     `SELECT e.*, d.object_name as department_name, p.staff_position_name as position_name
      FROM employees e
      LEFT JOIN departments d ON e.object_code = d.object_code
      LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
-     WHERE e.table_number = ?`,
-    [tableNumber],
-    (err, employee) => {
-      if (err) {
-        console.error('Login error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
-      }
-
-      if (!employee) {
-        return res.status(404).json({ error: 'Employee not found' });
-      }
-
-      res.json({
-        id: employee.id,
-        tableNumber: employee.table_number,
-        fullName: employee.full_name,
-        department: employee.department_name,
-        position: employee.position_name,
-        objectBin: employee.object_bin
-      });
+     WHERE e.table_number = $1`,
+    [tableNumber]
+  ).then(employee => {
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
     }
-  );
+
+    res.json({
+      id: employee.id,
+      tableNumber: employee.table_number,
+      fullName: employee.full_name,
+      department: employee.department_name,
+      position: employee.position_name,
+      objectBin: employee.object_bin
+    });
+  }).catch(err => {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
 });
 
 module.exports = router;

@@ -1,4 +1,5 @@
-console.log('🚀 HR Mini App FINAL v4.0 - CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App v2.0 started - FIXED VERSION');
+console.log('🔧 File loaded at:', new Date().toISOString());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -452,23 +453,13 @@ async function loadCalendarData() {
     }
     
     try {
-        // Try new API first (by table number)
-        let url = `${API_BASE_URL}/employee/by-number/${tableNumber}/timesheet/${currentYear}/${currentMonth + 1}`;
-        console.log('🚀 FINAL v4.0 - NEW API:', url);
+        // Use table_number instead of ID for API calls
+        const url = `${API_BASE_URL}/employee/by-number/${tableNumber}/timesheet/${currentYear}/${currentMonth + 1}`;
+        console.log('🔧 Loading calendar for employee:', currentEmployee);
+        console.log('🔧 Fetching URL:', url);
         
-        let response = await fetch(url + '?v=' + Date.now());
-        
-        // If new API fails (404 or returns HTML), fallback to old API
-        if (!response.ok || response.headers.get('content-type')?.includes('text/html')) {
-            console.log('⚠️ New API not available, falling back to old API');
-            
-            // Use old API with employee ID
-            if (currentEmployee.id) {
-                url = `${API_BASE_URL}/employee/${currentEmployee.id}/timesheet/${currentYear}/${currentMonth + 1}`;
-                console.log('🔧 Trying old API:', url);
-                response = await fetch(url + '?v=' + Date.now());
-            }
-        }
+        // Add cache busting parameter
+        const response = await fetch(url + '?v=' + Date.now());
         
         if (!response.ok) {
             const errorText = await response.text();

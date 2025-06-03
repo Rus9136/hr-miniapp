@@ -1,0 +1,21 @@
+Server running on port 3030
+✅ PostgreSQL database initialized successfully
+Database initialized successfully
+Starting initial data sync...
+Starting data synchronization...
+Synced 535 departments
+Synced 6068 positions
+Synced 2946 employees
+Sync completed: 535 departments, 6068 positions, 2946 employees
+Initial data sync completed
+🚨 DEPRECATED API CALLED: /employee/1767/timesheet/2025/6
+🚨 Please use /employee/by-number/TABLE_NUMBER/timesheet/2025/6 instead
+Getting timesheet for employee table_number: АП00-00358
+Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
+Error syncing events for employee АП00-00358: Request failed with status code 404
+Found 5 time records for АП00-00358
+Mapped date key: 2025-05-01
+Mapped date key: 2025-05-02
+Mapped date key: 2025-05-03
+Mapped date key: 2025-05-06
+Mapped date key: 2025-05-07

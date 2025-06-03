@@ -1,0 +1,249 @@
+/* Telegram Mini App Styles */
+
+/* CSS Variables for Telegram theme */
+:root {
+  --tg-bg-color: #ffffff;
+  --tg-text-color: #000000;
+  --tg-hint-color: #999999;
+  --tg-link-color: #2481cc;
+  --tg-button-color: #2481cc;
+  --tg-button-text-color: #ffffff;
+  --tg-secondary-bg-color: #f1f1f1;
+  --tg-header-bg-color: #ffffff;
+  --tg-accent-text-color: #2481cc;
+  --tg-section-bg-color: #ffffff;
+  --tg-section-header-text-color: #6d6d71;
+  --tg-subtitle-text-color: #999999;
+  --tg-destructive-text-color: #ff3b30;
+}
+
+/* Telegram theme styles */
+body.telegram-theme {
+  background-color: var(--tg-bg-color);
+  color: var(--tg-text-color);
+}
+
+/* Safe area support for iOS */
+.telegram-theme {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Mobile-first responsive design */
+.telegram-theme .container {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Hide web-only elements in Telegram */
+.telegram-theme .web-only {
+  display: none !important;
+}
+
+/* Telegram-specific button styles */
+.telegram-theme .btn--primary {
+  background-color: var(--tg-button-color);
+  color: var(--tg-button-text-color);
+  border: none;
+}
+
+.telegram-theme .btn--primary:hover {
+  background-color: var(--tg-button-color);
+  opacity: 0.8;
+}
+
+/* Telegram header styles */
+.telegram-theme .app-header {
+  background-color: var(--tg-header-bg-color);
+  border-bottom: 1px solid var(--tg-hint-color);
+  padding: 8px 16px;
+}
+
+/* Links in Telegram theme */
+.telegram-theme a {
+  color: var(--tg-link-color);
+}
+
+/* Card styles for Telegram */
+.telegram-theme .card {
+  background-color: var(--tg-section-bg-color);
+  border: none;
+  box-shadow: none;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+/* Menu cards for Telegram */
+.telegram-theme .menu-card {
+  background-color: var(--tg-section-bg-color);
+  border: none;
+  box-shadow: none;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  padding: 16px;
+}
+
+.telegram-theme .menu-card:hover {
+  background-color: var(--tg-secondary-bg-color);
+}
+
+/* Form elements in Telegram */
+.telegram-theme .form-control {
+  background-color: var(--tg-secondary-bg-color);
+  border: none;
+  border-radius: 10px;
+  color: var(--tg-text-color);
+  padding: 12px 16px;
+}
+
+.telegram-theme .form-control:focus {
+  outline: none;
+  background-color: var(--tg-secondary-bg-color);
+  box-shadow: 0 0 0 2px var(--tg-button-color);
+}
+
+/* Calendar styles for Telegram */
+.telegram-theme .calendar-grid {
+  gap: 4px;
+}
+
+.telegram-theme .calendar-day {
+  border-radius: 8px;
+  font-size: 14px;
+  padding: 8px 4px;
+}
+
+/* Status colors remain the same but with better contrast */
+.telegram-theme .status--on-time {
+  background-color: #34c759;
+  color: white;
+}
+
+.telegram-theme .status--late {
+  background-color: #ff9500;
+  color: white;
+}
+
+.telegram-theme .status--absent {
+  background-color: #ff3b30;
+  color: white;
+}
+
+.telegram-theme .status--early-leave {
+  background-color: #ff9500;
+  color: white;
+}
+
+/* Legend for Telegram */
+.telegram-theme .legend {
+  background-color: var(--tg-section-bg-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+/* Hide logout button in Telegram (handled by close) */
+.telegram-theme #menuLogoutBtn {
+  display: none;
+}
+
+/* Hide back buttons in Telegram (handled by BackButton) */
+.telegram-theme .btn-back {
+  display: none;
+}
+
+/* Modal adjustments for Telegram */
+.telegram-theme .modal-content {
+  border-radius: 12px;
+  border: none;
+  background-color: var(--tg-section-bg-color);
+}
+
+.telegram-theme .modal-header {
+  border-bottom: 1px solid var(--tg-hint-color);
+  background-color: var(--tg-header-bg-color);
+  border-radius: 12px 12px 0 0;
+}
+
+/* Table styles for Telegram */
+.telegram-theme .admin-table {
+  background-color: var(--tg-section-bg-color);
+  border: none;
+}
+
+.telegram-theme .admin-table th {
+  background-color: var(--tg-secondary-bg-color);
+  color: var(--tg-section-header-text-color);
+  border: none;
+}
+
+.telegram-theme .admin-table td {
+  border-color: var(--tg-hint-color);
+}
+
+/* Loading states */
+.telegram-theme .spinner {
+  color: var(--tg-button-color);
+}
+
+/* Breadcrumb styles */
+.telegram-theme .breadcrumb {
+  background-color: transparent;
+  padding: 8px 0;
+}
+
+.telegram-theme .breadcrumb-item {
+  color: var(--tg-accent-text-color);
+}
+
+/* Status message styles */
+.telegram-theme .status-message {
+  background-color: var(--tg-secondary-bg-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+/* Responsive adjustments for small screens */
+@media (max-width: 480px) {
+  .telegram-theme .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  
+  .telegram-theme .menu-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .telegram-theme .calendar-grid {
+    gap: 2px;
+  }
+  
+  .telegram-theme .calendar-day {
+    font-size: 12px;
+    padding: 6px 2px;
+  }
+  
+  .telegram-theme .modal-content {
+    margin: 10px;
+    max-width: calc(100vw - 20px);
+  }
+}
+
+/* Animation for better UX */
+.telegram-theme .menu-card,
+.telegram-theme .calendar-day,
+.telegram-theme .btn {
+  transition: all 0.2s ease;
+}
+
+/* Focus styles for better accessibility */
+.telegram-theme .menu-card:focus,
+.telegram-theme .btn:focus,
+.telegram-theme .calendar-day:focus {
+  outline: 2px solid var(--tg-button-color);
+  outline-offset: 2px;
+}
