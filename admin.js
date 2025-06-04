@@ -274,7 +274,7 @@ function displayEmployees(employees) {
     const tbody = document.getElementById('employees-tbody');
     
     if (employees.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
 
@@ -284,6 +284,7 @@ function displayEmployees(employees) {
             <td>${emp.full_name}</td>
             <td>${emp.department_name || '-'}</td>
             <td>${emp.position_name || '-'}</td>
+            <td>${emp.current_schedule || '-'}</td>
             <td><span class="status-badge ${emp.status === 1 ? 'active' : 'inactive'}">${emp.status === 1 ? 'Активен' : 'Неактивен'}</span></td>
         </tr>
     `).join('');
@@ -1361,6 +1362,7 @@ let scheduleRuleIndex = 1;
 
 // Initialize schedules section
 let schedulesInitialized = false;
+let currentScheduleCode = null; // Переменная для хранения текущего кода графика
 
 function initSchedulesSection() {
     console.log('🔧 initSchedulesSection called for 1C schedules, initialized:', schedulesInitialized);
@@ -1425,6 +1427,9 @@ function showCreateScheduleModal() {
 function openScheduleCard(scheduleCode) {
     console.log('🎯 openScheduleCard called with scheduleCode:', scheduleCode);
     
+    // Store current schedule code for later use
+    currentScheduleCode = scheduleCode;
+    
     // Hide schedules list and show card
     switchSection('schedule-card');
     
@@ -1473,6 +1478,12 @@ function initScheduleCardSection() {
         addDateBtn.addEventListener('click', addWorkDate);
     }
     
+    // Add event listener for apply times button
+    const applyTimesBtn = document.getElementById('apply-times-btn');
+    if (applyTimesBtn) {
+        applyTimesBtn.addEventListener('click', applyTimesToAllDays);
+    }
+    
     // Form validation
     ['schedule-card-name', 'schedule-card-check-in', 'schedule-card-check-out'].forEach(id => {
         const element = document.getElementById(id);
@@ -1510,11 +1521,11 @@ async function loadScheduleCard1C(scheduleCode) {
         const checkOutElement = document.getElementById('schedule-card-check-out');
         if (checkInElement) {
             checkInElement.value = firstSchedule.work_start_time || '';
-            checkInElement.readOnly = true;
+            checkInElement.readOnly = false; // Разрешаем редактирование
         }
         if (checkOutElement) {
             checkOutElement.value = firstSchedule.work_end_time || '';
-            checkOutElement.readOnly = true;
+            checkOutElement.readOnly = false; // Разрешаем редактирование
         }
         
         // Hide description field for 1C schedules
@@ -1549,7 +1560,7 @@ function displayWorkDates1C(schedules) {
     const tbody = document.getElementById('work-dates-tbody');
     
     if (schedules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Нет рабочих дней</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет рабочих дней</td></tr>';
         return;
     }
     
@@ -1561,6 +1572,8 @@ function displayWorkDates1C(schedules) {
             <th style="width: 150px;">Дата</th>
             <th style="width: 100px;">Часов работы</th>
             <th style="width: 150px;">Тип времени</th>
+            <th style="width: 100px;">Время входа</th>
+            <th style="width: 100px;">Время выхода</th>
         `;
     }
     
@@ -1568,11 +1581,17 @@ function displayWorkDates1C(schedules) {
         const workDate = new Date(schedule.work_date);
         const dateStr = workDate.toLocaleDateString('ru-RU');
         
+        // Format time fields
+        const startTime = schedule.work_start_time || '';
+        const endTime = schedule.work_end_time || '';
+        
         return `
             <tr>
                 <td>${dateStr}</td>
                 <td>${schedule.work_hours || 0}</td>
                 <td>${schedule.time_type || ''}</td>
+                <td>${startTime}</td>
+                <td>${endTime}</td>
             </tr>
         `;
     }).join('');
@@ -2196,6 +2215,67 @@ async function handleScheduleAssignment() {
         btnText.style.display = 'inline';
         spinner.style.display = 'none';
         updateAssignButtonState();
+    }
+}
+
+// Apply times to all days in the schedule
+async function applyTimesToAllDays() {
+    const checkInElement = document.getElementById('schedule-card-check-in');
+    const checkOutElement = document.getElementById('schedule-card-check-out');
+    
+    if (!checkInElement || !checkOutElement) {
+        alert('Ошибка: не найдены поля времени');
+        return;
+    }
+    
+    const startTime = checkInElement.value;
+    const endTime = checkOutElement.value;
+    
+    // Проверяем, что оба поля заполнены
+    if (!startTime || !endTime) {
+        alert('Пожалуйста, заполните оба поля времени (вход и выход)');
+        return;
+    }
+    
+    if (!currentScheduleCode) {
+        alert('Ошибка: не найден код графика');
+        return;
+    }
+    
+    // Подтверждение от пользователя
+    if (!confirm(`Применить время входа ${startTime} и выхода ${endTime} ко всем дням графика?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/update-times`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scheduleCode: currentScheduleCode,
+                startTime: startTime,
+                endTime: endTime
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Перезагружаем данные графика чтобы показать обновленные значения
+            loadScheduleCard1C(currentScheduleCode);
+        } else {
+            alert(`Ошибка: ${result.message || 'Неизвестная ошибка'}`);
+        }
+        
+    } catch (error) {
+        console.error('Error applying times:', error);
+        alert('Ошибка при применении времени: ' + error.message);
     }
 }
 
