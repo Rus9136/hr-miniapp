@@ -662,50 +662,148 @@ router.post('/admin/schedules/assign', async (req, res) => {
     try {
         const { template_id, employee_ids, start_date, assigned_by } = req.body;
         
+        // Improved validation
         if (!template_id || !employee_ids || !start_date) {
-            return res.status(400).json({ error: 'Missing required fields' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Необходимо указать шаблон графика, сотрудников и дату начала' 
+            });
         }
+        
+        // Validate employee_ids is an array
+        if (!Array.isArray(employee_ids) || employee_ids.length === 0) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Необходимо выбрать хотя бы одного сотрудника' 
+            });
+        }
+        
+        // Check if template exists
+        const template = await db.queryRow(
+            'SELECT id, name FROM work_schedule_templates WHERE id = $1 AND is_active = true',
+            [template_id]
+        );
+        
+        if (!template) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Указанный шаблон графика не найден или неактивен' 
+            });
+        }
+        
+        console.log(`Assigning schedule "${template.name}" to ${employee_ids.length} employees from ${start_date}`);
         
         await db.query('BEGIN');
         
         let assignedCount = 0;
+        let skippedCount = 0;
+        const errors = [];
         
         for (const employee_id of employee_ids) {
-            // Get employee number
-            const employee = await db.queryRow(
-                'SELECT table_number FROM employees WHERE id = $1',
-                [employee_id]
-            );
-            
-            if (!employee) continue;
-            
-            // End current schedule if exists
-            await db.query(`
-                UPDATE employee_schedule_history 
-                SET end_date = $1::date - INTERVAL '1 day'
-                WHERE employee_id = $2 AND end_date IS NULL
-            `, [start_date, employee_id]);
-            
-            // Create new schedule assignment
-            await db.query(`
-                INSERT INTO employee_schedule_history
-                (employee_id, employee_number, template_id, start_date, assigned_by)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [employee_id, employee.table_number, template_id, start_date, assigned_by || 'admin']);
-            
-            assignedCount++;
+            try {
+                // Get employee info
+                const employee = await db.queryRow(
+                    'SELECT id, table_number, full_name FROM employees WHERE id = $1',
+                    [employee_id]
+                );
+                
+                if (!employee) {
+                    errors.push(`Сотрудник с ID ${employee_id} не найден`);
+                    skippedCount++;
+                    continue;
+                }
+                
+                console.log(`Processing employee: ${employee.full_name} (${employee.table_number})`);
+                
+                // Check for overlapping schedules in the future
+                const existingSchedule = await db.queryRow(`
+                    SELECT 
+                        esh.id,
+                        esh.start_date,
+                        esh.end_date,
+                        wst.name as template_name
+                    FROM employee_schedule_history esh
+                    JOIN work_schedule_templates wst ON esh.template_id = wst.id
+                    WHERE esh.employee_id = $1 
+                    AND (
+                        esh.end_date IS NULL 
+                        OR esh.end_date >= $2::date
+                    )
+                    AND esh.start_date <= $2::date
+                `, [employee_id, start_date]);
+                
+                if (existingSchedule) {
+                    console.log(`Found existing schedule for ${employee.full_name}: ${existingSchedule.template_name} from ${existingSchedule.start_date}`);
+                    
+                    // Check if new start date is after existing start date
+                    const newStartDate = new Date(start_date);
+                    const existingStartDate = new Date(existingSchedule.start_date);
+                    
+                    if (newStartDate > existingStartDate) {
+                        // End current schedule the day before the new one starts
+                        const endDate = new Date(start_date);
+                        endDate.setDate(endDate.getDate() - 1);
+                        const endDateStr = endDate.toISOString().split('T')[0];
+                        
+                        await db.query(`
+                            UPDATE employee_schedule_history 
+                            SET end_date = $1::date
+                            WHERE id = $2
+                        `, [endDateStr, existingSchedule.id]);
+                        
+                        console.log(`Ended previous schedule for ${employee.full_name} on ${endDateStr}`);
+                    } else {
+                        // New schedule starts before or same as existing - remove existing schedule entirely
+                        await db.query(`
+                            DELETE FROM employee_schedule_history 
+                            WHERE id = $1
+                        `, [existingSchedule.id]);
+                        
+                        console.log(`Removed previous schedule for ${employee.full_name} (conflicting dates)`);
+                    }
+                }
+                
+                // Create new schedule assignment
+                await db.query(`
+                    INSERT INTO employee_schedule_history
+                    (employee_id, employee_number, template_id, start_date, assigned_by)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [employee_id, employee.table_number, template_id, start_date, assigned_by || 'admin']);
+                
+                console.log(`Assigned new schedule to ${employee.full_name} from ${start_date}`);
+                assignedCount++;
+                
+            } catch (empError) {
+                console.error(`Error processing employee ${employee_id}:`, empError);
+                errors.push(`Ошибка для сотрудника ${employee_id}: ${empError.message}`);
+                skippedCount++;
+            }
         }
         
         await db.query('COMMIT');
+        
+        let message = `График "${template.name}" назначен ${assignedCount} сотрудникам`;
+        if (skippedCount > 0) {
+            message += `, пропущено ${skippedCount} сотрудников`;
+        }
+        
+        console.log(`Assignment completed: ${assignedCount} assigned, ${skippedCount} skipped`);
+        
         res.json({ 
             success: true, 
-            message: `График назначен ${assignedCount} сотрудникам`,
-            assignedCount 
+            message: message,
+            assignedCount,
+            skippedCount,
+            errors: errors.length > 0 ? errors : undefined
         });
+        
     } catch (error) {
         await db.query('ROLLBACK');
         console.error('Error assigning schedule:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ 
+            success: false,
+            error: 'Ошибка при назначении графика: ' + error.message 
+        });
     }
 });
 
