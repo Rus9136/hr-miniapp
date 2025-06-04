@@ -1363,44 +1363,27 @@ let scheduleRuleIndex = 1;
 let schedulesInitialized = false;
 
 function initSchedulesSection() {
-    console.log('🔧 initSchedulesSection called, initialized:', schedulesInitialized);
+    console.log('🔧 initSchedulesSection called for 1C schedules, initialized:', schedulesInitialized);
     
     if (schedulesInitialized) {
         loadSchedules();
         return;
     }
     
-    // Wait a bit for DOM to be ready
+    // No need for create button anymore, just load 1C schedules
     setTimeout(() => {
-        console.log('🔍 Looking for create-schedule-btn...');
-        const createBtn = document.getElementById('create-schedule-btn');
-        if (createBtn) {
-            console.log('✅ create-schedule-btn found, adding event listener');
-            createBtn.addEventListener('click', showCreateScheduleModal);
-        } else {
-            console.error('❌ create-schedule-btn element not found!');
-            console.log('🔍 Available buttons in schedules section:');
-            const schedulesSection = document.getElementById('schedules-section');
-            if (schedulesSection) {
-                const buttons = schedulesSection.querySelectorAll('button');
-                buttons.forEach((btn, index) => {
-                    console.log(`Button ${index}: id="${btn.id}", class="${btn.className}"`);
-                });
-            }
-        }
-        
         schedulesInitialized = true;
         loadSchedules();
     }, 200);
 }
 
-// Load schedules
+// Load schedules from 1C
 async function loadSchedules() {
     const tbody = document.getElementById('schedules-tbody');
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">Загрузка данных...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="2" class="loading">Загрузка данных...</td></tr>';
     
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/templates`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list`);
         if (!response.ok) throw new Error('Failed to load schedules');
         
         schedulesData = await response.json();
@@ -1408,31 +1391,25 @@ async function loadSchedules() {
         document.getElementById('schedules-total').textContent = schedulesData.length;
     } catch (error) {
         console.error('Error loading schedules:', error);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
-// Display schedules
+// Display schedules from 1C
 function displaySchedules(schedules) {
     const tbody = document.getElementById('schedules-tbody');
     
     if (schedules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
     tbody.innerHTML = schedules.map(schedule => {
-        const workTime = `${schedule.check_in_time} - ${schedule.check_out_time}`;
-        
         return `
             <tr>
-                <td>${schedule.name}</td>
-                <td>${workTime}</td>
-                <td>${schedule.work_days_count || 0}</td>
-                <td>${schedule.employee_count || 0}</td>
-                <td>${schedule.organizations || '-'}</td>
+                <td>${schedule.schedule_name}</td>
                 <td>
-                    <button class="btn btn--sm btn--primary" onclick="openScheduleCard(${schedule.id})">Открыть</button>
+                    <button class="btn btn--sm btn--primary" onclick="openScheduleCard('${schedule.schedule_code}')">Открыть</button>
                 </td>
             </tr>
         `;
@@ -1444,9 +1421,9 @@ function showCreateScheduleModal() {
     openScheduleCard(null); // null means create new
 }
 
-// Open schedule card
-function openScheduleCard(scheduleId) {
-    console.log('🎯 openScheduleCard called with scheduleId:', scheduleId);
+// Open schedule card for 1C schedule
+function openScheduleCard(scheduleCode) {
+    console.log('🎯 openScheduleCard called with scheduleCode:', scheduleCode);
     
     // Hide schedules list and show card
     switchSection('schedule-card');
@@ -1457,31 +1434,17 @@ function openScheduleCard(scheduleId) {
         const titleElement = document.getElementById('schedule-card-title');
         if (titleElement) {
             console.log('✅ schedule-card-title found');
-            if (scheduleId) {
-                // Edit existing schedule
-                console.log('📝 Setting title for edit mode');
-                titleElement.textContent = 'Редактирование графика';
-                loadScheduleCard(scheduleId);
+            if (scheduleCode) {
+                // Show existing 1C schedule
+                console.log('📝 Setting title for 1C schedule view');
+                titleElement.textContent = 'График работы из 1С';
+                loadScheduleCard1C(scheduleCode);
             } else {
-                // Create new schedule
-                console.log('➕ Setting title for create mode');
-                titleElement.textContent = 'Создание нового графика';
-                clearScheduleCard();
+                console.log('❌ No schedule code provided');
+                titleElement.textContent = 'Ошибка загрузки графика';
             }
         } else {
             console.error('❌ schedule-card-title element not found!');
-            console.log('🔍 Checking if schedule-card-section exists...');
-            const cardSection = document.getElementById('schedule-card-section');
-            if (cardSection) {
-                console.log('✅ schedule-card-section exists, display:', window.getComputedStyle(cardSection).display);
-                console.log('🔍 All elements in card section:');
-                const allElements = cardSection.querySelectorAll('[id]');
-                allElements.forEach(el => {
-                    console.log(`- ${el.tagName}#${el.id}`);
-                });
-            } else {
-                console.error('❌ schedule-card-section not found!');
-            }
         }
     }, 200);
 }
@@ -1521,47 +1484,98 @@ function initScheduleCardSection() {
     scheduleCardInitialized = true;
 }
 
-// Load schedule card data
-async function loadScheduleCard(scheduleId) {
+// Load schedule card data from 1C
+async function loadScheduleCard1C(scheduleCode) {
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/templates/${scheduleId}`);
-        if (!response.ok) throw new Error('Failed to load schedule');
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c?scheduleCode=${scheduleCode}`);
+        if (!response.ok) throw new Error('Failed to load 1C schedule');
         
         const data = await response.json();
-        const { template, dates, employees } = data;
+        const schedules = data.schedules || [];
         
-        // Populate form fields with safety checks
-        const fieldsMap = [
-            { id: 'schedule-card-id', value: template.id || '' },
-            { id: 'schedule-card-name', value: template.name || '' },
-            { id: 'schedule-card-description', value: template.description || '' },
-            { id: 'schedule-card-check-in', value: template.check_in_time || '09:00' },
-            { id: 'schedule-card-check-out', value: template.check_out_time || '18:00' }
-        ];
-        
-        fieldsMap.forEach(item => {
-            const element = document.getElementById(item.id);
-            if (element) {
-                element.value = item.value;
-            } else {
-                console.warn(`Element ${item.id} not found in loadScheduleCard`);
-            }
-        });
-        
-        // Display work dates and assigned employees
-        displayWorkDates(dates || []);
-        displayAssignedEmployees(employees || []);
-        
-        const countElement = document.getElementById('assigned-employees-count');
-        if (countElement) {
-            countElement.textContent = employees.length;
+        if (schedules.length === 0) {
+            throw new Error('No data found for this schedule');
         }
         
-        validateScheduleCard();
+        const firstSchedule = schedules[0];
+        
+        // Populate schedule name and times
+        const nameElement = document.getElementById('schedule-card-name');
+        if (nameElement) {
+            nameElement.value = firstSchedule.schedule_name || '';
+            nameElement.readOnly = true;
+        }
+        
+        const checkInElement = document.getElementById('schedule-card-check-in');
+        const checkOutElement = document.getElementById('schedule-card-check-out');
+        if (checkInElement) {
+            checkInElement.value = firstSchedule.work_start_time || '';
+            checkInElement.readOnly = true;
+        }
+        if (checkOutElement) {
+            checkOutElement.value = firstSchedule.work_end_time || '';
+            checkOutElement.readOnly = true;
+        }
+        
+        // Hide description field for 1C schedules
+        const descriptionElement = document.getElementById('schedule-card-description');
+        if (descriptionElement) {
+            descriptionElement.closest('.form-group').style.display = 'none';
+        }
+        
+        // Display work dates from 1C
+        displayWorkDates1C(schedules);
+        
+        // Hide employee assignment section for 1C schedules
+        const employeeSection = document.querySelector('.schedule-employees-section');
+        if (employeeSection) {
+            employeeSection.style.display = 'none';
+        }
+        
+        // Hide save button and add date button for 1C schedules
+        const saveBtn = document.getElementById('save-schedule-btn');
+        const addDateBtn = document.getElementById('add-work-date-btn');
+        if (saveBtn) saveBtn.style.display = 'none';
+        if (addDateBtn) addDateBtn.style.display = 'none';
+        
     } catch (error) {
-        console.error('Error loading schedule card:', error);
-        alert('Ошибка загрузки графика');
+        console.error('Error loading 1C schedule:', error);
+        alert('Ошибка загрузки графика из 1С: ' + error.message);
     }
+}
+
+// Display work dates from 1C schedule
+function displayWorkDates1C(schedules) {
+    const tbody = document.getElementById('work-dates-tbody');
+    
+    if (schedules.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Нет рабочих дней</td></tr>';
+        return;
+    }
+    
+    // Update table header for 1C data
+    const table = document.getElementById('work-dates-table');
+    const thead = table.querySelector('thead tr');
+    if (thead) {
+        thead.innerHTML = `
+            <th style="width: 150px;">Дата</th>
+            <th style="width: 100px;">Часов работы</th>
+            <th style="width: 150px;">Тип времени</th>
+        `;
+    }
+    
+    tbody.innerHTML = schedules.map(schedule => {
+        const workDate = new Date(schedule.work_date);
+        const dateStr = workDate.toLocaleDateString('ru-RU');
+        
+        return `
+            <tr>
+                <td>${dateStr}</td>
+                <td>${schedule.work_hours || 0}</td>
+                <td>${schedule.time_type || ''}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // Clear schedule card form
