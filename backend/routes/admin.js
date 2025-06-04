@@ -941,4 +941,229 @@ router.delete('/admin/time-records/clear-all', async (req, res) => {
     }
 });
 
+// ==================== 1C WORK SCHEDULES IMPORT ENDPOINT ====================
+
+// Import work schedules data from 1C
+router.post('/admin/schedules/import-1c', async (req, res) => {
+    try {
+        const { ДатаВыгрузки, КоличествоГрафиков, Графики } = req.body;
+        
+        console.log('Received 1C schedules import request:', {
+            exportDate: ДатаВыгрузки,
+            schedulesCount: КоличествоГрафиков,
+            schedulesReceived: Графики?.length || 0
+        });
+        
+        // Basic validation
+        if (!Графики || !Array.isArray(Графики) || Графики.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Нет данных для импорта. Массив "Графики" отсутствует или пуст.'
+            });
+        }
+        
+        let totalProcessed = 0;
+        let totalInserted = 0;
+        let totalUpdated = 0;
+        let errors = [];
+        
+        // Process each schedule
+        for (const график of Графики) {
+            try {
+                const { НаименованиеГрафика, КодГрафика, РабочиеДни } = график;
+                
+                // Validate schedule data
+                if (!НаименованиеГрафика || !КодГрафика || !РабочиеДни || !Array.isArray(РабочиеДни)) {
+                    errors.push(`Неполные данные для графика: ${НаименованиеГрафика || КодГрафика || 'UNKNOWN'}`);
+                    continue;
+                }
+                
+                console.log(`Processing schedule: ${НаименованиеГрафика} (${КодГрафика}) with ${РабочиеДни.length} work days`);
+                
+                // Start transaction for this schedule
+                await db.query('BEGIN');
+                
+                // Delete existing records for this schedule code (replace existing data)
+                const deleteResult = await db.query(
+                    'DELETE FROM work_schedules_1c WHERE schedule_code = $1',
+                    [КодГрафика]
+                );
+                
+                const deletedCount = deleteResult.rowCount || 0;
+                if (deletedCount > 0) {
+                    console.log(`Deleted ${deletedCount} existing records for schedule ${КодГрафика}`);
+                }
+                
+                let scheduleInsertCount = 0;
+                
+                // Insert new records for this schedule
+                for (const рабочийДень of РабочиеДни) {
+                    const { Дата, Месяц, ВидУчетаВремени, ДополнительноеЗначение } = рабочийДень;
+                    
+                    // Validate work day data
+                    if (!Дата || !Месяц || !ВидУчетаВремени || ДополнительноеЗначение === undefined) {
+                        errors.push(`Неполные данные для рабочего дня в графике ${НаименованиеГрафика}: ${JSON.stringify(рабочийДень)}`);
+                        continue;
+                    }
+                    
+                    // Insert work day record
+                    await db.query(`
+                        INSERT INTO work_schedules_1c 
+                        (schedule_name, schedule_code, work_date, work_month, time_type, work_hours)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                    `, [
+                        НаименованиеГрафика,
+                        КодГрафика,
+                        Дата,              // work_date
+                        Месяц,             // work_month
+                        ВидУчетаВремени,   // time_type
+                        ДополнительноеЗначение  // work_hours
+                    ]);
+                    
+                    scheduleInsertCount++;
+                }
+                
+                await db.query('COMMIT');
+                
+                console.log(`Successfully processed schedule ${НаименованиеГрафика}: inserted ${scheduleInsertCount} work days`);
+                totalProcessed++;
+                totalInserted += scheduleInsertCount;
+                if (deletedCount > 0) {
+                    totalUpdated++;
+                }
+                
+            } catch (scheduleError) {
+                await db.query('ROLLBACK');
+                const errorMsg = `Ошибка обработки графика ${график.НаименованиеГрафика || график.КодГрафика || 'UNKNOWN'}: ${scheduleError.message}`;
+                console.error(errorMsg, scheduleError);
+                errors.push(errorMsg);
+            }
+        }
+        
+        const response = {
+            success: true,
+            message: `Импорт завершен успешно`,
+            statistics: {
+                totalSchedulesReceived: Графики.length,
+                totalSchedulesProcessed: totalProcessed,
+                totalSchedulesUpdated: totalUpdated,
+                totalWorkDaysInserted: totalInserted,
+                errorsCount: errors.length
+            },
+            exportDate: ДатаВыгрузки,
+            errors: errors.length > 0 ? errors : undefined
+        };
+        
+        console.log('1C import completed:', response.statistics);
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Error importing 1C schedules:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка импорта данных из 1С: ' + error.message
+        });
+    }
+});
+
+// Get work schedules from 1C with filters
+router.get('/admin/schedules/1c', async (req, res) => {
+    try {
+        const { scheduleCode, scheduleName, dateFrom, dateTo, month } = req.query;
+        
+        let query = `
+            SELECT 
+                schedule_name,
+                schedule_code,
+                work_date,
+                work_month,
+                time_type,
+                work_hours,
+                created_at,
+                updated_at
+            FROM work_schedules_1c
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        
+        if (scheduleCode) {
+            query += ` AND schedule_code = $${params.length + 1}`;
+            params.push(scheduleCode);
+        }
+        
+        if (scheduleName) {
+            query += ` AND schedule_name ILIKE $${params.length + 1}`;
+            params.push(`%${scheduleName}%`);
+        }
+        
+        if (dateFrom) {
+            query += ` AND work_date >= $${params.length + 1}`;
+            params.push(dateFrom);
+        }
+        
+        if (dateTo) {
+            query += ` AND work_date <= $${params.length + 1}`;
+            params.push(dateTo);
+        }
+        
+        if (month) {
+            query += ` AND work_month = $${params.length + 1}`;
+            params.push(month);
+        }
+        
+        query += ` ORDER BY schedule_name, work_date LIMIT 1000`;
+        
+        const schedules = await db.queryRows(query, params);
+        
+        // Get summary statistics
+        const statsQuery = `
+            SELECT 
+                COUNT(DISTINCT schedule_code) as total_schedules,
+                COUNT(*) as total_work_days,
+                MIN(work_date) as earliest_date,
+                MAX(work_date) as latest_date,
+                SUM(work_hours) as total_hours
+            FROM work_schedules_1c
+            ${params.length > 0 ? 'WHERE ' + query.split('WHERE ')[1].split(' ORDER BY')[0] : ''}
+        `;
+        
+        const stats = await db.queryRow(statsQuery, params);
+        
+        res.json({
+            schedules,
+            statistics: stats,
+            filters: { scheduleCode, scheduleName, dateFrom, dateTo, month }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching 1C schedules:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get unique schedule names and codes from 1C data
+router.get('/admin/schedules/1c/list', async (req, res) => {
+    try {
+        const schedules = await db.queryRows(`
+            SELECT DISTINCT 
+                schedule_name,
+                schedule_code,
+                COUNT(*) as work_days_count,
+                MIN(work_date) as start_date,
+                MAX(work_date) as end_date,
+                AVG(work_hours) as avg_hours,
+                MAX(created_at) as last_updated
+            FROM work_schedules_1c
+            GROUP BY schedule_name, schedule_code
+            ORDER BY schedule_name
+        `);
+        
+        res.json(schedules);
+    } catch (error) {
+        console.error('Error fetching 1C schedules list:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
