@@ -998,7 +998,14 @@ router.post('/admin/schedules/import-1c', async (req, res) => {
                 
                 // Insert new records for this schedule
                 for (const рабочийДень of РабочиеДни) {
-                    const { Дата, Месяц, ВидУчетаВремени, ДополнительноеЗначение } = рабочийДень;
+                    const { 
+                        Дата, 
+                        Месяц, 
+                        ВидУчетаВремени, 
+                        ДополнительноеЗначение,
+                        ВремяНачалоРаботы,
+                        ВремяЗавершениеРаботы 
+                    } = рабочийДень;
                     
                     // Validate work day data
                     if (!Дата || !Месяц || !ВидУчетаВремени || ДополнительноеЗначение === undefined) {
@@ -1009,15 +1016,17 @@ router.post('/admin/schedules/import-1c', async (req, res) => {
                     // Insert work day record
                     await db.query(`
                         INSERT INTO work_schedules_1c 
-                        (schedule_name, schedule_code, work_date, work_month, time_type, work_hours)
-                        VALUES ($1, $2, $3, $4, $5, $6)
+                        (schedule_name, schedule_code, work_date, work_month, time_type, work_hours, work_start_time, work_end_time)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     `, [
                         НаименованиеГрафика,
                         КодГрафика,
                         Дата,              // work_date
                         Месяц,             // work_month
                         ВидУчетаВремени,   // time_type
-                        ДополнительноеЗначение  // work_hours
+                        ДополнительноеЗначение,  // work_hours
+                        ВремяНачалоРаботы || null,    // work_start_time (optional)
+                        ВремяЗавершениеРаботы || null // work_end_time (optional)
                     ]);
                     
                     scheduleInsertCount++;
@@ -1079,6 +1088,8 @@ router.get('/admin/schedules/1c', async (req, res) => {
                 work_month,
                 time_type,
                 work_hours,
+                work_start_time,
+                work_end_time,
                 created_at,
                 updated_at
             FROM work_schedules_1c

@@ -1,0 +1,46 @@
+Server running on port 3030
+Timezone set to Asia/Almaty for new connection
+Database timezone set to Asia/Almaty
+✅ PostgreSQL database initialized successfully
+Database initialized successfully
+Starting initial data sync...
+Starting data synchronization...
+Synced 535 departments
+Synced 6068 positions
+Received 1C schedules import request: {
+  exportDate: '2025-06-04T13:05:05',
+  schedulesCount: 1,
+  schedulesReceived: 1
+}
+Processing schedule: 05:00-17:00/MG 1 смена (76c06530-1aad-11f0-90de-3cecef8cc60b) with 1 work days
+Successfully processed schedule 05:00-17:00/MG 1 смена: inserted 1 work days
+1C import completed: {
+  totalSchedulesReceived: 1,
+  totalSchedulesProcessed: 1,
+  totalSchedulesUpdated: 0,
+  totalWorkDaysInserted: 1,
+  errorsCount: 0
+}
+Synced 2945 employees
+Sync completed: 535 departments, 6068 positions, 2945 employees
+Initial data sync completed
+Received 1C schedules import request: {
+  exportDate: '2025-06-04T14:00:00',
+  schedulesCount: 1,
+  schedulesReceived: 1
+}
+Processing schedule: 05:00-17:00/MG 1 смена ОБНОВЛЕННАЯ (76c06530-1aad-11f0-90de-3cecef8cc60b) with 2 work days
+Deleted 1 existing records for schedule 76c06530-1aad-11f0-90de-3cecef8cc60b
+Successfully processed schedule 05:00-17:00/MG 1 смена ОБНОВЛЕННАЯ: inserted 2 work days
+1C import completed: {
+  totalSchedulesReceived: 1,
+  totalSchedulesProcessed: 1,
+  totalSchedulesUpdated: 1,
+  totalWorkDaysInserted: 2,
+  errorsCount: 0
+}
+Received 1C schedules import request: {
+  exportDate: '2025-06-04T14:00:00',
+  schedulesCount: 1,
+  schedulesReceived: 0
+}
