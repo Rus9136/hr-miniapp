@@ -141,6 +141,8 @@ async function initializeDatabase() {
         work_month DATE NOT NULL,
         time_type VARCHAR(100) NOT NULL,
         work_hours INTEGER NOT NULL,
+        work_start_time TIME,
+        work_end_time TIME,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT unique_schedule_date UNIQUE(schedule_code, work_date)

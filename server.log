@@ -1,20 +1,23 @@
-node:events:495
-      throw er; // Unhandled 'error' event
-      ^
-
-Error: listen EADDRINUSE: address already in use 0.0.0.0:3030
-    at Server.setupListenHandle [as _listen2] (node:net:1817:16)
-    at listenInCluster (node:net:1865:12)
-    at doListen (node:net:2014:7)
-    at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
-Emitted 'error' event on Server instance at:
-    at emitErrorNT (node:net:1844:8)
-    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
-  code: 'EADDRINUSE',
-  errno: -98,
-  syscall: 'listen',
-  address: '0.0.0.0',
-  port: 3030
+Server running on port 3030
+✅ PostgreSQL database initialized successfully
+Database initialized successfully
+Starting initial data sync...
+Starting data synchronization...
+Synced 535 departments
+Loading timesheet data: {
+  tableNumber: 'АП00-00020',
+  dateFrom: '2025-04-01',
+  dateTo: '2025-05-01',
+  objectBin: '241240023631'
 }
-
-Node.js v18.20.8
+Loading events for employee: {
+  dateStart: '2025-04-01',
+  dateStop: '2025-05-01',
+  tableNumber: 'АП00-00020',
+  objectBIN: '241240023631'
+}
+Saving 19 events to database...
+Synced 6068 positions
+Synced 2942 employees
+Sync completed: 535 departments, 6068 positions, 2942 employees
+Initial data sync completed
