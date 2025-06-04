@@ -10,10 +10,20 @@ router.get('/admin/employees', (req, res) => {
             e.*,
             d.object_name as department_name,
             p.staff_position_name as position_name,
-            e.object_bin
+            e.object_bin,
+            ws.schedule_name as current_schedule
         FROM employees e
         LEFT JOIN departments d ON e.object_code = d.object_code
         LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
+        LEFT JOIN (
+            SELECT DISTINCT ON (esa.employee_number) 
+                esa.employee_number,
+                ws1c.schedule_name
+            FROM employee_schedule_assignments esa
+            LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+            WHERE esa.end_date IS NULL
+            ORDER BY esa.employee_number, esa.created_at DESC
+        ) ws ON e.table_number = ws.employee_number
         ORDER BY e.full_name
     `;
 
@@ -943,6 +953,26 @@ router.delete('/admin/time-records/clear-all', async (req, res) => {
 
 // ==================== 1C WORK SCHEDULES IMPORT ENDPOINT ====================
 
+// Function to extract work times from schedule name
+function extractWorkTimesFromScheduleName(scheduleName) {
+    if (!scheduleName) return { work_start_time: null, work_end_time: null };
+    
+    // Regex pattern for time format: HH:MM-HH:MM at the beginning of the name
+    const timePattern = /^(\d{2}:\d{2})-(\d{2}:\d{2})/;
+    const match = scheduleName.match(timePattern);
+    
+    if (match) {
+        console.log(`Extracted times from "${scheduleName}": ${match[1]} - ${match[2]}`);
+        return {
+            work_start_time: match[1],
+            work_end_time: match[2]
+        };
+    }
+    
+    console.log(`Could not extract times from "${scheduleName}"`);
+    return { work_start_time: null, work_end_time: null };
+}
+
 // Import work schedules data from 1C
 router.post('/admin/schedules/import-1c', async (req, res) => {
     try {
@@ -996,6 +1026,9 @@ router.post('/admin/schedules/import-1c', async (req, res) => {
                 
                 let scheduleInsertCount = 0;
                 
+                // Extract work times from schedule name (fallback if not provided by 1C)
+                const extractedTimes = extractWorkTimesFromScheduleName(НаименованиеГрафика);
+                
                 // Insert new records for this schedule
                 for (const рабочийДень of РабочиеДни) {
                     const { 
@@ -1013,6 +1046,10 @@ router.post('/admin/schedules/import-1c', async (req, res) => {
                         continue;
                     }
                     
+                    // Use times from 1C if provided, otherwise use extracted times from schedule name
+                    const finalStartTime = ВремяНачалоРаботы || extractedTimes.work_start_time;
+                    const finalEndTime = ВремяЗавершениеРаботы || extractedTimes.work_end_time;
+                    
                     // Insert work day record
                     await db.query(`
                         INSERT INTO work_schedules_1c 
@@ -1025,8 +1062,8 @@ router.post('/admin/schedules/import-1c', async (req, res) => {
                         Месяц,             // work_month
                         ВидУчетаВремени,   // time_type
                         ДополнительноеЗначение,  // work_hours
-                        ВремяНачалоРаботы || null,    // work_start_time (optional)
-                        ВремяЗавершениеРаботы || null // work_end_time (optional)
+                        finalStartTime,    // work_start_time (from 1C or extracted)
+                        finalEndTime       // work_end_time (from 1C or extracted)
                     ]);
                     
                     scheduleInsertCount++;
@@ -1473,6 +1510,75 @@ router.get('/admin/employees/:employee_number/schedule-history', async (req, res
     } catch (error) {
         console.error('Error fetching schedule history:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update work times for all days in a schedule
+router.put('/admin/schedules/1c/update-times', async (req, res) => {
+    try {
+        const { scheduleCode, startTime, endTime } = req.body;
+        
+        // Валидация входных данных
+        if (!scheduleCode || !startTime || !endTime) {
+            return res.status(400).json({
+                success: false,
+                message: 'Все поля обязательны: scheduleCode, startTime, endTime'
+            });
+        }
+        
+        // Проверяем существование графика
+        const checkQuery = `
+            SELECT COUNT(*) as count 
+            FROM work_schedules_1c 
+            WHERE schedule_code = $1
+        `;
+        const checkResult = await db.queryRows(checkQuery, [scheduleCode]);
+        
+        if (checkResult[0].count == 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'График с указанным кодом не найден'
+            });
+        }
+        
+        // Обновляем время только для записей, где поля времени пустые (NULL)
+        const updateQuery = `
+            UPDATE work_schedules_1c 
+            SET 
+                work_start_time = $2,
+                work_end_time = $3
+            WHERE schedule_code = $1 
+            AND (work_start_time IS NULL OR work_end_time IS NULL)
+        `;
+        
+        const result = await db.queryRows(updateQuery, [scheduleCode, startTime, endTime]);
+        
+        // Получаем количество обновленных записей
+        const countQuery = `
+            SELECT COUNT(*) as total_count,
+                   COUNT(CASE WHEN work_start_time = $2 AND work_end_time = $3 THEN 1 END) as updated_count
+            FROM work_schedules_1c 
+            WHERE schedule_code = $1
+        `;
+        const countResult = await db.queryRows(countQuery, [scheduleCode, startTime, endTime]);
+        
+        res.json({
+            success: true,
+            message: 'Время успешно применено',
+            updatedCount: countResult[0].updated_count,
+            totalCount: countResult[0].total_count,
+            scheduleCode: scheduleCode,
+            appliedStartTime: startTime,
+            appliedEndTime: endTime
+        });
+        
+    } catch (error) {
+        console.error('Error updating schedule times:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка сервера при обновлении времени',
+            error: error.message
+        });
     }
 });
 
