@@ -181,6 +181,43 @@ async function initializeDatabase() {
       ON work_schedules_1c(work_month)
     `);
 
+    // Employee schedule assignments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS employee_schedule_assignments (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+        employee_number VARCHAR(255) NOT NULL,
+        schedule_code VARCHAR(255) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        assigned_by VARCHAR(255) DEFAULT '1C',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Indexes for employee_schedule_assignments
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_employee_schedule_assignments_employee 
+      ON employee_schedule_assignments(employee_number)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_employee_schedule_assignments_schedule 
+      ON employee_schedule_assignments(schedule_code)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_employee_schedule_assignments_dates 
+      ON employee_schedule_assignments(start_date, end_date)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_employee_schedule_assignments_active 
+      ON employee_schedule_assignments(employee_number, end_date) 
+      WHERE end_date IS NULL
+    `);
+
     // Insert admin user if not exists
     await pool.query(`
       INSERT INTO users (employee_number, role) 

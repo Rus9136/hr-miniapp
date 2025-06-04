@@ -1177,4 +1177,303 @@ router.get('/admin/schedules/1c/list', async (req, res) => {
     }
 });
 
+// ==================== EMPLOYEE SCHEDULE ASSIGNMENTS ====================
+
+// Assign schedule to single employee
+router.post('/admin/schedules/assign-employee', async (req, res) => {
+    try {
+        const { employee_number, schedule_code, start_date } = req.body;
+        
+        // Validate input
+        if (!employee_number || !schedule_code || !start_date) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо указать табельный номер, код графика и дату начала'
+            });
+        }
+        
+        await db.query('BEGIN');
+        
+        try {
+            // Check if employee exists
+            const employee = await db.queryRow(
+                'SELECT id, full_name FROM employees WHERE table_number = $1',
+                [employee_number]
+            );
+            
+            if (!employee) {
+                await db.query('ROLLBACK');
+                return res.json({
+                    success: false,
+                    error: 'Сотрудник не найден',
+                    skipped: true
+                });
+            }
+            
+            // Check if schedule exists
+            const schedule = await db.queryRow(
+                'SELECT DISTINCT schedule_code, schedule_name FROM work_schedules_1c WHERE schedule_code = $1',
+                [schedule_code]
+            );
+            
+            if (!schedule) {
+                await db.query('ROLLBACK');
+                return res.json({
+                    success: false,
+                    error: 'График не найден',
+                    skipped: true
+                });
+            }
+            
+            // Close any existing active schedule
+            const existingSchedule = await db.queryRow(`
+                SELECT id, schedule_code, start_date 
+                FROM employee_schedule_assignments 
+                WHERE employee_number = $1 AND end_date IS NULL
+            `, [employee_number]);
+            
+            if (existingSchedule) {
+                // Set end_date to day before new schedule starts
+                const endDate = new Date(start_date);
+                endDate.setDate(endDate.getDate() - 1);
+                
+                await db.query(`
+                    UPDATE employee_schedule_assignments 
+                    SET end_date = $1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $2
+                `, [endDate.toISOString().split('T')[0], existingSchedule.id]);
+            }
+            
+            // Create new assignment
+            const newAssignment = await db.queryRow(`
+                INSERT INTO employee_schedule_assignments 
+                (employee_id, employee_number, schedule_code, start_date, assigned_by)
+                VALUES ($1, $2, $3, $4, '1C')
+                RETURNING *
+            `, [employee.id, employee_number, schedule_code, start_date]);
+            
+            await db.query('COMMIT');
+            
+            res.json({
+                success: true,
+                message: 'График успешно назначен',
+                assignment: {
+                    id: newAssignment.id,
+                    employee_number: employee_number,
+                    employee_name: employee.full_name,
+                    schedule_code: schedule_code,
+                    schedule_name: schedule.schedule_name,
+                    start_date: start_date,
+                    previous_schedule_ended: !!existingSchedule
+                }
+            });
+            
+        } catch (error) {
+            await db.query('ROLLBACK');
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Error assigning schedule to employee:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка назначения графика: ' + error.message
+        });
+    }
+});
+
+// Batch assign schedules to multiple employees
+router.post('/admin/schedules/assign-employees-batch', async (req, res) => {
+    try {
+        const { assignments } = req.body;
+        
+        if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо передать массив назначений'
+            });
+        }
+        
+        const results = {
+            success: true,
+            totalReceived: assignments.length,
+            assigned: 0,
+            skipped: 0,
+            errors: [],
+            assignments: []
+        };
+        
+        for (const assignment of assignments) {
+            const { employee_number, schedule_code, start_date } = assignment;
+            
+            if (!employee_number || !schedule_code || !start_date) {
+                results.errors.push(`Неполные данные: ${JSON.stringify(assignment)}`);
+                results.skipped++;
+                continue;
+            }
+            
+            try {
+                await db.query('BEGIN');
+                
+                // Check employee
+                const employee = await db.queryRow(
+                    'SELECT id, full_name FROM employees WHERE table_number = $1',
+                    [employee_number]
+                );
+                
+                if (!employee) {
+                    results.errors.push(`Сотрудник ${employee_number} не найден`);
+                    results.skipped++;
+                    await db.query('ROLLBACK');
+                    continue;
+                }
+                
+                // Check schedule
+                const schedule = await db.queryRow(
+                    'SELECT DISTINCT schedule_code, schedule_name FROM work_schedules_1c WHERE schedule_code = $1',
+                    [schedule_code]
+                );
+                
+                if (!schedule) {
+                    results.errors.push(`График ${schedule_code} не найден`);
+                    results.skipped++;
+                    await db.query('ROLLBACK');
+                    continue;
+                }
+                
+                // Close existing active schedule
+                const existingSchedule = await db.queryRow(`
+                    SELECT id FROM employee_schedule_assignments 
+                    WHERE employee_number = $1 AND end_date IS NULL
+                `, [employee_number]);
+                
+                if (existingSchedule) {
+                    const endDate = new Date(start_date);
+                    endDate.setDate(endDate.getDate() - 1);
+                    
+                    await db.query(`
+                        UPDATE employee_schedule_assignments 
+                        SET end_date = $1, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $2
+                    `, [endDate.toISOString().split('T')[0], existingSchedule.id]);
+                }
+                
+                // Create new assignment
+                const newAssignment = await db.queryRow(`
+                    INSERT INTO employee_schedule_assignments 
+                    (employee_id, employee_number, schedule_code, start_date, assigned_by)
+                    VALUES ($1, $2, $3, $4, '1C')
+                    RETURNING id
+                `, [employee.id, employee_number, schedule_code, start_date]);
+                
+                await db.query('COMMIT');
+                
+                results.assigned++;
+                results.assignments.push({
+                    employee_number,
+                    employee_name: employee.full_name,
+                    schedule_code,
+                    schedule_name: schedule.schedule_name,
+                    start_date
+                });
+                
+            } catch (error) {
+                await db.query('ROLLBACK');
+                results.errors.push(`Ошибка для ${employee_number}: ${error.message}`);
+                results.skipped++;
+            }
+        }
+        
+        res.json(results);
+        
+    } catch (error) {
+        console.error('Error in batch schedule assignment:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка массового назначения графиков: ' + error.message
+        });
+    }
+});
+
+// Get current schedule for employee
+router.get('/admin/employees/:employee_number/current-schedule', async (req, res) => {
+    try {
+        const { employee_number } = req.params;
+        
+        const currentSchedule = await db.queryRow(`
+            SELECT 
+                esa.id,
+                esa.employee_number,
+                e.full_name as employee_name,
+                esa.schedule_code,
+                ws.schedule_name,
+                esa.start_date,
+                esa.assigned_by,
+                esa.created_at
+            FROM employee_schedule_assignments esa
+            LEFT JOIN employees e ON esa.employee_id = e.id
+            LEFT JOIN (
+                SELECT DISTINCT schedule_code, schedule_name 
+                FROM work_schedules_1c
+            ) ws ON esa.schedule_code = ws.schedule_code
+            WHERE esa.employee_number = $1 AND esa.end_date IS NULL
+        `, [employee_number]);
+        
+        if (!currentSchedule) {
+            return res.json({
+                success: false,
+                message: 'У сотрудника нет активного графика'
+            });
+        }
+        
+        res.json({
+            success: true,
+            schedule: currentSchedule
+        });
+        
+    } catch (error) {
+        console.error('Error fetching current schedule:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get schedule history for employee
+router.get('/admin/employees/:employee_number/schedule-history', async (req, res) => {
+    try {
+        const { employee_number } = req.params;
+        
+        const history = await db.queryRows(`
+            SELECT 
+                esa.id,
+                esa.schedule_code,
+                ws.schedule_name,
+                esa.start_date,
+                esa.end_date,
+                esa.assigned_by,
+                esa.created_at,
+                CASE 
+                    WHEN esa.end_date IS NULL THEN 'active'
+                    ELSE 'ended'
+                END as status
+            FROM employee_schedule_assignments esa
+            LEFT JOIN (
+                SELECT DISTINCT schedule_code, schedule_name 
+                FROM work_schedules_1c
+            ) ws ON esa.schedule_code = ws.schedule_code
+            WHERE esa.employee_number = $1
+            ORDER BY esa.start_date DESC
+        `, [employee_number]);
+        
+        res.json({
+            success: true,
+            employee_number,
+            history
+        });
+        
+    } catch (error) {
+        console.error('Error fetching schedule history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
