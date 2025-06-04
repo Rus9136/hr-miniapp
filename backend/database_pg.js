@@ -111,6 +111,7 @@ async function initializeDatabase() {
         check_out TIMESTAMP,
         hours_worked DECIMAL(4,2),
         status TEXT,
+        off_schedule BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(employee_number, date)

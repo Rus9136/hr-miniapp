@@ -318,6 +318,7 @@ router.get('/admin/time-records', (req, res) => {
     let query = `
         SELECT 
             tr.*,
+            tr.off_schedule,
             e.full_name,
             e.table_number,
             e.object_bin,
@@ -364,24 +365,87 @@ router.get('/admin/time-records', (req, res) => {
 // Recalculate time records from time_events
 router.post('/admin/recalculate-time-records', async (req, res) => {
     try {
-        console.log('Starting time records recalculation...');
+        const { organization, department, month } = req.body;
         
-        // Clear existing time_records
-        await db.query('DELETE FROM time_records');
+        console.log('Starting filtered time records recalculation with filters:', { organization, department, month });
         
-        // Get all time events grouped by employee and date
-        const timeEvents = await db.queryRows(`
+        // Month is required
+        if (!month) {
+            return res.status(400).json({
+                success: false,
+                error: 'Месяц обязателен для пересчета табеля'
+            });
+        }
+        
+        // Build filter conditions for time_events query
+        let whereConditions = ['te.employee_number IS NOT NULL'];
+        let deleteWhereConditions = ['1=1'];
+        const params = [];
+        const deleteParams = [];
+        
+        // Month filter (required)
+        whereConditions.push(`to_char(te.event_datetime, 'YYYY-MM') = $${params.length + 1}`);
+        params.push(month);
+        
+        deleteWhereConditions.push(`to_char(date, 'YYYY-MM') = $${deleteParams.length + 1}`);
+        deleteParams.push(month);
+        
+        // Organization filter (optional)
+        if (organization) {
+            whereConditions.push(`e.object_bin = $${params.length + 1}`);
+            params.push(organization);
+            
+            deleteWhereConditions.push(`employee_number IN (SELECT table_number FROM employees WHERE object_bin = $${deleteParams.length + 1})`);
+            deleteParams.push(organization);
+        }
+        
+        // Department filter (optional)
+        if (department) {
+            whereConditions.push(`e.object_code = $${params.length + 1}`);
+            params.push(department);
+            
+            deleteWhereConditions.push(`employee_number IN (SELECT table_number FROM employees WHERE object_code = $${deleteParams.length + 1})`);
+            deleteParams.push(department);
+        }
+        
+        // Delete existing filtered time_records (not all records)
+        const deleteQuery = `DELETE FROM time_records WHERE ${deleteWhereConditions.join(' AND ')}`;
+        const deleteResult = await db.query(deleteQuery, deleteParams);
+        console.log(`Deleted ${deleteResult.rowCount} existing time records for the filtered period`);
+        
+        // Get filtered time events with employee work schedules
+        const timeEventsQuery = `
             SELECT 
                 te.employee_number,
                 to_char(te.event_datetime::date, 'YYYY-MM-DD') as date,
                 te.event_datetime,
                 te.event_type,
-                e.id as employee_id
+                e.id as employee_id,
+                ws1c.work_start_time,
+                ws1c.work_end_time,
+                ws1c.work_hours,
+                ws1c.schedule_name
             FROM time_events te
             LEFT JOIN employees e ON te.employee_number = e.table_number
-            WHERE te.employee_number IS NOT NULL
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            LEFT JOIN (
+                SELECT DISTINCT ON (esa.employee_number) 
+                    esa.employee_number,
+                    esa.schedule_code,
+                    ws1c.work_start_time,
+                    ws1c.work_end_time,
+                    ws1c.work_hours,
+                    ws1c.schedule_name
+                FROM employee_schedule_assignments esa
+                LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+                WHERE esa.end_date IS NULL
+                ORDER BY esa.employee_number, esa.created_at DESC
+            ) ws1c ON e.table_number = ws1c.employee_number
+            WHERE ${whereConditions.join(' AND ')}
             ORDER BY te.employee_number, te.event_datetime
-        `);
+        `;
+        
+        const timeEvents = await db.queryRows(timeEventsQuery, params);
         
         console.log(`Found ${timeEvents.length} time events to process`);
         
@@ -394,6 +458,10 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                     employee_number: event.employee_number,
                     employee_id: event.employee_id,
                     date: event.date,
+                    work_start_time: event.work_start_time,
+                    work_end_time: event.work_end_time,
+                    work_hours: event.work_hours,
+                    schedule_name: event.schedule_name,
                     events: []
                 };
             }
@@ -408,24 +476,25 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
             const dayData = groupedEvents[key];
             const events = dayData.events.sort((a, b) => new Date(a.event_datetime) - new Date(b.event_datetime));
             
-            // Определяем вход и выход по времени события
-            // Если есть события с типами 1 и 2, используем их
-            // Иначе используем первое событие как вход, последнее как выход (для типа 0)
+            // IMPROVED LOGIC: Find first entry and last exit
             let checkIn = null;
             let checkOut = null;
             
-            const entryEvents = events.filter(e => e.event_type === '1');
-            const exitEvents = events.filter(e => e.event_type === '2');
+            // Get all entry events (type 1) and exit events (type 2)
+            const entryEvents = events.filter(e => e.event_type === '1').sort((a, b) => new Date(a.event_datetime) - new Date(b.event_datetime));
+            const exitEvents = events.filter(e => e.event_type === '2').sort((a, b) => new Date(a.event_datetime) - new Date(b.event_datetime));
             
-            if (entryEvents.length > 0 || exitEvents.length > 0) {
-                // Используем типы 1 и 2 если они есть
-                checkIn = entryEvents.length > 0 ? entryEvents[0].event_datetime : null;
-                checkOut = exitEvents.length > 0 ? exitEvents[exitEvents.length - 1].event_datetime : null;
-            } else if (events.length > 0) {
-                // Для событий типа 0 определяем по времени
-                // Первое событие дня - вход, последнее - выход
+            if (entryEvents.length > 0) {
+                checkIn = entryEvents[0].event_datetime; // FIRST entry of the day
+            }
+            
+            if (exitEvents.length > 0) {
+                checkOut = exitEvents[exitEvents.length - 1].event_datetime; // LAST exit of the day
+            }
+            
+            // Fallback for type 0 events if no typed events exist
+            if (!checkIn && !checkOut && events.length > 0) {
                 if (events.length === 1) {
-                    // Если только одно событие, проверяем время
                     const hour = new Date(events[0].event_datetime).getHours();
                     if (hour < 12) {
                         checkIn = events[0].event_datetime;
@@ -433,52 +502,31 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                         checkOut = events[0].event_datetime;
                     }
                 } else {
-                    // Если несколько событий, первое - вход, последнее - выход
                     checkIn = events[0].event_datetime;
                     checkOut = events[events.length - 1].event_datetime;
                 }
             }
             
-            // Calculate hours worked
+            // IMPROVED: Calculate hours worked using universal night shift logic
             let hoursWorked = null;
             if (checkIn && checkOut) {
-                const inTime = new Date(checkIn);
-                const outTime = new Date(checkOut);
-                hoursWorked = (outTime - inTime) / (1000 * 60 * 60); // Convert to hours
+                hoursWorked = calculateShiftHours(checkIn, checkOut, dayData);
             }
             
-            // Determine status
-            let status = 'absent';
-            if (checkIn) {
-                const inTime = new Date(checkIn);
-                const inHour = inTime.getHours();
-                const inMinute = inTime.getMinutes();
-                
-                if (inHour < 9 || (inHour === 9 && inMinute === 0)) {
-                    status = 'on_time';
-                } else {
-                    status = 'late';
-                }
-                
-                // Check for early departure
-                if (checkOut) {
-                    const outTime = new Date(checkOut);
-                    const outHour = outTime.getHours();
-                    if (outHour < 18) {
-                        status = 'early_leave';
-                    }
-                }
-            }
+            // IMPROVED: Use enhanced status determination with night shift support
+            const status = determineShiftStatus(checkIn, checkOut, dayData);
+            const offSchedule = !dayData.schedule_name;
             
             await db.query(`
                 INSERT INTO time_records 
-                (employee_id, employee_number, date, check_in, check_out, hours_worked, status, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                (employee_id, employee_number, date, check_in, check_out, hours_worked, status, off_schedule, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
                 ON CONFLICT (employee_number, date) DO UPDATE SET
                     check_in = EXCLUDED.check_in,
                     check_out = EXCLUDED.check_out,
                     hours_worked = EXCLUDED.hours_worked,
                     status = EXCLUDED.status,
+                    off_schedule = EXCLUDED.off_schedule,
                     updated_at = NOW()
             `, [
                 dayData.employee_id,
@@ -487,19 +535,27 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                 checkIn,
                 checkOut,
                 hoursWorked,
-                status
+                status,
+                offSchedule
             ]);
             
             processedCount++;
         }
         
-        console.log(`Recalculation completed. Processed ${processedCount} records`);
+        console.log(`Filtered recalculation completed. Processed ${processedCount} records for filters:`, { organization, department, month });
+        
+        // Build descriptive message about what was processed
+        let filterDescription = `месяц: ${month}`;
+        if (organization) filterDescription += `, организация: ${organization}`;
+        if (department) filterDescription += `, подразделение: ${department}`;
         
         res.json({
             success: true,
-            message: `Пересчет завершен успешно`,
+            message: `Пересчет завершен успешно с учетом фильтров (${filterDescription})`,
             processedRecords: processedCount,
-            totalEvents: timeEvents.length
+            totalEvents: timeEvents.length,
+            deletedRecords: deleteResult.rowCount,
+            filters: { organization, department, month }
         });
         
     } catch (error) {
@@ -952,6 +1008,100 @@ router.delete('/admin/time-records/clear-all', async (req, res) => {
 });
 
 // ==================== 1C WORK SCHEDULES IMPORT ENDPOINT ====================
+
+// UNIVERSAL NIGHT SHIFT CALCULATOR
+function calculateShiftHours(checkIn, checkOut, scheduleData) {
+    const inTime = new Date(checkIn);
+    let outTime = new Date(checkOut);
+    
+    // Get schedule times
+    const startTime = scheduleData.work_start_time;
+    const endTime = scheduleData.work_end_time;
+    const expectedHours = parseInt(scheduleData.work_hours) || 8;
+    const scheduleName = scheduleData.schedule_name || '';
+    
+    // Determine if this is a night shift using multiple indicators
+    const isNightShift = startTime && endTime && (
+        startTime > endTime ||  // Direct indicator: 22:00-06:00
+        expectedHours > 12 ||   // Long shifts (12+ hours)
+        (startTime >= "22:00" || startTime >= "23:00") || // Late start times
+        (endTime <= "08:00" || endTime <= "06:00") ||     // Early end times  
+        scheduleName.toLowerCase().includes('ночная') ||   // Russian "night"
+        scheduleName.toLowerCase().includes('смена') ||    // Russian "shift"
+        scheduleName.toLowerCase().includes('24ч') ||      // 24-hour indicator
+        scheduleName.includes('00:00')                     // Midnight indicator
+    );
+    
+    if (isNightShift) {
+        console.log(`🌙 Night shift detected: ${scheduleName} (${startTime}-${endTime})`);
+        
+        // Strategy 1: If checkout is earlier than checkin, it's next day
+        if (outTime <= inTime) {
+            outTime.setDate(outTime.getDate() + 1);
+            console.log(`⏰ Adjusted checkout to next day: ${outTime.toISOString()}`);
+        }
+        
+        // Calculate hours
+        let hours = (outTime - inTime) / (1000 * 60 * 60);
+        
+        // Strategy 2: Validate against expected hours
+        if (hours > 16) {
+            console.warn(`⚠️ Unusually long shift: ${hours.toFixed(2)}h, using expected: ${expectedHours}h`);
+            hours = expectedHours;
+        }
+        
+        // Strategy 3: Handle edge cases
+        if (hours < 0) {
+            console.warn(`⚠️ Negative hours detected, adding 24h: ${hours.toFixed(2)}h`);
+            hours = hours + 24;
+        }
+        
+        console.log(`✅ Night shift calculation: ${hours.toFixed(2)}h`);
+        return Math.max(0, hours); // Ensure non-negative
+    } else {
+        // Standard day shift calculation
+        const hours = (outTime - inTime) / (1000 * 60 * 60);
+        console.log(`☀️ Day shift calculation: ${hours.toFixed(2)}h`);
+        return Math.max(0, hours);
+    }
+}
+
+// Enhanced status determination for night shifts
+function determineShiftStatus(checkIn, checkOut, scheduleData) {
+    const actualHours = calculateShiftHours(checkIn, checkOut, scheduleData);
+    const expectedHours = parseInt(scheduleData.work_hours) || 8;
+    const startTime = scheduleData.work_start_time;
+    const endTime = scheduleData.work_end_time;
+    
+    // Check if employee worked without assigned schedule
+    const offSchedule = !scheduleData.schedule_name;
+    
+    if (!checkIn) return 'absent';
+    
+    const inTime = new Date(checkIn);
+    
+    // Parse expected start time for comparison
+    let expectedStart = new Date(inTime);
+    if (startTime) {
+        const [hours, minutes] = startTime.split(':').map(Number);
+        expectedStart.setHours(hours, minutes, 0, 0);
+        
+        // For night shifts starting late (22:00+), adjust date if needed
+        if (hours >= 22 && inTime.getHours() < 12) {
+            expectedStart.setDate(expectedStart.getDate() - 1);
+        }
+    }
+    
+    // Calculate lateness in minutes
+    const lateness = (inTime - expectedStart) / (1000 * 60);
+    
+    // Determine status
+    if (lateness <= 5) return 'on_time';           // Within 5 minutes
+    if (lateness <= 30) return 'late';             // Up to 30 minutes late
+    if (actualHours < expectedHours * 0.8) return 'early_leave'; // Left significantly early
+    
+    return 'late';
+}
 
 // Function to extract work times from schedule name
 function extractWorkTimesFromScheduleName(scheduleName) {

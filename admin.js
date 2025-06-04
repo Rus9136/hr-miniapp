@@ -1145,7 +1145,7 @@ function initTimeRecordsSection() {
 // Load time records
 async function loadTimeRecords() {
     const tbody = document.getElementById('time-records-tbody');
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка данных...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">Загрузка данных...</td></tr>';
     
     const params = new URLSearchParams();
     const organization = document.getElementById('records-organization-filter').value;
@@ -1167,7 +1167,7 @@ async function loadTimeRecords() {
         document.getElementById('records-total').textContent = adminTimeRecordsData.length;
     } catch (error) {
         console.error('Error loading time records:', error);
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
@@ -1176,7 +1176,7 @@ function displayTimeRecords(records) {
     const tbody = document.getElementById('time-records-tbody');
     
     if (records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
@@ -1191,6 +1191,7 @@ function displayTimeRecords(records) {
         const checkInTime = record.check_in ? formatTime(record.check_in) : '-';
         const checkOutTime = record.check_out ? formatTime(record.check_out) : '-';
         const hoursWorked = record.hours_worked ? parseFloat(record.hours_worked).toFixed(1) : '-';
+        const offSchedule = record.off_schedule ? 'Да' : 'Нет';
         
         return `
             <tr>
@@ -1200,6 +1201,7 @@ function displayTimeRecords(records) {
                 <td>${checkInTime}</td>
                 <td>${checkOutTime}</td>
                 <td>${hoursWorked}</td>
+                <td><span class="off-schedule-${record.off_schedule ? 'yes' : 'no'}">${offSchedule}</span></td>
                 <td><span class="status-${record.status}">${statusText}</span></td>
             </tr>
         `;
@@ -1314,10 +1316,31 @@ async function recalculateTimeRecords() {
     btnText.style.display = 'none';
     spinner.style.display = 'inline-block';
     
+    // Get filter values
+    const organization = document.getElementById('records-organization-filter').value;
+    const department = document.getElementById('records-department-filter').value;
+    const month = document.getElementById('records-month-filter').value;
+    
+    // Month is required for recalculation
+    if (!month) {
+        alert('Выберите месяц для пересчета табеля. Пересчет без указания месяца не выполняется.');
+        // Reset button state
+        button.disabled = false;
+        btnText.style.display = 'inline-block';
+        spinner.style.display = 'none';
+        return;
+    }
+    
+    // Prepare request body with filters
+    const requestBody = { month }; // Month is always required
+    if (organization) requestBody.organization = organization;
+    if (department) requestBody.department = department;
+    
     try {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/recalculate-time-records`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
         });
         
         const result = await response.json();
