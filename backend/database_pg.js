@@ -131,6 +131,22 @@ async function initializeDatabase() {
       )
     `);
 
+    // Work schedules from 1C table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS work_schedules_1c (
+        id SERIAL PRIMARY KEY,
+        schedule_name VARCHAR(255) NOT NULL,
+        schedule_code VARCHAR(255) NOT NULL,
+        work_date DATE NOT NULL,
+        work_month DATE NOT NULL,
+        time_type VARCHAR(100) NOT NULL,
+        work_hours INTEGER NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_schedule_date UNIQUE(schedule_code, work_date)
+      )
+    `);
+
     // Create indexes for performance
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_time_events_employee_date 
@@ -145,6 +161,22 @@ async function initializeDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_time_records_employee_date 
       ON time_records(employee_number, date)
+    `);
+
+    // Indexes for work_schedules_1c table
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_work_schedules_1c_code 
+      ON work_schedules_1c(schedule_code)
+    `);
+    
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_work_schedules_1c_date 
+      ON work_schedules_1c(work_date)
+    `);
+    
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_work_schedules_1c_month 
+      ON work_schedules_1c(work_month)
     `);
 
     // Insert admin user if not exists
