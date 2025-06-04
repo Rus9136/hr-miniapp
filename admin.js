@@ -114,6 +114,8 @@ window.testLoadOrganizations = function() {
 
 // Switch between sections
 function switchSection(sectionName) {
+    console.log('🔄 switchSection called with:', sectionName);
+    
     // Update menu
     menuItems.forEach(item => {
         item.classList.toggle('active', item.dataset.section === sectionName);
@@ -125,7 +127,20 @@ function switchSection(sectionName) {
         section.classList.toggle('active', isActive);
         // Добавляем display style как fallback
         section.style.display = isActive ? 'block' : 'none';
+        if (isActive) {
+            console.log(`✅ Activated section: ${section.id}`);
+        }
     });
+    
+    // Verify the target section exists
+    const targetSection = document.getElementById(`${sectionName}-section`);
+    if (!targetSection) {
+        console.error(`❌ Target section '${sectionName}-section' not found!`);
+        console.log('🔍 Available sections:');
+        contentSections.forEach(section => {
+            console.log(`- ${section.id}`);
+        });
+    }
 
     // Load data for the section
     switch (sectionName) {
@@ -164,6 +179,9 @@ function switchSection(sectionName) {
             break;
         case 'schedules':
             initSchedulesSection();
+            break;
+        case 'schedule-card':
+            initScheduleCardSection();
             break;
         case 'schedule-assign':
             initScheduleAssignSection();
@@ -394,6 +412,50 @@ function filterPositions(searchTerm) {
 //     initAdminPanel();
 // }
 
+// Diagnostic function for debugging
+window.debugScheduleModule = function() {
+    console.log('🔧 === SCHEDULE MODULE DIAGNOSTICS ===');
+    
+    console.log('📊 DOM Elements Check:');
+    const elementsToCheck = [
+        'schedules-section',
+        'schedule-card-section', 
+        'create-schedule-btn',
+        'schedule-card-title',
+        'save-schedule-btn',
+        'add-work-date-btn'
+    ];
+    
+    elementsToCheck.forEach(id => {
+        const element = document.getElementById(id);
+        console.log(`${id}: ${element ? '✅ Found' : '❌ Missing'}`);
+        if (element && element.style) {
+            console.log(`  - Display: ${element.style.display || 'default'}`);
+            console.log(`  - Computed: ${window.getComputedStyle(element).display}`);
+        }
+    });
+    
+    console.log('📊 Variables State:');
+    console.log(`schedulesInitialized: ${schedulesInitialized}`);
+    console.log(`scheduleCardInitialized: ${scheduleCardInitialized}`);
+    console.log(`menuItems.length: ${menuItems.length}`);
+    console.log(`contentSections.length: ${contentSections.length}`);
+    
+    console.log('📊 Functions Available:');
+    const functionsToCheck = [
+        'initSchedulesSection',
+        'openScheduleCard', 
+        'showCreateScheduleModal',
+        'switchSection'
+    ];
+    
+    functionsToCheck.forEach(funcName => {
+        console.log(`${funcName}: ${typeof window[funcName] === 'function' ? '✅ Available' : '❌ Missing'}`);
+    });
+    
+    console.log('🔧 === END DIAGNOSTICS ===');
+};
+
 // Export for use in app.js
 window.initAdminPanel = function() {
     console.log('loadAdminPanel called');
@@ -408,6 +470,9 @@ window.initAdminPanel = function() {
     
     // Загружаем первую секцию
     switchSection('employees');
+    
+    // Add debug function to global scope
+    window.debugScheduleModule = window.debugScheduleModule;
 };
 
 // Setup admin event handlers (extracted from initAdminPanel to avoid recursion)
@@ -774,6 +839,7 @@ function initTimeEventsSection() {
     // Event listeners
     document.getElementById('events-filter-btn').addEventListener('click', loadTimeEvents);
     document.getElementById('events-clear-btn').addEventListener('click', clearEventsFilter);
+    document.getElementById('events-delete-all-btn').addEventListener('click', clearAllTimeEvents);
     
     // Organization filter change event for cascading departments
     document.getElementById('events-organization-filter').addEventListener('change', onTimeEventsOrganizationChange);
@@ -865,8 +931,8 @@ function displayTimeEvents(events) {
     }
     
     tbody.innerHTML = events.map(event => {
-        const eventType = event.event_type == 1 ? 'Вход' : 'Выход';
-        const eventClass = event.event_type == 1 ? 'event-type-1' : 'event-type-2';
+        const eventType = event.event_type === '1' ? 'Вход' : 'Выход';
+        const eventClass = event.event_type === '1' ? 'event-type-1' : 'event-type-2';
         
         return `
             <tr>
@@ -896,6 +962,59 @@ function clearEventsFilter() {
     loadDepartmentsForTimeEventsFilter();
     
     loadTimeEvents();
+}
+
+// Clear all time events from database
+async function clearAllTimeEvents() {
+    // Confirm before deleting
+    const confirmMessage = 'ВНИМАНИЕ! Вы действительно хотите удалить ВСЕ записи из таблицы событий входа/выхода?\n\n' + 
+                          'Это действие невозможно отменить!';
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Double confirmation for safety
+    const secondConfirm = confirm('Это последнее предупреждение!\n\nУдалить все записи событий?');
+    if (!secondConfirm) {
+        return;
+    }
+    
+    const btn = document.getElementById('events-delete-all-btn');
+    const btnText = btn.querySelector('.btn-text');
+    const spinner = btn.querySelector('.spinner');
+    
+    // Show loading state
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline';
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-events/clear-all`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`Успешно! ${data.message}`);
+            // Reload the table
+            loadTimeEvents();
+        } else {
+            alert(`Ошибка: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error clearing time events:', error);
+        alert('Ошибка при очистке таблицы: ' + error.message);
+    } finally {
+        // Reset button state
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
 }
 
 // Track if time records section has been initialized
@@ -1011,6 +1130,7 @@ function initTimeRecordsSection() {
     document.getElementById('records-filter-btn').addEventListener('click', loadTimeRecords);
     document.getElementById('records-clear-btn').addEventListener('click', clearRecordsFilter);
     document.getElementById('records-recalculate-btn').addEventListener('click', recalculateTimeRecords);
+    document.getElementById('records-delete-all-btn').addEventListener('click', clearAllTimeRecords);
     
     // Organization filter change event for cascading departments
     document.getElementById('records-organization-filter').addEventListener('change', onTimeRecordsOrganizationChange);
@@ -1098,6 +1218,59 @@ function clearRecordsFilter() {
     loadDepartmentsForTimeRecords();
     
     loadTimeRecords();
+}
+
+// Clear all time records from database
+async function clearAllTimeRecords() {
+    // Confirm before deleting
+    const confirmMessage = 'ВНИМАНИЕ! Вы действительно хотите удалить ВСЕ записи из таблицы табеля рабочего времени?\n\n' + 
+                          'Это действие невозможно отменить!';
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Double confirmation for safety
+    const secondConfirm = confirm('Это последнее предупреждение!\n\nУдалить все записи табеля?');
+    if (!secondConfirm) {
+        return;
+    }
+    
+    const btn = document.getElementById('records-delete-all-btn');
+    const btnText = btn.querySelector('.btn-text');
+    const spinner = btn.querySelector('.spinner');
+    
+    // Show loading state
+    btn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline';
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-records/clear-all`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`Успешно! ${data.message}`);
+            // Reload the table
+            loadTimeRecords();
+        } else {
+            alert(`Ошибка: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Error clearing time records:', error);
+        alert('Ошибка при очистке таблицы: ' + error.message);
+    } finally {
+        // Reset button state
+        btn.disabled = false;
+        btnText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
 }
 
 // Helper functions
@@ -1190,46 +1363,41 @@ let scheduleRuleIndex = 1;
 let schedulesInitialized = false;
 
 function initSchedulesSection() {
+    console.log('🔧 initSchedulesSection called, initialized:', schedulesInitialized);
+    
     if (schedulesInitialized) {
         loadSchedules();
         return;
     }
     
-    // Set up event listeners
-    document.getElementById('create-schedule-btn').addEventListener('click', showCreateScheduleModal);
-    
-    // Modal events
-    document.getElementById('closeScheduleModal').addEventListener('click', hideScheduleModal);
-    document.getElementById('cancelScheduleBtn').addEventListener('click', hideScheduleModal);
-    document.getElementById('scheduleForm').addEventListener('submit', handleScheduleSubmit);
-    document.getElementById('addRuleBtn').addEventListener('click', addScheduleRule);
-    document.getElementById('scheduleType').addEventListener('change', handleScheduleTypeChange);
-    
-    // Details modal events
-    document.getElementById('closeScheduleDetailsModal').addEventListener('click', hideScheduleDetailsModal);
-    document.getElementById('closeDetailsBtn').addEventListener('click', hideScheduleDetailsModal);
-    document.getElementById('editScheduleBtn').addEventListener('click', () => {
-        const scheduleId = document.getElementById('scheduleDetailsModal').dataset.scheduleId;
-        hideScheduleDetailsModal();
-        showEditScheduleModal(scheduleId);
-    });
-    
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const tabName = e.target.dataset.tab;
-            switchDetailsTab(tabName);
-        });
-    });
-    
-    schedulesInitialized = true;
-    loadSchedules();
+    // Wait a bit for DOM to be ready
+    setTimeout(() => {
+        console.log('🔍 Looking for create-schedule-btn...');
+        const createBtn = document.getElementById('create-schedule-btn');
+        if (createBtn) {
+            console.log('✅ create-schedule-btn found, adding event listener');
+            createBtn.addEventListener('click', showCreateScheduleModal);
+        } else {
+            console.error('❌ create-schedule-btn element not found!');
+            console.log('🔍 Available buttons in schedules section:');
+            const schedulesSection = document.getElementById('schedules-section');
+            if (schedulesSection) {
+                const buttons = schedulesSection.querySelectorAll('button');
+                buttons.forEach((btn, index) => {
+                    console.log(`Button ${index}: id="${btn.id}", class="${btn.className}"`);
+                });
+            }
+        }
+        
+        schedulesInitialized = true;
+        loadSchedules();
+    }, 200);
 }
 
 // Load schedules
 async function loadSchedules() {
     const tbody = document.getElementById('schedules-tbody');
-    tbody.innerHTML = '<tr><td colspan="5" class="loading">Загрузка данных...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">Загрузка данных...</td></tr>';
     
     try {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/templates`);
@@ -1240,7 +1408,7 @@ async function loadSchedules() {
         document.getElementById('schedules-total').textContent = schedulesData.length;
     } catch (error) {
         console.error('Error loading schedules:', error);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
@@ -1249,188 +1417,299 @@ function displaySchedules(schedules) {
     const tbody = document.getElementById('schedules-tbody');
     
     if (schedules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
     tbody.innerHTML = schedules.map(schedule => {
-        const typeText = {
-            'fixed': 'Фиксированный',
-            'rotating': 'Сменный',
-            'flexible': 'Гибкий'
-        }[schedule.schedule_type] || schedule.schedule_type;
+        const workTime = `${schedule.check_in_time} - ${schedule.check_out_time}`;
         
         return `
             <tr>
                 <td>${schedule.name}</td>
-                <td>${typeText}${schedule.cycle_days ? ` (${schedule.cycle_days} дн.)` : ''}</td>
+                <td>${workTime}</td>
+                <td>${schedule.work_days_count || 0}</td>
                 <td>${schedule.employee_count || 0}</td>
                 <td>${schedule.organizations || '-'}</td>
                 <td>
-                    <button class="btn btn--sm btn--outline" onclick="showScheduleDetails(${schedule.id})">Просмотр</button>
-                    <button class="btn btn--sm btn--primary" onclick="showEditScheduleModal(${schedule.id})">Изменить</button>
+                    <button class="btn btn--sm btn--primary" onclick="openScheduleCard(${schedule.id})">Открыть</button>
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-// Show create schedule modal
+// Open schedule card for creating new schedule
 function showCreateScheduleModal() {
-    document.getElementById('scheduleModalTitle').textContent = 'Создание графика работы';
-    document.getElementById('scheduleForm').reset();
-    document.getElementById('scheduleId').value = '';
-    document.getElementById('scheduleRules').innerHTML = '';
-    scheduleRuleIndex = 1;
-    
-    // Add default rule
-    addScheduleRule();
-    
-    document.getElementById('scheduleModal').style.display = 'block';
+    openScheduleCard(null); // null means create new
 }
 
-// Show edit schedule modal
-async function showEditScheduleModal(scheduleId) {
+// Open schedule card
+function openScheduleCard(scheduleId) {
+    console.log('🎯 openScheduleCard called with scheduleId:', scheduleId);
+    
+    // Hide schedules list and show card
+    switchSection('schedule-card');
+    
+    // Wait a bit for the section to be displayed, then update elements
+    setTimeout(() => {
+        console.log('🔍 Looking for schedule-card-title...');
+        const titleElement = document.getElementById('schedule-card-title');
+        if (titleElement) {
+            console.log('✅ schedule-card-title found');
+            if (scheduleId) {
+                // Edit existing schedule
+                console.log('📝 Setting title for edit mode');
+                titleElement.textContent = 'Редактирование графика';
+                loadScheduleCard(scheduleId);
+            } else {
+                // Create new schedule
+                console.log('➕ Setting title for create mode');
+                titleElement.textContent = 'Создание нового графика';
+                clearScheduleCard();
+            }
+        } else {
+            console.error('❌ schedule-card-title element not found!');
+            console.log('🔍 Checking if schedule-card-section exists...');
+            const cardSection = document.getElementById('schedule-card-section');
+            if (cardSection) {
+                console.log('✅ schedule-card-section exists, display:', window.getComputedStyle(cardSection).display);
+                console.log('🔍 All elements in card section:');
+                const allElements = cardSection.querySelectorAll('[id]');
+                allElements.forEach(el => {
+                    console.log(`- ${el.tagName}#${el.id}`);
+                });
+            } else {
+                console.error('❌ schedule-card-section not found!');
+            }
+        }
+    }, 200);
+}
+
+// Initialize schedule card section
+let scheduleCardInitialized = false;
+
+function initScheduleCardSection() {
+    if (scheduleCardInitialized) return;
+    
+    // Set up event listeners with safety checks
+    const backBtn = document.getElementById('back-to-schedules-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            switchSection('schedules');
+        });
+    }
+    
+    const saveBtn = document.getElementById('save-schedule-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveScheduleCard);
+    }
+    
+    const addDateBtn = document.getElementById('add-work-date-btn');
+    if (addDateBtn) {
+        addDateBtn.addEventListener('click', addWorkDate);
+    }
+    
+    // Form validation
+    ['schedule-card-name', 'schedule-card-check-in', 'schedule-card-check-out'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', validateScheduleCard);
+        }
+    });
+    
+    scheduleCardInitialized = true;
+}
+
+// Load schedule card data
+async function loadScheduleCard(scheduleId) {
     try {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/templates/${scheduleId}`);
         if (!response.ok) throw new Error('Failed to load schedule');
         
         const data = await response.json();
-        const { template, rules } = data;
+        const { template, dates, employees } = data;
         
-        document.getElementById('scheduleModalTitle').textContent = 'Редактирование графика работы';
-        document.getElementById('scheduleId').value = template.id;
-        document.getElementById('scheduleName').value = template.name;
-        document.getElementById('scheduleDescription').value = template.description || '';
-        document.getElementById('scheduleType').value = template.schedule_type;
+        // Populate form fields with safety checks
+        const fieldsMap = [
+            { id: 'schedule-card-id', value: template.id || '' },
+            { id: 'schedule-card-name', value: template.name || '' },
+            { id: 'schedule-card-description', value: template.description || '' },
+            { id: 'schedule-card-check-in', value: template.check_in_time || '09:00' },
+            { id: 'schedule-card-check-out', value: template.check_out_time || '18:00' }
+        ];
         
-        if (template.schedule_type === 'rotating') {
-            document.getElementById('cycleDaysGroup').style.display = 'block';
-            document.getElementById('cycleDays').value = template.cycle_days;
-        }
-        
-        // Load rules
-        document.getElementById('scheduleRules').innerHTML = '';
-        scheduleRuleIndex = 1;
-        
-        rules.forEach(rule => {
-            addScheduleRule(rule);
+        fieldsMap.forEach(item => {
+            const element = document.getElementById(item.id);
+            if (element) {
+                element.value = item.value;
+            } else {
+                console.warn(`Element ${item.id} not found in loadScheduleCard`);
+            }
         });
         
-        document.getElementById('scheduleModal').style.display = 'block';
+        // Display work dates and assigned employees
+        displayWorkDates(dates || []);
+        displayAssignedEmployees(employees || []);
+        
+        const countElement = document.getElementById('assigned-employees-count');
+        if (countElement) {
+            countElement.textContent = employees.length;
+        }
+        
+        validateScheduleCard();
     } catch (error) {
-        console.error('Error loading schedule:', error);
+        console.error('Error loading schedule card:', error);
         alert('Ошибка загрузки графика');
     }
 }
 
-// Hide schedule modal
-function hideScheduleModal() {
-    document.getElementById('scheduleModal').style.display = 'none';
+// Clear schedule card form
+function clearScheduleCard() {
+    // Clear form fields with safety checks
+    const elements = [
+        { id: 'schedule-card-id', value: '' },
+        { id: 'schedule-card-name', value: '' },
+        { id: 'schedule-card-description', value: '' },
+        { id: 'schedule-card-check-in', value: '09:00' },
+        { id: 'schedule-card-check-out', value: '18:00' }
+    ];
+    
+    elements.forEach(item => {
+        const element = document.getElementById(item.id);
+        if (element) {
+            element.value = item.value;
+        } else {
+            console.warn(`Element ${item.id} not found in clearScheduleCard`);
+        }
+    });
+    
+    // Clear tables
+    displayWorkDates([]);
+    displayAssignedEmployees([]);
 }
 
-// Handle schedule type change
-function handleScheduleTypeChange() {
-    const scheduleType = document.getElementById('scheduleType').value;
-    const cycleDaysGroup = document.getElementById('cycleDaysGroup');
+// This function has been removed as part of modal-to-card conversion
+
+// Add work date to schedule
+function addWorkDate() {
+    // Создаем строку для ввода новой даты прямо в таблице
+    const tbody = document.getElementById('work-dates-tbody');
     
-    if (scheduleType === 'rotating') {
-        cycleDaysGroup.style.display = 'block';
-    } else {
-        cycleDaysGroup.style.display = 'none';
+    // Проверяем, нет ли уже строки для ввода
+    if (tbody.querySelector('.new-date-row')) {
+        return; // Уже есть строка для ввода
     }
-}
-
-// Add schedule rule
-function addScheduleRule(ruleData = null) {
-    const rulesContainer = document.getElementById('scheduleRules');
-    const ruleDiv = document.createElement('div');
-    ruleDiv.className = 'schedule-rule';
-    ruleDiv.dataset.ruleIndex = scheduleRuleIndex;
     
-    const scheduleType = document.getElementById('scheduleType').value;
-    const dayLabel = scheduleType === 'rotating' ? 'День цикла' : 'День недели';
-    
-    ruleDiv.innerHTML = `
-        <div class="rule-header">
-            <span class="rule-number">${dayLabel} ${scheduleRuleIndex}</span>
-            <button type="button" class="remove-rule-btn" onclick="removeScheduleRule(${scheduleRuleIndex})">Удалить</button>
-        </div>
-        <div class="rule-fields">
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="is_workday_${scheduleRuleIndex}" ${ruleData?.is_workday !== false ? 'checked' : ''}>
-                    Рабочий день
-                </label>
-            </div>
-            <div class="form-group">
-                <label>Время входа</label>
-                <input type="time" name="check_in_${scheduleRuleIndex}" class="form-control" value="${ruleData?.check_in_time || '09:00'}">
-            </div>
-            <div class="form-group">
-                <label>Время выхода</label>
-                <input type="time" name="check_out_${scheduleRuleIndex}" class="form-control" value="${ruleData?.check_out_time || '18:00'}">
-            </div>
-            <div class="form-group">
-                <label>Обед (мин)</label>
-                <input type="number" name="break_duration_${scheduleRuleIndex}" class="form-control" min="0" max="120" value="${ruleData?.break_duration_minutes || 60}">
-            </div>
-            <div class="form-group">
-                <label>Допуст. опоздание</label>
-                <input type="number" name="tolerance_late_${scheduleRuleIndex}" class="form-control" min="0" max="60" value="${ruleData?.tolerance_late_minutes || 15}">
-            </div>
-        </div>
+    // Добавляем новую строку для ввода
+    const newRow = document.createElement('tr');
+    newRow.className = 'new-date-row';
+    newRow.innerHTML = `
+        <td>
+            <input type="date" class="work-date-input" id="temp-date-input" required>
+        </td>
+        <td class="day-of-week" id="temp-day-display">-</td>
+        <td>
+            <button class="btn btn--sm btn--primary" onclick="confirmAddDate()">Добавить</button>
+            <button class="btn btn--sm btn--outline" onclick="cancelAddDate()">Отмена</button>
+        </td>
     `;
     
-    rulesContainer.appendChild(ruleDiv);
-    scheduleRuleIndex++;
+    tbody.appendChild(newRow);
+    
+    // Фокус на поле ввода даты
+    document.getElementById('temp-date-input').focus();
+    
+    // Добавляем обработчик для отображения дня недели
+    document.getElementById('temp-date-input').addEventListener('change', function() {
+        const date = new Date(this.value);
+        const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+        document.getElementById('temp-day-display').textContent = dayNames[date.getDay()];
+    });
 }
 
-// Remove schedule rule
-function removeScheduleRule(index) {
-    const rule = document.querySelector(`.schedule-rule[data-rule-index="${index}"]`);
-    if (rule) {
-        rule.remove();
+// Confirm adding new date
+function confirmAddDate() {
+    const dateInput = document.getElementById('temp-date-input');
+    const newDate = dateInput.value;
+    
+    if (!newDate) {
+        alert('Выберите дату');
+        return;
+    }
+    
+    // Получаем текущие даты
+    const tbody = document.getElementById('work-dates-tbody');
+    const existingDates = Array.from(tbody.querySelectorAll('tr:not(.new-date-row)'))
+        .map(row => row.querySelector('td')?.textContent)
+        .filter(date => date && date !== 'Нет рабочих дней');
+    
+    // Проверяем на дубликаты
+    if (existingDates.includes(formatDate(newDate))) {
+        alert('Эта дата уже добавлена');
+        return;
+    }
+    
+    // Удаляем строку ввода
+    cancelAddDate();
+    
+    // Обновляем список дат
+    const allDates = [...existingDates.map(d => parseDate(d)), newDate].sort();
+    displayWorkDates(allDates.map(date => ({ work_date: date })));
+}
+
+// Cancel adding new date
+function cancelAddDate() {
+    const newRow = document.querySelector('.new-date-row');
+    if (newRow) {
+        newRow.remove();
     }
 }
 
-// Handle schedule form submit
-async function handleScheduleSubmit(e) {
-    e.preventDefault();
+// Remove work date from schedule
+function removeWorkDate(dateToRemove) {
+    const tbody = document.getElementById('work-dates-tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr:not(.new-date-row)'));
     
-    const button = e.target.querySelector('button[type="submit"]');
+    // Получаем все даты кроме удаляемой
+    const remainingDates = rows
+        .map(row => row.querySelector('td')?.textContent)
+        .filter(date => date && date !== dateToRemove && date !== 'Нет рабочих дней')
+        .map(date => ({ work_date: parseDate(date) }));
+    
+    displayWorkDates(remainingDates);
+}
+
+// Save schedule card
+async function saveScheduleCard() {
+    const button = document.getElementById('save-schedule-btn');
     const btnText = button.querySelector('.btn-text');
     const spinner = button.querySelector('.spinner');
     
-    // Collect form data
-    const scheduleId = document.getElementById('scheduleId').value;
-    const formData = {
-        name: document.getElementById('scheduleName').value,
-        description: document.getElementById('scheduleDescription').value,
-        schedule_type: document.getElementById('scheduleType').value,
-        cycle_days: document.getElementById('scheduleType').value === 'rotating' ? 
-            parseInt(document.getElementById('cycleDays').value) : null,
-        rules: []
-    };
+    // Validate required fields
+    const name = document.getElementById('schedule-card-name').value.trim();
+    const checkIn = document.getElementById('schedule-card-check-in').value;
+    const checkOut = document.getElementById('schedule-card-check-out').value;
     
-    // Collect rules
-    const ruleElements = document.querySelectorAll('.schedule-rule');
-    ruleElements.forEach((ruleEl, index) => {
-        const ruleIndex = ruleEl.dataset.ruleIndex;
-        formData.rules.push({
-            day_number: index + 1,
-            is_workday: document.querySelector(`[name="is_workday_${ruleIndex}"]`).checked,
-            check_in_time: document.querySelector(`[name="check_in_${ruleIndex}"]`).value,
-            check_out_time: document.querySelector(`[name="check_out_${ruleIndex}"]`).value,
-            break_duration_minutes: parseInt(document.querySelector(`[name="break_duration_${ruleIndex}"]`).value),
-            tolerance_late_minutes: parseInt(document.querySelector(`[name="tolerance_late_${ruleIndex}"]`).value)
-        });
-    });
+    if (!name || !checkIn || !checkOut) {
+        alert('Заполните все обязательные поля');
+        return;
+    }
+    
+    // Collect form data
+    const scheduleId = document.getElementById('schedule-card-id').value;
+    const formData = {
+        name: name,
+        description: document.getElementById('schedule-card-description').value,
+        check_in_time: checkIn,
+        check_out_time: checkOut,
+        dates: getWorkDatesFromTable()
+    };
     
     // Show loading
     button.disabled = true;
-    btnText.style.display = 'none';
-    spinner.style.display = 'inline-block';
+    if (btnText) btnText.style.display = 'none';
+    if (spinner) spinner.style.display = 'inline-block';
     
     try {
         const url = scheduleId ? 
@@ -1446,9 +1725,9 @@ async function handleScheduleSubmit(e) {
         const result = await response.json();
         
         if (result.success || response.ok) {
-            hideScheduleModal();
-            loadSchedules();
             alert(scheduleId ? 'График успешно обновлен' : 'График успешно создан');
+            switchSection('schedules');
+            loadSchedules();
         } else {
             alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'));
         }
@@ -1457,80 +1736,120 @@ async function handleScheduleSubmit(e) {
         alert('Ошибка сохранения графика');
     } finally {
         button.disabled = false;
-        btnText.style.display = 'inline';
-        spinner.style.display = 'none';
+        if (btnText) btnText.style.display = 'inline';
+        if (spinner) spinner.style.display = 'none';
     }
 }
 
-// Show schedule details
-async function showScheduleDetails(scheduleId) {
-    try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/templates/${scheduleId}`);
-        if (!response.ok) throw new Error('Failed to load schedule');
+// Display work dates in table
+function displayWorkDates(dates) {
+    const tbody = document.getElementById('work-dates-tbody');
+    
+    if (!tbody) {
+        console.error('work-dates-tbody element not found');
+        return;
+    }
+    
+    if (dates.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: #6c757d;">Нет рабочих дней</td></tr>';
+        return;
+    }
+    
+    // Сортируем даты по возрастанию
+    const sortedDates = dates.sort((a, b) => new Date(a.work_date) - new Date(b.work_date));
+    
+    tbody.innerHTML = sortedDates.map(dateObj => {
+        const date = new Date(dateObj.work_date);
+        const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+        const dayOfWeek = dayNames[date.getDay()];
+        const formattedDate = formatDate(dateObj.work_date);
         
-        const data = await response.json();
-        const { template, rules, employees } = data;
-        
-        document.getElementById('scheduleDetailsTitle').textContent = template.name;
-        document.getElementById('scheduleDetailsModal').dataset.scheduleId = scheduleId;
-        
-        // Display rules
-        const rulesBody = document.getElementById('detailsRulesBody');
-        rulesBody.innerHTML = rules.map(rule => {
-            const dayText = template.schedule_type === 'rotating' ? 
-                `День ${rule.day_number}` : getDayOfWeekName(rule.day_number);
-            
-            return `
-                <tr>
-                    <td>${dayText}</td>
-                    <td>${rule.is_workday ? 'Да' : 'Нет'}</td>
-                    <td>${rule.check_in_time || '-'}</td>
-                    <td>${rule.check_out_time || '-'}</td>
-                    <td>${rule.break_duration_minutes || '-'}</td>
-                    <td>${rule.tolerance_late_minutes || '-'} мин</td>
-                </tr>
-            `;
-        }).join('');
-        
-        // Display employees
-        const employeesBody = document.getElementById('detailsEmployeesBody');
-        if (employees.length === 0) {
-            employeesBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет назначенных сотрудников</td></tr>';
-        } else {
-            employeesBody.innerHTML = employees.map(emp => `
-                <tr>
-                    <td>${emp.full_name}</td>
-                    <td>${emp.table_number}</td>
-                    <td>${emp.department_name || '-'}</td>
-                    <td>${emp.organization || '-'}</td>
-                    <td>${formatDate(emp.start_date)}</td>
-                </tr>
-            `).join('');
+        return `
+            <tr>
+                <td>${formattedDate}</td>
+                <td class="day-of-week">${dayOfWeek}</td>
+                <td>
+                    <button class="remove-date-btn" onclick="removeWorkDate('${formattedDate}')">
+                        Удалить
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Display assigned employees in table
+function displayAssignedEmployees(employees) {
+    const tbody = document.getElementById('assigned-employees-tbody');
+    
+    if (!tbody) {
+        console.error('assigned-employees-tbody element not found');
+        return;
+    }
+    
+    if (employees.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #6c757d;">Нет назначенных сотрудников</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = employees.map(emp => `
+        <tr>
+            <td>${emp.full_name}</td>
+            <td>${emp.table_number}</td>
+            <td>${emp.department_name || '-'}</td>
+            <td>${emp.organization || '-'}</td>
+            <td>${formatDate(emp.start_date)}</td>
+        </tr>
+    `).join('');
+}
+
+// Get work dates from table
+function getWorkDatesFromTable() {
+    const tbody = document.getElementById('work-dates-tbody');
+    const rows = tbody.querySelectorAll('tr:not(.new-date-row)');
+    const dates = [];
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 2 && !cells[0].textContent.includes('Нет рабочих')) {
+            // Преобразуем отформатированную дату обратно в формат YYYY-MM-DD
+            const dateText = cells[0].textContent.trim();
+            if (dateText && dateText !== '-') {
+                dates.push(parseDate(dateText));
+            }
         }
-        
-        document.getElementById('scheduleDetailsModal').style.display = 'block';
-    } catch (error) {
-        console.error('Error loading schedule details:', error);
-        alert('Ошибка загрузки деталей графика');
+    });
+    
+    return dates;
+}
+
+// Helper function to parse date from display format to YYYY-MM-DD
+function parseDate(displayDate) {
+    // displayDate может быть в формате "DD.MM.YYYY" или уже в "YYYY-MM-DD"
+    if (displayDate.includes('.')) {
+        const parts = displayDate.split('.');
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return displayDate;
+}
+
+// Add validation function
+function validateScheduleCard() {
+    const name = document.getElementById('schedule-card-name').value.trim();
+    const checkIn = document.getElementById('schedule-card-check-in').value;
+    const checkOut = document.getElementById('schedule-card-check-out').value;
+    
+    const saveBtn = document.getElementById('save-schedule-btn');
+    const isValid = name && checkIn && checkOut;
+    
+    if (saveBtn) {
+        saveBtn.disabled = !isValid;
     }
 }
 
-// Hide schedule details modal
-function hideScheduleDetailsModal() {
-    document.getElementById('scheduleDetailsModal').style.display = 'none';
-}
-
-// Switch details tab
-function switchDetailsTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
-    });
-    
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.style.display = 'none';
-    });
-    
-    document.getElementById(`${tabName}Tab`).style.display = 'block';
+// Show schedule details (redirect to card)
+async function showScheduleDetails(scheduleId) {
+    openScheduleCard(scheduleId);
 }
 
 // Get day of week name
@@ -1872,6 +2191,8 @@ window.loadEmployees = loadEmployees;
 window.loadDepartments = loadDepartments;
 window.loadPositions = loadPositions;
 window.showScheduleDetails = showScheduleDetails;
-window.showEditScheduleModal = showEditScheduleModal;
-window.removeScheduleRule = removeScheduleRule;
+window.openScheduleCard = openScheduleCard;
+window.confirmAddDate = confirmAddDate;
+window.cancelAddDate = cancelAddDate;
+window.removeWorkDate = removeWorkDate;
 window.handleEmployeeSelection = handleEmployeeSelection;

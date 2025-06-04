@@ -11,7 +11,7 @@
     <meta name="last-modified" content="2025-06-02T19:00:00Z">
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="admin.css?v=cors-fix&bust=1733328000">
     <link rel="stylesheet" href="telegram.css">
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -476,6 +476,10 @@
                                 <input type="date" id="events-date-to" class="form-control">
                                 <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
                                 <button id="events-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                <button id="events-delete-all-btn" class="btn btn--danger btn--sm" title="Удалить все записи из таблицы">
+                                    <span class="btn-text">🗑️ Очистить таблицу</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
                             </div>
                             <span class="total-count">Всего: <span id="events-total">0</span></span>
                         </div>
@@ -522,6 +526,10 @@
                                 <button id="records-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
                                 <button id="records-recalculate-btn" class="btn btn--success btn--sm">
                                     <span class="btn-text">Пересчет рабочего времени</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                                <button id="records-delete-all-btn" class="btn btn--danger btn--sm" title="Удалить все записи из таблицы">
+                                    <span class="btn-text">🗑️ Очистить таблицу</span>
                                     <span class="spinner" style="display: none;">⏳</span>
                                 </button>
                             </div>
@@ -609,6 +617,90 @@
                     </div>
                 </section>
                 
+                <!-- Секция: Карточка графика -->
+                <section id="schedule-card-section" class="content-section">
+                    <div class="section-header">
+                        <button id="back-to-schedules-btn" class="btn btn--outline btn--sm">← Назад к списку</button>
+                        <h2 id="schedule-card-title">График работы</h2>
+                        <div class="section-controls">
+                            <button id="save-schedule-btn" class="btn btn--primary">
+                                <span class="btn-text">Сохранить</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="schedule-card-container">
+                        <!-- Шапка графика -->
+                        <div class="schedule-header-form">
+                            <input type="hidden" id="schedule-card-id">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="schedule-card-name">Название графика</label>
+                                    <input type="text" id="schedule-card-name" class="form-control" placeholder="Например: Дневная смена" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="schedule-card-description">Описание</label>
+                                    <textarea id="schedule-card-description" class="form-control" rows="2" placeholder="Описание графика работы"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="schedule-card-check-in">Время входа</label>
+                                    <input type="time" id="schedule-card-check-in" class="form-control" value="09:00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="schedule-card-check-out">Время выхода</label>
+                                    <input type="time" id="schedule-card-check-out" class="form-control" value="18:00" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Рабочие дни -->
+                        <div class="schedule-dates-section">
+                            <div class="dates-header">
+                                <h3>Рабочие дни</h3>
+                                <button type="button" id="add-work-date-btn" class="btn btn--outline btn--sm">+ Добавить дату</button>
+                            </div>
+                            <div class="dates-table-container">
+                                <table class="admin-table" id="work-dates-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 150px;">Дата</th>
+                                            <th style="width: 100px;">День недели</th>
+                                            <th style="width: 100px;">Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="work-dates-tbody">
+                                        <!-- Даты будут добавлены динамически -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Назначенные сотрудники -->
+                        <div class="schedule-employees-section">
+                            <h3>Назначенные сотрудники (<span id="assigned-employees-count">0</span>)</h3>
+                            <div class="employees-table-container" style="max-height: 300px; overflow-y: auto;">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ФИО</th>
+                                            <th>Табельный номер</th>
+                                            <th>Подразделение</th>
+                                            <th>Организация</th>
+                                            <th>Дата назначения</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="assigned-employees-tbody">
+                                        <!-- Сотрудники будут загружены динамически -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
                 <!-- Секция: Шаблоны графиков -->
                 <section id="schedules-section" class="content-section">
                     <div class="section-header">
@@ -625,7 +717,8 @@
                             <thead>
                                 <tr>
                                     <th>Название</th>
-                                    <th>Тип</th>
+                                    <th>Время работы</th>
+                                    <th>Рабочих дней</th>
                                     <th>Сотрудников</th>
                                     <th>Организации</th>
                                     <th>Действия</th>
@@ -748,123 +841,9 @@
         </div>
     </div>
 
-    <!-- Модальное окно создания/редактирования графика -->
-    <div id="scheduleModal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <div class="modal-header">
-                <h3 id="scheduleModalTitle">Создание графика работы</h3>
-                <button id="closeScheduleModal" class="btn-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="scheduleForm">
-                    <input type="hidden" id="scheduleId">
-                    
-                    <!-- Основная информация -->
-                    <div class="form-group">
-                        <label for="scheduleName">Название графика</label>
-                        <input type="text" id="scheduleName" class="form-control" placeholder="Например: Пятидневка 9-18" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="scheduleDescription">Описание</label>
-                        <textarea id="scheduleDescription" class="form-control" rows="3" placeholder="Описание графика работы"></textarea>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group" style="flex: 1;">
-                            <label for="scheduleType">Тип графика</label>
-                            <select id="scheduleType" class="form-control" required>
-                                <option value="fixed">Фиксированный (пн-пт)</option>
-                                <option value="rotating">Сменный (2/2, 3/3 и т.д.)</option>
-                                <option value="flexible">Гибкий</option>
-                            </select>
-                        </div>
-                        <div class="form-group" id="cycleDaysGroup" style="flex: 1; display: none;">
-                            <label for="cycleDays">Дней в цикле</label>
-                            <input type="number" id="cycleDays" class="form-control" min="2" max="30" placeholder="Например: 4 для 2/2">
-                        </div>
-                    </div>
-                    
-                    <!-- Правила графика -->
-                    <h4>Правила графика</h4>
-                    <div id="scheduleRules" class="schedule-rules-container">
-                        <!-- Правила будут добавлены динамически -->
-                    </div>
-                    
-                    <button type="button" id="addRuleBtn" class="btn btn--outline btn--sm">+ Добавить день</button>
-                    
-                    <div class="modal-footer">
-                        <button type="button" id="cancelScheduleBtn" class="btn btn--outline">Отмена</button>
-                        <button type="submit" class="btn btn--primary">
-                            <span class="btn-text">Сохранить</span>
-                            <span class="spinner" style="display: none;">⏳</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно детальной информации о графике -->
-    <div id="scheduleDetailsModal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h3 id="scheduleDetailsTitle">График работы</h3>
-                <button id="closeScheduleDetailsModal" class="btn-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="schedule-details-tabs">
-                    <button class="tab-btn active" data-tab="rules">Правила</button>
-                    <button class="tab-btn" data-tab="employees">Сотрудники</button>
-                </div>
-                
-                <div id="rulesTab" class="tab-content active">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>День</th>
-                                <th>Рабочий день</th>
-                                <th>Время входа</th>
-                                <th>Время выхода</th>
-                                <th>Обед (мин)</th>
-                                <th>Допустимое опоздание</th>
-                            </tr>
-                        </thead>
-                        <tbody id="detailsRulesBody">
-                            <!-- Правила будут загружены динамически -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <div id="employeesTab" class="tab-content" style="display: none;">
-                    <div style="max-height: 400px; overflow-y: auto;">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>ФИО</th>
-                                    <th>Табельный номер</th>
-                                    <th>Подразделение</th>
-                                    <th>Организация</th>
-                                    <th>Дата назначения</th>
-                                </tr>
-                            </thead>
-                            <tbody id="detailsEmployeesBody">
-                                <!-- Сотрудники будут загружены динамически -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="modal-footer">
-                    <button id="editScheduleBtn" class="btn btn--primary">Редактировать</button>
-                    <button id="closeDetailsBtn" class="btn btn--outline">Закрыть</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="telegram.js?v=final"></script>
     <script src="app-ultimate-fix.js?v=final4&ts=20250602-final"></script>
-    <script src="admin.js?v=final10&ts=20250603-schedules"></script>
+    <script src="admin.js?v=final12&ts=20250604-cors-fix&bust=1733328000"></script>
 </body>
 </html>
