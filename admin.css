@@ -636,3 +636,110 @@
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+/* Schedule card styles */
+.schedule-card-container {
+    padding: 20px;
+}
+
+.schedule-header-form {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.schedule-header-form h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #495057;
+}
+
+.schedule-dates-section,
+.schedule-employees-section {
+    margin-bottom: 30px;
+}
+
+.dates-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.dates-header h3 {
+    margin: 0;
+    color: #495057;
+}
+
+.dates-table-container {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.work-date-row {
+    position: relative;
+}
+
+.work-date-input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    padding: 8px;
+}
+
+.work-date-input:focus {
+    background: #fff3cd;
+    outline: 2px solid #ffc107;
+}
+
+.remove-date-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.remove-date-btn:hover {
+    background: #c82333;
+}
+
+.day-of-week {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.schedule-employees-section h3 {
+    margin-bottom: 15px;
+    color: #495057;
+}
+
+/* Empty state */
+.empty-dates-message {
+    text-align: center;
+    padding: 40px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .schedule-card-container {
+        padding: 10px;
+    }
+    
+    .schedule-header-form {
+        padding: 15px;
+    }
+    
+    .dates-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+}

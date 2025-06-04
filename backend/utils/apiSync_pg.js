@@ -520,9 +520,10 @@ async function saveTimeEvents(events) {
         
         if (!eventDatetime) continue;
         
+        // Время из API в казахстанской зоне - сохраняем как timestamp без timezone
         await db.query(`
           INSERT INTO time_events (employee_number, object_code, event_datetime, event_type)
-          VALUES ($1, $2, $3, $4)
+          VALUES ($1, $2, $3::timestamp, $4)
         `, [tableNumber, objectCode, eventDatetime, eventType]);
         
         insertCount++;

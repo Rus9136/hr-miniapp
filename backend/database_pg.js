@@ -11,13 +11,28 @@ const dbConfig = {
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  options: '-c timezone=Asia/Almaty'
 };
 
 const pool = new Pool(dbConfig);
 
+// Set timezone for all connections
+pool.on('connect', async (client) => {
+  try {
+    await client.query("SET timezone = 'Asia/Almaty'");
+    console.log('Timezone set to Asia/Almaty for new connection');
+  } catch (err) {
+    console.error('Error setting timezone:', err);
+  }
+});
+
 // Create database schema
 async function initializeDatabase() {
   try {
+    // Set timezone for this connection
+    await pool.query("SET TIME ZONE 'Asia/Almaty'");
+    console.log('Database timezone set to Asia/Almaty');
+    
     await pool.query('BEGIN');
 
     // Users table (for admin authentication)

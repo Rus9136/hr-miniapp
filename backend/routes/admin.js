@@ -510,11 +510,13 @@ router.get('/admin/schedules/templates', async (req, res) => {
             SELECT 
                 t.*,
                 COUNT(DISTINCT esh.employee_id) as employee_count,
-                STRING_AGG(DISTINCT d.object_company, ', ') as organizations
+                STRING_AGG(DISTINCT d.object_company, ', ') as organizations,
+                COUNT(DISTINCT wsd.work_date) as work_days_count
             FROM work_schedule_templates t
             LEFT JOIN employee_schedule_history esh ON t.id = esh.template_id AND esh.end_date IS NULL
             LEFT JOIN employees e ON esh.employee_id = e.id
             LEFT JOIN departments d ON e.object_code = d.object_code
+            LEFT JOIN work_schedule_dates wsd ON t.id = wsd.template_id
             WHERE t.is_active = true
             GROUP BY t.id
             ORDER BY t.name
@@ -528,7 +530,7 @@ router.get('/admin/schedules/templates', async (req, res) => {
     }
 });
 
-// Get single schedule template with rules
+// Get single schedule template with dates
 router.get('/admin/schedules/templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -543,9 +545,9 @@ router.get('/admin/schedules/templates/:id', async (req, res) => {
             return res.status(404).json({ error: 'Template not found' });
         }
         
-        // Get rules
-        const rules = await db.queryRows(
-            'SELECT * FROM work_schedule_rules WHERE template_id = $1 ORDER BY day_number',
+        // Get work dates
+        const dates = await db.queryRows(
+            'SELECT * FROM work_schedule_dates WHERE template_id = $1 ORDER BY work_date',
             [id]
         );
         
@@ -565,7 +567,7 @@ router.get('/admin/schedules/templates/:id', async (req, res) => {
             ORDER BY d.object_company, d.object_name, e.full_name
         `, [id]);
         
-        res.json({ template, rules, employees });
+        res.json({ template, dates, employees });
     } catch (error) {
         console.error('Error fetching schedule template:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -575,7 +577,7 @@ router.get('/admin/schedules/templates/:id', async (req, res) => {
 // Create new schedule template
 router.post('/admin/schedules/templates', async (req, res) => {
     try {
-        const { name, description, schedule_type, cycle_days, rules } = req.body;
+        const { name, description, check_in_time, check_out_time, dates } = req.body;
         
         // Start transaction
         await db.query('BEGIN');
@@ -583,29 +585,19 @@ router.post('/admin/schedules/templates', async (req, res) => {
         // Create template
         const templateResult = await db.queryRow(`
             INSERT INTO work_schedule_templates 
-            (name, description, schedule_type, cycle_days, is_active)
+            (name, description, check_in_time, check_out_time, is_active)
             VALUES ($1, $2, $3, $4, true)
             RETURNING *
-        `, [name, description, schedule_type, cycle_days || null]);
+        `, [name, description, check_in_time || '09:00', check_out_time || '18:00']);
         
-        // Create rules
-        if (rules && rules.length > 0) {
-            for (const rule of rules) {
+        // Create dates
+        if (dates && dates.length > 0) {
+            for (const date of dates) {
                 await db.query(`
-                    INSERT INTO work_schedule_rules
-                    (template_id, day_number, is_workday, check_in_time, check_out_time, 
-                     break_duration_minutes, tolerance_late_minutes, tolerance_early_minutes)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                `, [
-                    templateResult.id,
-                    rule.day_number,
-                    rule.is_workday,
-                    rule.check_in_time,
-                    rule.check_out_time,
-                    rule.break_duration_minutes || 60,
-                    rule.tolerance_late_minutes || 15,
-                    rule.tolerance_early_minutes || 5
-                ]);
+                    INSERT INTO work_schedule_dates
+                    (template_id, work_date)
+                    VALUES ($1, $2)
+                `, [templateResult.id, date]);
             }
         }
         
@@ -622,45 +614,37 @@ router.post('/admin/schedules/templates', async (req, res) => {
 router.put('/admin/schedules/templates/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, description, is_active, rules } = req.body;
+        const { name, description, check_in_time, check_out_time, dates } = req.body;
         
         await db.query('BEGIN');
         
         // Update template
         const templateResult = await db.queryRow(`
             UPDATE work_schedule_templates 
-            SET name = $1, description = $2, is_active = $3, updated_at = NOW()
-            WHERE id = $4
+            SET name = $1, description = $2, check_in_time = $3, check_out_time = $4, updated_at = NOW()
+            WHERE id = $5
             RETURNING *
-        `, [name, description, is_active, id]);
+        `, [name, description, check_in_time, check_out_time, id]);
         
         if (!templateResult) {
             await db.query('ROLLBACK');
             return res.status(404).json({ error: 'Template not found' });
         }
         
-        // Update rules if provided
-        if (rules) {
-            // Delete existing rules
-            await db.query('DELETE FROM work_schedule_rules WHERE template_id = $1', [id]);
+        // Update dates if provided
+        if (dates !== undefined) {
+            // Delete existing dates
+            await db.query('DELETE FROM work_schedule_dates WHERE template_id = $1', [id]);
             
-            // Insert new rules
-            for (const rule of rules) {
-                await db.query(`
-                    INSERT INTO work_schedule_rules
-                    (template_id, day_number, is_workday, check_in_time, check_out_time, 
-                     break_duration_minutes, tolerance_late_minutes, tolerance_early_minutes)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                `, [
-                    id,
-                    rule.day_number,
-                    rule.is_workday,
-                    rule.check_in_time,
-                    rule.check_out_time,
-                    rule.break_duration_minutes || 60,
-                    rule.tolerance_late_minutes || 15,
-                    rule.tolerance_early_minutes || 5
-                ]);
+            // Insert new dates
+            if (dates.length > 0) {
+                for (const date of dates) {
+                    await db.query(`
+                        INSERT INTO work_schedule_dates
+                        (template_id, work_date)
+                        VALUES ($1, $2)
+                    `, [id, date]);
+                }
             }
         }
         
@@ -794,6 +778,68 @@ router.get('/admin/schedules/employee/:employeeId/history', async (req, res) => 
     } catch (error) {
         console.error('Error fetching employee schedule history:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ==================== CLEAR TABLE ENDPOINTS ====================
+
+// Clear all time_events
+router.delete('/admin/time-events/clear-all', async (req, res) => {
+    try {
+        console.log('Clearing all time_events...');
+        
+        await db.query('BEGIN');
+        
+        // Удаляем все записи из time_events
+        const result = await db.query('DELETE FROM time_events');
+        const deletedCount = result.rowCount || 0;
+        
+        await db.query('COMMIT');
+        
+        console.log(`Deleted ${deletedCount} records from time_events`);
+        
+        res.json({
+            success: true,
+            message: `Удалено ${deletedCount} записей из таблицы событий`,
+            deletedCount: deletedCount
+        });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Error clearing time_events:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при очистке таблицы событий: ' + error.message
+        });
+    }
+});
+
+// Clear all time_records
+router.delete('/admin/time-records/clear-all', async (req, res) => {
+    try {
+        console.log('Clearing all time_records...');
+        
+        await db.query('BEGIN');
+        
+        // Удаляем все записи из time_records
+        const result = await db.query('DELETE FROM time_records');
+        const deletedCount = result.rowCount || 0;
+        
+        await db.query('COMMIT');
+        
+        console.log(`Deleted ${deletedCount} records from time_records`);
+        
+        res.json({
+            success: true,
+            message: `Удалено ${deletedCount} записей из таблицы табеля`,
+            deletedCount: deletedCount
+        });
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('Error clearing time_records:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при очистке таблицы табеля: ' + error.message
+        });
     }
 });
 
