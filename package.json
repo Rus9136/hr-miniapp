@@ -5,11 +5,11 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "node backend/server.js",
-    "server:https": "node backend/server_https.js",
-    "server:prod": "NODE_ENV=production node backend/server_https.js",
+    "server": "node --max-old-space-size=512 backend/server.js",
+    "server:https": "node --max-old-space-size=512 backend/server_https.js",
+    "server:prod": "NODE_ENV=production node --max-old-space-size=512 backend/server_https.js",
     "client": "http-server . -p 5555 -c-1",
-    "dev": "concurrently \"nodemon backend/server.js\" \"http-server . -p 5555 -c-1\"",
+    "dev": "concurrently \"nodemon --max-old-space-size=512 backend/server.js\" \"http-server . -p 5555 -c-1\"",
     "install-all": "npm install"
   },
   "dependencies": {

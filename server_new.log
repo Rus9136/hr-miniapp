@@ -1,112 +1,20 @@
 Server running on port 3030
+Timezone set to Asia/Almaty for new connection
+Database timezone set to Asia/Almaty
 ✅ PostgreSQL database initialized successfully
 Database initialized successfully
 Starting initial data sync...
 Starting data synchronization...
 Synced 535 departments
 Synced 6068 positions
+Getting timesheet for employee table_number: АП00-00358
+Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
+Error syncing events for employee АП00-00358: Request failed with status code 404
+Found 0 time records for АП00-00358
 Synced 2946 employees
 Sync completed: 535 departments, 6068 positions, 2946 employees
 Initial data sync completed
-DEBUG: Looking for employee with table_number: test123
-DEBUG: No employee found with table_number: test123
-DEBUG: First 10 employees: [
-  {
-    id: 74,
-    table_number: '980101402371',
-    full_name: 'Асан Мәлике Сейділдақызы'
-  },
-  {
-    id: 46,
-    table_number: '810623450455',
-    full_name: 'Жунусова Динара Кабкешовна'
-  },
-  {
-    id: 5,
-    table_number: '0000000005',
-    full_name: 'Садуахас Еркенай Рахимжанқызы'
-  },
-  {
-    id: 8,
-    table_number: '850612301011',
-    full_name: 'Сиязов Бекнур Талгатович'
-  },
-  {
-    id: 4,
-    table_number: '0000000004',
-    full_name: 'Муратова Айгерим Ержановна'
-  },
-  {
-    id: 2,
-    table_number: '0000000002',
-    full_name: 'Ахмедова Жанна Нурдуллаевна'
-  },
-  {
-    id: 45,
-    table_number: '001227601084',
-    full_name: 'Елтай Ақниет Миятқызы'
-  },
-  {
-    id: 7,
-    table_number: '0000000007',
-    full_name: 'Садирова Гульжахан Бахтибаевна'
-  },
-  {
-    id: 1,
-    table_number: '0000000001',
-    full_name: 'Муратова Айгерим Ержановна'
-  },
-  {
-    id: 47,
-    table_number: '840613450951',
-    full_name: 'Мусагажинова Айгорым Александровна'
-  }
-]
-DEBUG: Looking for employee with table_number: АП00-00358
-DEBUG: Found employee: {
-  id: 1767,
-  object_code: 'АП000049',
-  staff_position_code: '09cb7cfc-f293-11ef-90db-3cecef8cc60b',
-  table_number: 'АП00-00358',
-  full_name: 'Суиндикова Сайраш Агабековна',
-  status: 1,
-  object_bin: '241240023631',
-  created_at: 2025-06-01T11:15:28.259Z,
-  updated_at: 2025-06-02T13:55:02.313Z
-}
-DEBUG: Looking for employee with table_number: АП00-00358
-DEBUG: Found employee: {
-  id: 1767,
-  object_code: 'АП000049',
-  staff_position_code: '09cb7cfc-f293-11ef-90db-3cecef8cc60b',
-  table_number: 'АП00-00358',
-  full_name: 'Суиндикова Сайраш Агабековна',
-  status: 1,
-  object_bin: '241240023631',
-  created_at: 2025-06-01T11:15:28.259Z,
-  updated_at: 2025-06-02T13:55:02.313Z
-}
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 0 time records for АП00-00358
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 0 time records for АП00-00358
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 5 time records for АП00-00358
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 5 time records for АП00-00358
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 5 time records for АП00-00358
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 5 time records for АП00-00358
+Getting timesheet for employee table_number: 911027402151
+Found employee: Мирзахметова Наргиза Мавзуровна (911027402151)
+Error syncing events for employee 911027402151: Request failed with status code 404
+Found 0 time records for 911027402151

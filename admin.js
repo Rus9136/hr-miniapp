@@ -1176,7 +1176,7 @@ function displayTimeRecords(records) {
     const tbody = document.getElementById('time-records-tbody');
     
     if (records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
@@ -1185,13 +1185,24 @@ function displayTimeRecords(records) {
             'on_time': 'Вовремя',
             'late': 'Опоздание',
             'early_leave': 'Ранний уход',
-            'absent': 'Отсутствие'
+            'absent': 'Отсутствие',
+            'night_shift_on_time': 'Ночная смена вовремя',
+            'night_shift_late': 'Ночная смена опоздание',
+            'night_shift_early_leave': 'Ночная смена ранний уход',
+            'night_shift_auto': 'Ночная смена авто'
         }[record.status] || record.status;
         
         const checkInTime = record.check_in ? formatTime(record.check_in) : '-';
         const checkOutTime = record.check_out ? formatTime(record.check_out) : '-';
-        const hoursWorked = record.hours_worked ? parseFloat(record.hours_worked).toFixed(1) : '-';
-        const offSchedule = record.off_schedule ? 'Да' : 'Нет';
+        
+        // Enhanced hours display with new fields
+        const plannedHours = record.planned_hours ? parseFloat(record.planned_hours).toFixed(1) : '-';
+        const actualHours = record.actual_hours ? parseFloat(record.actual_hours).toFixed(1) : '-';
+        const overtimeHours = record.overtime_hours ? parseFloat(record.overtime_hours).toFixed(1) : '0';
+        const hasLunch = record.has_lunch_break ? 'Да' : 'Нет';
+        
+        // Color coding for overtime
+        const overtimeClass = overtimeHours > 0 ? 'overtime-yes' : 'overtime-no';
         
         return `
             <tr>
@@ -1200,8 +1211,10 @@ function displayTimeRecords(records) {
                 <td>${record.table_number || '-'}</td>
                 <td>${checkInTime}</td>
                 <td>${checkOutTime}</td>
-                <td>${hoursWorked}</td>
-                <td><span class="off-schedule-${record.off_schedule ? 'yes' : 'no'}">${offSchedule}</span></td>
+                <td><span class="planned-hours">${plannedHours}ч</span></td>
+                <td><span class="actual-hours">${actualHours}ч</span></td>
+                <td><span class="overtime-hours ${overtimeClass}">${overtimeHours}ч</span></td>
+                <td><span class="lunch-break-${record.has_lunch_break ? 'yes' : 'no'}">${hasLunch}</span></td>
                 <td><span class="status-${record.status}">${statusText}</span></td>
             </tr>
         `;

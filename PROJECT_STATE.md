@@ -1,8 +1,8 @@
 # HR Time Tracking Mini App - Project State
 
 ## Current Status: PRODUCTION READY 🚀
-**Last Updated**: 2025-06-04 18:40  
-**Major Milestone**: ✅ **Night Shift Calculation System COMPLETE + Universal Shift Logic**
+**Last Updated**: 2025-06-05 10:45  
+**Major Milestone**: ✅ **Calendar Weekend Display Fix + Night Shift System COMPLETE**
 
 ## 🎯 Project Overview
 HR Time Tracking application successfully transformed into a **Telegram Mini App** with full production deployment capability.
@@ -194,7 +194,22 @@ help - Помощь
 - **Test Results**: 7/7 PASSED ✅
 - **Production Verification**: Live API testing completed ✅
 
-## 🛠️ **Latest Implementation (2025-06-04 18:40)**
+## 🛠️ **Latest Implementation (2025-06-05 10:45)**
+
+### **📅 Calendar Weekend Display Fix**
+- **Duration**: 30 minutes
+- **Problem Solved**: Weekend days showing work schedule times (09:00-22:00) in calendar and day details modal
+- **Features Added**: Weekend status check for schedule time display
+- **Files Modified**: `app.js` (showDayDetails and renderCalendar functions)
+- **Status**: ✅ **CALENDAR DISPLAY FIXED**
+
+### **Key Fixes**
+1. **Modal Window**: Added `isWeekend` check to hide planned time/hours for weekend days
+2. **Calendar Display**: Added `&& day.status !== 'weekend'` condition to schedule time rendering
+3. **Planned Section**: Hide entire planned data section for weekend days
+4. **Production Deployment**: Successfully deployed and tested with employee АП00-00229
+
+### **Previous Implementation (2025-06-04 18:40)**
 
 ### **🌙 Night Shift Calculation System**
 - **Duration**: 2 hours 15 minutes

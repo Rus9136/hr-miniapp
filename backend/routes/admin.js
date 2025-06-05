@@ -148,10 +148,19 @@ router.post('/admin/load/timesheet', async (req, res) => {
         // Start the loading process in the background and return immediately
         const loadingId = Date.now().toString();
         
-        // Store progress state
+        // Store progress state with automatic cleanup
         if (!global.loadingProgress) {
             global.loadingProgress = {};
         }
+        
+        // Clean up old progress entries (older than 1 hour)
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        Object.keys(global.loadingProgress).forEach(key => {
+            const progress = global.loadingProgress[key];
+            if (progress.startTime && new Date(progress.startTime).getTime() < oneHourAgo) {
+                delete global.loadingProgress[key];
+            }
+        });
         
         global.loadingProgress[loadingId] = {
             status: 'starting',
@@ -232,10 +241,12 @@ async function loadTimesheetWithProgress(loadingId, params) {
             endTime: new Date()
         });
         
-        // Clean up after 5 minutes
+        // Clean up after 2 minutes (reduced from 5)
         setTimeout(() => {
-            delete global.loadingProgress[loadingId];
-        }, 5 * 60 * 1000);
+            if (global.loadingProgress && global.loadingProgress[loadingId]) {
+                delete global.loadingProgress[loadingId];
+            }
+        }, 2 * 60 * 1000);
         
     } catch (error) {
         console.error('Background loading error:', error);
@@ -507,26 +518,52 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                 }
             }
             
-            // IMPROVED: Calculate hours worked using universal night shift logic
-            let hoursWorked = null;
-            if (checkIn && checkOut) {
-                hoursWorked = calculateShiftHours(checkIn, checkOut, dayData);
-            }
+            // ENHANCED: Check if this is a scheduled workday with specific date check
+            const scheduledWorkday = await isScheduledWorkday(dayData.employee_number, dayData.date);
+            
+            // Use actual schedule data if found, otherwise use general schedule info
+            const scheduleForCalculation = scheduledWorkday || dayData;
+            
+            // IMPROVED: Calculate hours using advanced logic with schedule verification
+            const hoursCalculation = calculateAdvancedHours(
+                checkIn, 
+                checkOut, 
+                scheduleForCalculation, 
+                dayData.date
+            );
             
             // IMPROVED: Use enhanced status determination with night shift support
-            const status = determineShiftStatus(checkIn, checkOut, dayData);
-            const offSchedule = !dayData.schedule_name;
+            const status = determineShiftStatus(checkIn, checkOut, scheduleForCalculation);
+            
+            // Legacy hours_worked field uses final_hours for backward compatibility
+            const hoursWorked = hoursCalculation.final_hours;
+            
+            console.log(`📊 Hours breakdown for ${dayData.employee_number} on ${dayData.date}:`);
+            console.log(`   Actual: ${hoursCalculation.actual_hours?.toFixed(2)}h`);
+            console.log(`   Planned: ${hoursCalculation.planned_hours?.toFixed(2)}h`);
+            console.log(`   Final: ${hoursCalculation.final_hours?.toFixed(2)}h`);
+            console.log(`   Overtime: ${hoursCalculation.overtime_hours?.toFixed(2)}h`);
+            console.log(`   Scheduled: ${hoursCalculation.is_scheduled_workday ? 'Yes' : 'No'}`);
+            console.log(`   Lunch break: ${hoursCalculation.has_lunch_break ? 'Yes' : 'No'}`);
             
             await db.query(`
                 INSERT INTO time_records 
-                (employee_id, employee_number, date, check_in, check_out, hours_worked, status, off_schedule, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+                (employee_id, employee_number, date, check_in, check_out, 
+                 hours_worked, planned_hours, actual_hours, overtime_hours,
+                 status, off_schedule, is_scheduled_workday, has_lunch_break,
+                 created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
                 ON CONFLICT (employee_number, date) DO UPDATE SET
                     check_in = EXCLUDED.check_in,
                     check_out = EXCLUDED.check_out,
                     hours_worked = EXCLUDED.hours_worked,
+                    planned_hours = EXCLUDED.planned_hours,
+                    actual_hours = EXCLUDED.actual_hours,
+                    overtime_hours = EXCLUDED.overtime_hours,
                     status = EXCLUDED.status,
                     off_schedule = EXCLUDED.off_schedule,
+                    is_scheduled_workday = EXCLUDED.is_scheduled_workday,
+                    has_lunch_break = EXCLUDED.has_lunch_break,
                     updated_at = NOW()
             `, [
                 dayData.employee_id,
@@ -534,9 +571,14 @@ router.post('/admin/recalculate-time-records', async (req, res) => {
                 dayData.date,
                 checkIn,
                 checkOut,
-                hoursWorked,
-                status,
-                offSchedule
+                hoursWorked,                          // $6 - legacy hours_worked
+                hoursCalculation.planned_hours,       // $7 - planned_hours
+                hoursCalculation.actual_hours,        // $8 - actual_hours  
+                hoursCalculation.overtime_hours,      // $9 - overtime_hours
+                status,                               // $10 - status
+                !hoursCalculation.is_scheduled_workday, // $11 - off_schedule
+                hoursCalculation.is_scheduled_workday,  // $12 - is_scheduled_workday
+                hoursCalculation.has_lunch_break      // $13 - has_lunch_break
             ]);
             
             processedCount++;
@@ -1009,61 +1051,131 @@ router.delete('/admin/time-records/clear-all', async (req, res) => {
 
 // ==================== 1C WORK SCHEDULES IMPORT ENDPOINT ====================
 
-// UNIVERSAL NIGHT SHIFT CALCULATOR
-function calculateShiftHours(checkIn, checkOut, scheduleData) {
+// ADVANCED HOURS CALCULATOR WITH SCHEDULE-BASED LOGIC
+function calculateAdvancedHours(checkIn, checkOut, scheduleData, workDate) {
+    if (!checkIn || !checkOut) {
+        return {
+            actual_hours: 0,
+            planned_hours: 0,
+            overtime_hours: 0,
+            is_scheduled_workday: false,
+            has_lunch_break: false
+        };
+    }
+    
     const inTime = new Date(checkIn);
     let outTime = new Date(checkOut);
     
-    // Get schedule times
+    // Get schedule information
     const startTime = scheduleData.work_start_time;
     const endTime = scheduleData.work_end_time;
-    const expectedHours = parseInt(scheduleData.work_hours) || 8;
+    const plannedHours = parseFloat(scheduleData.work_hours) || 8;
     const scheduleName = scheduleData.schedule_name || '';
     
-    // Determine if this is a night shift using multiple indicators
+    // Check if this is a scheduled workday
+    const isScheduledWorkday = !!scheduleData.schedule_name;
+    
+    // Determine if night shift
     const isNightShift = startTime && endTime && (
-        startTime > endTime ||  // Direct indicator: 22:00-06:00
-        expectedHours > 12 ||   // Long shifts (12+ hours)
-        (startTime >= "22:00" || startTime >= "23:00") || // Late start times
-        (endTime <= "08:00" || endTime <= "06:00") ||     // Early end times  
-        scheduleName.toLowerCase().includes('ночная') ||   // Russian "night"
-        scheduleName.toLowerCase().includes('смена') ||    // Russian "shift"
-        scheduleName.toLowerCase().includes('24ч') ||      // 24-hour indicator
-        scheduleName.includes('00:00')                     // Midnight indicator
+        startTime > endTime ||
+        plannedHours > 12 ||
+        (startTime >= "22:00" || startTime >= "23:00") ||
+        (endTime <= "08:00" || endTime <= "06:00") ||
+        scheduleName.toLowerCase().includes('ночная') ||
+        scheduleName.includes('00:00')
     );
     
-    if (isNightShift) {
-        console.log(`🌙 Night shift detected: ${scheduleName} (${startTime}-${endTime})`);
-        
-        // Strategy 1: If checkout is earlier than checkin, it's next day
-        if (outTime <= inTime) {
-            outTime.setDate(outTime.getDate() + 1);
-            console.log(`⏰ Adjusted checkout to next day: ${outTime.toISOString()}`);
-        }
-        
-        // Calculate hours
-        let hours = (outTime - inTime) / (1000 * 60 * 60);
-        
-        // Strategy 2: Validate against expected hours
-        if (hours > 16) {
-            console.warn(`⚠️ Unusually long shift: ${hours.toFixed(2)}h, using expected: ${expectedHours}h`);
-            hours = expectedHours;
-        }
-        
-        // Strategy 3: Handle edge cases
-        if (hours < 0) {
-            console.warn(`⚠️ Negative hours detected, adding 24h: ${hours.toFixed(2)}h`);
-            hours = hours + 24;
-        }
-        
-        console.log(`✅ Night shift calculation: ${hours.toFixed(2)}h`);
-        return Math.max(0, hours); // Ensure non-negative
-    } else {
-        // Standard day shift calculation
-        const hours = (outTime - inTime) / (1000 * 60 * 60);
-        console.log(`☀️ Day shift calculation: ${hours.toFixed(2)}h`);
-        return Math.max(0, hours);
+    // Handle night shift time calculation
+    if (isNightShift && outTime <= inTime) {
+        outTime.setDate(outTime.getDate() + 1);
+        console.log(`🌙 Night shift: adjusted checkout to next day`);
     }
+    
+    // Calculate raw actual hours
+    let actualHours = (outTime - inTime) / (1000 * 60 * 60);
+    
+    // Handle edge cases
+    if (actualHours < 0) {
+        actualHours = actualHours + 24;
+    }
+    if (actualHours > 16) {
+        console.warn(`⚠️ Unusually long shift: ${actualHours.toFixed(2)}h`);
+        actualHours = Math.min(actualHours, 16); // Cap at 16 hours
+    }
+    
+    // Determine if lunch break should be deducted
+    const hasLunchBreak = actualHours > 4 && !isNightShift;
+    
+    // Calculate final hours based on schedule logic
+    let finalHours, overtimeHours = 0;
+    
+    if (isScheduledWorkday) {
+        console.log(`📅 Scheduled workday: ${scheduleName} (${plannedHours}h planned)`);
+        
+        // Deduct lunch break if applicable
+        let workingHours = actualHours;
+        if (hasLunchBreak) {
+            workingHours = Math.max(0, actualHours - 1); // Deduct 1 hour lunch
+            console.log(`🍽️ Lunch break deducted: ${actualHours.toFixed(2)}h → ${workingHours.toFixed(2)}h`);
+        }
+        
+        if (workingHours > plannedHours) {
+            // Overtime: cap at planned hours, calculate overtime separately
+            finalHours = plannedHours;
+            overtimeHours = workingHours - plannedHours;
+            console.log(`⏰ Overtime detected: ${plannedHours}h + ${overtimeHours.toFixed(2)}h overtime → capped at ${finalHours}h`);
+        } else {
+            // Within scheduled hours or early departure
+            finalHours = workingHours;
+            console.log(`✅ Within schedule: ${finalHours.toFixed(2)}h of ${plannedHours}h planned`);
+        }
+    } else {
+        // No schedule: count actual hours
+        console.log(`🚫 No schedule: counting actual hours`);
+        finalHours = hasLunchBreak ? Math.max(0, actualHours - 1) : actualHours;
+    }
+    
+    return {
+        actual_hours: Math.max(0, actualHours),
+        planned_hours: isScheduledWorkday ? plannedHours : 0,
+        overtime_hours: Math.max(0, overtimeHours),
+        is_scheduled_workday: isScheduledWorkday,
+        has_lunch_break: hasLunchBreak,
+        final_hours: Math.max(0, finalHours)
+    };
+}
+
+// CHECK IF DATE IS SCHEDULED WORKDAY
+async function isScheduledWorkday(employeeNumber, workDate) {
+    try {
+        // Check if the specific date exists in employee's work schedule
+        const scheduleEntry = await db.queryRow(`
+            SELECT 
+                ws1c.work_date,
+                ws1c.work_hours,
+                ws1c.time_type,
+                ws1c.schedule_name,
+                ws1c.work_start_time,
+                ws1c.work_end_time
+            FROM employee_schedule_assignments esa
+            JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+            WHERE esa.employee_number = $1 
+            AND esa.end_date IS NULL
+            AND ws1c.work_date = $2
+            LIMIT 1
+        `, [employeeNumber, workDate]);
+        
+        return scheduleEntry || null;
+    } catch (error) {
+        console.error('Error checking scheduled workday:', error);
+        return null;
+    }
+}
+
+// LEGACY FUNCTION - DEPRECATED BUT KEPT FOR COMPATIBILITY
+function calculateShiftHours(checkIn, checkOut, scheduleData) {
+    const result = calculateAdvancedHours(checkIn, checkOut, scheduleData, null);
+    return result.final_hours;
 }
 
 // Enhanced status determination for night shifts

@@ -303,7 +303,8 @@ async function syncAllData() {
 
 async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objectBin }, progressCallback) {
   try {
-    let allEvents = [];
+    const BATCH_SIZE = 100; // Process in smaller batches
+    let totalEventsProcessed = 0;
     
     if (tableNumber) {
       // Если указан табельный номер конкретного сотрудника
@@ -329,11 +330,17 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       const response = await axios.get(`${API_BASE_URL}/event/filter`, { params });
       const events = response.data || [];
       
-      // Добавляем table_number к каждому событию, так как API его не возвращает
-      allEvents = events.map(e => ({
-        ...e,
-        table_number: tableNumber
-      }));
+      // Process events immediately without storing in large array
+      if (events.length > 0) {
+        const eventsWithTableNumber = events.map(e => ({
+          ...e,
+          table_number: tableNumber
+        }));
+        
+        // Save events immediately in batches
+        await saveTimeEvents(eventsWithTableNumber);
+        totalEventsProcessed += events.length;
+      }
       
       progressCallback({
         message: `Загружено ${events.length} событий для сотрудника ${tableNumber}`,
@@ -408,13 +415,19 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
             
             if (events.length > 0) {
               console.log(`Found ${events.length} events for ${emp.table_number}`);
-              // Добавляем table_number к каждому событию, так как API его не возвращает
+              // Process events immediately without storing in large array
               const eventsWithTableNumber = events.map(e => ({
                 ...e,
                 table_number: emp.table_number
               }));
-              allEvents = allEvents.concat(eventsWithTableNumber);
+              
+              // Save events in batches immediately
+              await saveTimeEvents(eventsWithTableNumber);
+              totalEventsProcessed += events.length;
               totalEvents += events.length;
+              
+              // Clear the events from memory after saving
+              eventsWithTableNumber.length = 0;
             }
             
             processedCount++;
@@ -444,13 +457,8 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       });
     }
     
-    // Сохраняем события в базу данных
-    if (allEvents.length > 0) {
-      console.log(`Saving ${allEvents.length} events to database...`);
-      await saveTimeEvents(allEvents);
-    }
-    
-    return allEvents;
+    console.log(`Total events processed: ${totalEventsProcessed}`);
+    return totalEventsProcessed;
     
   } catch (error) {
     console.error('Error loading time events:', error);
@@ -461,6 +469,19 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
 async function saveTimeEvents(events) {
   if (!events || events.length === 0) return;
   
+  const BATCH_SIZE = 50; // Process in smaller batches
+  
+  // Process events in batches to avoid memory issues
+  for (let i = 0; i < events.length; i += BATCH_SIZE) {
+    const batch = events.slice(i, i + BATCH_SIZE);
+    await processBatchEvents(batch);
+    
+    // Yield control to event loop
+    await new Promise(resolve => setImmediate(resolve));
+  }
+}
+
+async function processBatchEvents(events) {
   // Группируем события по сотрудникам и датам
   const eventsByEmployee = {};
   for (const event of events) {

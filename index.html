@@ -10,7 +10,7 @@
     <meta name="cache-control" content="no-cache">
     <meta name="last-modified" content="2025-06-02T19:00:00Z">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=modal-fix-20250605-1530">
     <link rel="stylesheet" href="admin.css?v=cors-fix&bust=1733328000">
     <link rel="stylesheet" href="telegram.css">
     <!-- Telegram Web App SDK -->
@@ -546,8 +546,10 @@
                                     <th>Табельный номер</th>
                                     <th>Приход</th>
                                     <th>Уход</th>
-                                    <th>Часов</th>
-                                    <th>Не по графику</th>
+                                    <th>Плановые часы</th>
+                                    <th>Фактические</th>
+                                    <th>Сверхурочные</th>
+                                    <th>Обед</th>
                                     <th>Статус</th>
                                 </tr>
                             </thead>
@@ -818,21 +820,44 @@
             </div>
             <div class="modal-body">
                 <div class="day-details">
-                    <div class="detail-row">
-                        <span class="detail-label">Приход:</span>
-                        <span id="arrivalTime" class="detail-value">--</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Уход:</span>
-                        <span id="departureTime" class="detail-value">--</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Отработано:</span>
-                        <span id="workedHours" class="detail-value">--</span>
-                    </div>
+                    <!-- Поле 1: Статус -->
                     <div class="detail-row">
                         <span class="detail-label">Статус:</span>
                         <span id="dayStatus" class="detail-value status">--</span>
+                    </div>
+                    
+                    <!-- Секция: Плановые данные -->
+                    <div class="detail-section">
+                        <div class="section-title">Плановые данные</div>
+                        
+                        <!-- Поле 2: Плановое время -->
+                        <div class="detail-row">
+                            <span class="detail-label">Плановое время:</span>
+                            <span id="plannedTime" class="detail-value">--</span>
+                        </div>
+                        
+                        <!-- Поле 3: Плановые часы -->
+                        <div class="detail-row">
+                            <span class="detail-label">Плановые часы:</span>
+                            <span id="plannedHours" class="detail-value">--</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Секция: Фактические данные -->
+                    <div class="detail-section">
+                        <div class="section-title">Фактические данные</div>
+                        
+                        <!-- Поле 4: Фактический приход -->
+                        <div class="detail-row">
+                            <span class="detail-label">Фактический приход:</span>
+                            <span id="actualArrival" class="detail-value">--</span>
+                        </div>
+                        
+                        <!-- Поле 5: Фактический уход -->
+                        <div class="detail-row">
+                            <span class="detail-label">Фактический уход:</span>
+                            <span id="actualDeparture" class="detail-value">--</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -841,7 +866,7 @@
 
 
     <script src="telegram.js?v=final"></script>
-    <script src="app-ultimate-fix.js?v=final4&ts=20250602-final"></script>
+    <script src="app.js?v=modal-fix&ts=20250605-1550&bust=1733420003"></script>
     <script src="admin.js?v=schedule-column&ts=20250604-schedule-fix&bust=1733420000"></script>
 </body>
 </html>
