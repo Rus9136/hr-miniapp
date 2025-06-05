@@ -194,7 +194,22 @@ help - Помощь
 - **Test Results**: 7/7 PASSED ✅
 - **Production Verification**: Live API testing completed ✅
 
-## 🛠️ **Latest Implementation (2025-06-05 10:45)**
+## 🛠️ **Latest Implementation (2025-06-05 13:50)**
+
+### **📊 Department Statistics Schedule Display Fix**
+- **Duration**: 1 hour
+- **Problem Solved**: Schedule times not displaying for employees with actual work data in department statistics table
+- **Features Added**: Fallback logic for schedule time extraction from schedule names
+- **Files Modified**: `backend/routes/employee.js` (department-stats endpoint)
+- **Status**: ✅ **DEPARTMENT STATISTICS SCHEDULE DISPLAY FIXED**
+
+### **Key Fixes**
+1. **Fallback Logic**: Extract schedule times from schedule names using regex pattern
+2. **Missing Schedule Handling**: Show default schedule for days without specific work_schedules_1c records
+3. **Schedule Assignment Edge Cases**: Handle cases where schedule assignment starts after actual work data
+4. **Production Testing**: Verified fix with employee АП00-00229 in "11мкр/MG" department
+
+### **Previous Implementation (2025-06-05 10:45)**
 
 ### **📅 Calendar Weekend Display Fix**
 - **Duration**: 30 minutes
