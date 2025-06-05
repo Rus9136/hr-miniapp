@@ -696,4 +696,344 @@ router.get('/employee/by-number/:tableNumber/schedule/:year/:month', async (req,
   }
 });
 
+// Get department statistics for current month
+router.get('/employee/by-number/:tableNumber/department-stats/:year/:month', async (req, res) => {
+  const { tableNumber, year, month } = req.params;
+  
+  try {
+    console.log(`Getting department stats for employee ${tableNumber}, ${year}-${month}`);
+    
+    // First, get the employee and their department
+    const employee = await db.queryRow(`
+      SELECT e.*, d.object_name as department_name, d.object_code as department_code
+      FROM employees e
+      LEFT JOIN departments d ON e.object_code = d.object_code
+      WHERE e.table_number = $1
+    `, [tableNumber]);
+    
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    if (!employee.department_code) {
+      return res.status(400).json({ error: 'Employee has no department assigned' });
+    }
+    
+    console.log(`Employee department: ${employee.department_name} (Code: ${employee.department_code})`);
+    
+    // Get all employees in the same department
+    const departmentEmployees = await db.queryRows(`
+      SELECT e.id, e.table_number, e.full_name, e.object_code
+      FROM employees e
+      WHERE e.object_code = $1
+      ORDER BY e.full_name
+    `, [employee.object_code]);
+    
+    console.log(`Found ${departmentEmployees.length} employees in department`);
+    console.log(`Looking for department stats for: ${tableNumber}`);
+    
+    // Get first and last day of the month
+    const firstDay = `${year}-${month.toString().padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const lastDayOfMonth = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
+    
+    // Generate all days in the month
+    const allDays = [];
+    for (let day = 1; day <= lastDay; day++) {
+      allDays.push(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+    }
+    
+    // Get time events for all employees in department for this month (first entry and last exit per day)
+    const timeEvents = await db.queryRows(`
+      WITH daily_events AS (
+        SELECT 
+          e.table_number,
+          e.full_name,
+          DATE(te.event_datetime) as event_date,
+          MIN(te.event_datetime) as first_entry,
+          MAX(te.event_datetime) as last_exit,
+          COUNT(*) as event_count
+        FROM time_events te
+        JOIN employees e ON te.employee_number = e.table_number
+        WHERE e.object_code = $1
+        AND DATE(te.event_datetime) >= $2
+        AND DATE(te.event_datetime) <= $3
+        GROUP BY e.table_number, e.full_name, DATE(te.event_datetime)
+      )
+      SELECT * FROM daily_events
+      ORDER BY event_date, full_name
+    `, [employee.object_code, firstDay, lastDayOfMonth]);
+    
+    // Get schedule assignments for all employees in department
+    const scheduleAssignments = await db.queryRows(`
+      SELECT DISTINCT
+        esa.employee_number,
+        esa.schedule_code,
+        ws1c.schedule_name,
+        esa.start_date,
+        esa.end_date
+      FROM employee_schedule_assignments esa
+      JOIN employees e ON esa.employee_number = e.table_number
+      LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+      WHERE e.object_code = $1
+      AND (esa.end_date IS NULL OR esa.end_date >= $2)
+      AND esa.start_date <= $3
+    `, [employee.object_code, firstDay, lastDayOfMonth]);
+    
+    // Get all work days for assigned schedules in this month
+    const scheduleCodes = [...new Set(scheduleAssignments.map(sa => sa.schedule_code))];
+    let workDaysSchedule = [];
+    
+    if (scheduleCodes.length > 0) {
+      workDaysSchedule = await db.queryRows(`
+        SELECT 
+          schedule_code,
+          work_date,
+          time_type,
+          work_hours,
+          work_start_time,
+          work_end_time
+        FROM work_schedules_1c
+        WHERE schedule_code = ANY($1)
+        AND EXTRACT(YEAR FROM work_date) = $2
+        AND EXTRACT(MONTH FROM work_date) = $3
+        ORDER BY work_date
+      `, [scheduleCodes, year, month]);
+    }
+    
+    // Also get individual schedules for each employee in department
+    const individualSchedules = {};
+    for (const emp of departmentEmployees) {
+      try {
+        const empSchedule = await db.queryRow(`
+          SELECT 
+            esa.employee_number,
+            esa.schedule_code,
+            ws1c.schedule_name,
+            esa.start_date,
+            esa.end_date
+          FROM employee_schedule_assignments esa
+          LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+          WHERE esa.employee_number = $1
+          AND (esa.end_date IS NULL OR esa.end_date >= $2)
+          AND esa.start_date <= $3
+          ORDER BY esa.created_at DESC
+          LIMIT 1
+        `, [emp.table_number, firstDay, lastDayOfMonth]);
+        
+        if (empSchedule) {
+          console.log(`Individual schedule for ${emp.table_number}:`, {
+            schedule_name: empSchedule.schedule_name,
+            start_date: empSchedule.start_date,
+            end_date: empSchedule.end_date
+          });
+          individualSchedules[emp.table_number] = empSchedule;
+        } else {
+          console.log(`No individual schedule found for ${emp.table_number}`);
+        }
+        
+        if (empSchedule) {
+          // Get work days for this employee's schedule
+          const empWorkDays = await db.queryRows(`
+            SELECT 
+              schedule_code,
+              work_date,
+              time_type,
+              work_hours,
+              work_start_time,
+              work_end_time
+            FROM work_schedules_1c
+            WHERE schedule_code = $1
+            AND EXTRACT(YEAR FROM work_date) = $2
+            AND EXTRACT(MONTH FROM work_date) = $3
+            ORDER BY work_date
+          `, [empSchedule.schedule_code, year, month]);
+          
+          // Add to workDaysSchedule if not already there
+          empWorkDays.forEach(wd => {
+            if (!workDaysSchedule.find(existing => 
+              existing.schedule_code === wd.schedule_code && 
+              existing.work_date.getTime() === wd.work_date.getTime()
+            )) {
+              workDaysSchedule.push(wd);
+            }
+          });
+        }
+      } catch (error) {
+        console.log(`Could not get schedule for employee ${emp.table_number}:`, error.message);
+      }
+    }
+    
+    // Build result data structure
+    const resultData = [];
+    
+    // For each day in the month
+    allDays.forEach(date => {
+      // For each employee in department
+      departmentEmployees.forEach(emp => {
+        // Get schedule for this employee on this date
+        let assignment = scheduleAssignments.find(sa => {
+          if (sa.employee_number !== emp.table_number) return false;
+          
+          const currentDate = new Date(date);
+          const startDate = new Date(sa.start_date);
+          const endDate = sa.end_date ? new Date(sa.end_date) : null;
+          
+          return currentDate >= startDate && (endDate === null || currentDate <= endDate);
+        });
+        
+        // If not found in department assignments, check individual schedules
+        if (!assignment && individualSchedules[emp.table_number]) {
+          const indSchedule = individualSchedules[emp.table_number];
+          const currentDate = new Date(date);
+          const startDate = new Date(indSchedule.start_date);
+          const endDate = indSchedule.end_date ? new Date(indSchedule.end_date) : null;
+          
+          if (currentDate >= startDate && 
+              (endDate === null || currentDate <= endDate)) {
+            assignment = indSchedule;
+          }
+        }
+        
+        // Get actual time events for this employee on this date (used in multiple places)
+        const dayEvents = timeEvents.find(te => 
+          te.table_number === emp.table_number &&
+          te.event_date.toISOString().split('T')[0] === date
+        );
+        
+        // If still no assignment but employee has actual time data,
+        // use the most recent schedule assignment even if start_date is later
+        if (!assignment && dayEvents && individualSchedules[emp.table_number]) {
+          console.log(`Using fallback schedule for ${emp.table_number} on ${date}: ${individualSchedules[emp.table_number].schedule_name}`);
+          assignment = individualSchedules[emp.table_number];
+        }
+        
+        let scheduleData = null;
+        if (assignment) {
+          // First try to find specific work day record
+          const workDay = workDaysSchedule.find(wd => 
+            wd.schedule_code === assignment.schedule_code &&
+            wd.work_date.toISOString().split('T')[0] === date
+          );
+          
+          if (workDay) {
+            // Use specific work day data
+            scheduleData = {
+              scheduleStartTime: workDay.work_start_time,
+              scheduleEndTime: workDay.work_end_time,
+              timeType: workDay.time_type,
+              workHours: workDay.work_hours
+            };
+          } else {
+            // If no specific work day found, try to get default times from schedule name
+            const scheduleName = assignment.schedule_name || '';
+            let defaultStartTime = null;
+            let defaultEndTime = null;
+            
+            // Extract times from schedule name (e.g., "09:00-22:00/11мкр 1 смена")
+            const timeMatch = scheduleName.match(/(\d{2}:\d{2})-(\d{2}:\d{2})/);
+            if (timeMatch) {
+              defaultStartTime = timeMatch[1] + ':00';
+              defaultEndTime = timeMatch[2] + ':00';
+            }
+            
+            // For weekdays, show default schedule even if no specific work_date record
+            const dayOfWeek = new Date(date).getDay();
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            
+            if (defaultStartTime && defaultEndTime && !isWeekend) {
+              scheduleData = {
+                scheduleStartTime: defaultStartTime,
+                scheduleEndTime: defaultEndTime,
+                timeType: 'Рабочее',
+                workHours: 8 // Default work hours
+              };
+            } else if (isWeekend) {
+              scheduleData = {
+                scheduleStartTime: null,
+                scheduleEndTime: null,
+                timeType: 'Выходной',
+                workHours: 0
+              };
+            }
+          }
+        }
+        
+        // Determine status
+        let status = 'absent';
+        const dayOfWeek = new Date(date).getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        
+        if (scheduleData) {
+          if (scheduleData.timeType === 'Выходной') {
+            status = 'weekend';
+            // If employee worked on weekend day, show actual data
+            if (dayEvents) {
+              status = 'weekend_worked';
+            }
+          } else if (dayEvents) {
+            // Has schedule and worked
+            const scheduleStart = new Date(`2000-01-01T${scheduleData.scheduleStartTime}`);
+            const actualStart = new Date(dayEvents.first_entry);
+            const actualStartTime = new Date(`2000-01-01T${actualStart.toTimeString().split(' ')[0]}`);
+            
+            if (actualStartTime <= scheduleStart) {
+              status = 'on_time';
+            } else {
+              status = 'late';
+            }
+          } else {
+            // Has schedule but didn't work
+            status = 'absent';
+          }
+        } else {
+          // No schedule
+          if (isWeekend) {
+            status = dayEvents ? 'weekend_worked' : 'weekend';
+          } else {
+            status = dayEvents ? 'no_schedule_worked' : 'absent';
+          }
+        }
+        
+        resultData.push({
+          date: date,
+          employeeName: emp.full_name,
+          employeeTableNumber: emp.table_number,
+          scheduleStartTime: scheduleData?.scheduleStartTime || null,
+          scheduleEndTime: scheduleData?.scheduleEndTime || null,
+          actualStartTime: dayEvents?.first_entry || null,
+          actualEndTime: dayEvents?.last_exit || null,
+          status: status,
+          isWeekend: isWeekend
+        });
+      });
+    });
+    
+    // Sort by date, then by employee name
+    resultData.sort((a, b) => {
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      return a.employeeName.localeCompare(b.employeeName);
+    });
+    
+    res.json({
+      success: true,
+      departmentName: employee.department_name,
+      employeeCount: departmentEmployees.length,
+      period: {
+        year: parseInt(year),
+        month: parseInt(month),
+        dateFrom: firstDay,
+        dateTo: lastDayOfMonth
+      },
+      data: resultData
+    });
+    
+  } catch (error) {
+    console.error('Error getting department stats:', error.message);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
 module.exports = router;

@@ -27,6 +27,7 @@ const newsScreen = document.getElementById('newsScreen');
 const salaryScreen = document.getElementById('salaryScreen');
 const vacationScreen = document.getElementById('vacationScreen');
 const hrScreen = document.getElementById('hrScreen');
+const departmentStatsScreen = document.getElementById('departmentStatsScreen');
 const dayModal = document.getElementById('dayModal');
 const statsModal = document.getElementById('statsModal');
 
@@ -100,6 +101,9 @@ function goBackToPreviousScreen() {
             break;
         case 'hr':
             targetScreen = hrScreen;
+            break;
+        case 'departmentStats':
+            targetScreen = departmentStatsScreen;
             break;
         default:
             targetScreen = menuScreen;
@@ -394,10 +398,14 @@ document.getElementById('nextMonth').addEventListener('click', () => {
     loadCalendarData();
 });
 
-// Statistics button
+// Statistics button - now opens department stats screen
 document.getElementById('statsBtn').addEventListener('click', async () => {
-    await loadTimeEvents();
-    statsModal.classList.add('active');
+    // Navigate to department stats screen
+    const departmentStatsScreen = document.getElementById('departmentStatsScreen');
+    showScreen('departmentStats', departmentStatsScreen);
+    
+    // Load department statistics
+    await loadDepartmentStats();
 });
 
 // Close stats modal
@@ -797,6 +805,172 @@ function renderTimeEvents() {
     });
 }
 
+// Load department statistics
+async function loadDepartmentStats() {
+    console.log('Loading department statistics...');
+    
+    if (!currentEmployee) {
+        console.log('❌ No current employee set');
+        showError('Ошибка: пользователь не авторизован');
+        return;
+    }
+    
+    const tableNumber = currentEmployee.tableNumber || currentEmployee.table_number;
+    if (!tableNumber) {
+        console.log('❌ No table number found for employee:', currentEmployee);
+        showError('Ошибка: табельный номер не найден');
+        return;
+    }
+    
+    // Show loading
+    const loadingElement = document.getElementById('departmentStatsLoading');
+    const tableContainer = document.querySelector('.department-stats-table-container');
+    loadingElement.style.display = 'block';
+    tableContainer.style.display = 'none';
+    
+    try {
+        // Get current month and year
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        
+        // Update month display
+        const monthNames = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ];
+        document.getElementById('currentMonthName').textContent = `${monthNames[month - 1]} ${year}`;
+        
+        // Load department stats
+        const url = `${API_BASE_URL}/employee/by-number/${tableNumber}/department-stats/${year}/${month}`;
+        console.log('Loading department stats from:', url);
+        
+        const response = await fetch(url + '?v=' + Date.now());
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Department stats API error:', response.status, errorText);
+            throw new Error(`Failed to load department stats: ${response.status} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Department stats data:', data);
+        
+        // Update department name
+        document.getElementById('departmentName').textContent = data.departmentName || 'Подразделение';
+        
+        // Render department stats table
+        renderDepartmentStatsTable(data.data);
+        
+        // Hide loading and show table
+        loadingElement.style.display = 'none';
+        tableContainer.style.display = 'block';
+        
+    } catch (error) {
+        console.error('Error loading department stats:', error);
+        loadingElement.style.display = 'none';
+        
+        if (isInTelegram && window.tgApp) {
+            window.tgApp.showAlert(`Ошибка загрузки статистики: ${error.message}`);
+        } else {
+            alert(`Ошибка загрузки статистики: ${error.message}`);
+        }
+    }
+}
+
+// Render department statistics table
+function renderDepartmentStatsTable(data) {
+    const tableBody = document.getElementById('departmentStatsTableBody');
+    tableBody.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Нет данных за выбранный период</td></tr>';
+        return;
+    }
+    
+    // Format time function
+    const formatTime = (datetime) => {
+        if (!datetime) return '--:--';
+        try {
+            const date = new Date(datetime);
+            return date.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'Asia/Almaty'
+            });
+        } catch (error) {
+            console.error('Error formatting time:', datetime, error);
+            return '--:--';
+        }
+    };
+    
+    // Format date function
+    const formatDate = (dateStr) => {
+        try {
+            const date = new Date(dateStr);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const weekDays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            const weekDay = weekDays[date.getDay()];
+            return `${day}.${month} (${weekDay})`;
+        } catch (error) {
+            return dateStr;
+        }
+    };
+    
+    // Get status text and CSS class
+    const getStatusInfo = (status) => {
+        const statusMap = {
+            'on_time': { text: 'Вовремя', class: 'on-time' },
+            'late': { text: 'Опоздание', class: 'late' },
+            'absent': { text: 'Отсутствие', class: 'absent' },
+            'weekend': { text: 'Выходной', class: 'weekend' },
+            'weekend_worked': { text: 'Работа в выходной', class: 'weekend-worked' },
+            'no_schedule_worked': { text: 'Без графика', class: 'no-schedule' },
+            'early_leave': { text: 'Ранний уход', class: 'early-leave' },
+            'no_exit': { text: 'Нет выхода', class: 'no-exit' }
+        };
+        return statusMap[status] || { text: status, class: 'unknown' };
+    };
+    
+    // Group data by date for better display
+    const groupedData = {};
+    data.forEach(row => {
+        if (!groupedData[row.date]) {
+            groupedData[row.date] = [];
+        }
+        groupedData[row.date].push(row);
+    });
+    
+    // Render grouped data
+    Object.keys(groupedData).sort().forEach(date => {
+        const dayData = groupedData[date];
+        
+        dayData.forEach((row, index) => {
+            const tr = document.createElement('tr');
+            
+            // Add weekend styling
+            if (row.isWeekend || row.status === 'weekend' || row.status === 'weekend_worked') {
+                tr.classList.add('weekend-row');
+            }
+            
+            const statusInfo = getStatusInfo(row.status);
+            
+            tr.innerHTML = `
+                <td class="date-cell">${index === 0 ? formatDate(date) : ''}</td>
+                <td class="employee-name">${row.employeeName}</td>
+                <td class="time-cell">${row.scheduleStartTime ? formatTime('2000-01-01T' + row.scheduleStartTime) : '--:--'}</td>
+                <td class="time-cell">${row.scheduleEndTime ? formatTime('2000-01-01T' + row.scheduleEndTime) : '--:--'}</td>
+                <td class="time-cell">${formatTime(row.actualStartTime)}</td>
+                <td class="time-cell">${formatTime(row.actualEndTime)}</td>
+                <td><span class="detail-status status--${statusInfo.class}">${statusInfo.text}</span></td>
+            `;
+            
+            tableBody.appendChild(tr);
+        });
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     // Set up all modals to close on outside click
@@ -845,6 +1019,9 @@ function initializeNavigation() {
                 case 'hr':
                     showScreen('hr', hrScreen);
                     break;
+                case 'departmentStats':
+                    showScreen('departmentStats', departmentStatsScreen);
+                    break;
             }
         });
     });
@@ -858,6 +1035,8 @@ function initializeNavigation() {
                     const target = btn.dataset.back;
                     if (target === 'menu') {
                         showScreen('menu', menuScreen);
+                    } else if (target === 'main') {
+                        showScreen('main', mainScreen);
                     }
                 });
             }

@@ -442,9 +442,24 @@ body {
   color: #e65100;
 }
 
-.status--no_exit {
+.status--no-exit {
   background-color: #ffcdd2;
   color: #c62828;
+}
+
+.status--weekend {
+  background-color: #e9ecef;
+  color: #6c757d;
+}
+
+.status--weekend-worked {
+  background-color: #d1ecf1;
+  color: #0c5460;
+}
+
+.status--no-schedule {
+  background-color: #fff3cd;
+  color: #856404;
 }
 
 /* Modal */
@@ -836,6 +851,114 @@ body {
 
 .btn-back:hover {
   background: #f5f5f5;
+}
+
+/* Department stats */
+.department-stats-header {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  text-align: center;
+}
+
+.department-stats-header h3 {
+  color: #333;
+  margin-bottom: 5px;
+  font-size: 24px;
+}
+
+.stats-period-text {
+  color: #666;
+  font-size: 16px;
+  margin: 0;
+}
+
+.department-stats-table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.department-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.department-stats-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.department-stats-table th {
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: 600;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.department-stats-table td {
+  padding: 10px 8px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+  color: #1f2937;
+  vertical-align: middle;
+}
+
+.department-stats-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.department-stats-table tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+.department-stats-table .employee-name {
+  text-align: left;
+  font-weight: 500;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.department-stats-table .date-cell {
+  font-weight: 500;
+  color: #333;
+  min-width: 80px;
+}
+
+.department-stats-table .time-cell {
+  font-family: 'Courier New', monospace;
+  min-width: 70px;
+}
+
+.department-stats-table .weekend-row {
+  background-color: #f1f3f4 !important;
+}
+
+.department-stats-table .weekend-row:hover {
+  background-color: #e8eaed !important;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.loading-message p {
+  margin: 0;
+  font-size: 16px;
 }
 
 /* Responsive */
