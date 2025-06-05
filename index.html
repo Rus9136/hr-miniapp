@@ -259,6 +259,58 @@
         </div>
     </div>
 
+    <!-- Экран статистики подразделения -->
+    <div id="departmentStatsScreen" class="screen">
+        <header class="app-header">
+            <button class="btn-header btn-back" data-back="main">← Назад</button>
+            <h2>Статистика подразделения</h2>
+            <div></div>
+        </header>
+        
+        <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <a href="#" class="breadcrumb-item" data-back="main">Проверить посещаемость</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Статистика подразделения</span>
+            </nav>
+            
+            <div class="department-stats-header">
+                <h3 id="departmentName">Подразделение</h3>
+                <p id="currentMonthName" class="stats-period-text">Май 2025</p>
+                <!-- TODO: В будущем добавить проверку прав доступа только для администраторов -->
+            </div>
+            
+            <div class="department-stats-table-container">
+                <table class="department-stats-table">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Дата</th>
+                            <th rowspan="2">Сотрудник</th>
+                            <th colspan="2">График</th>
+                            <th colspan="2">Факт</th>
+                            <th rowspan="2">Статус</th>
+                        </tr>
+                        <tr>
+                            <th>Время входа</th>
+                            <th>Время выхода</th>
+                            <th>Время входа</th>
+                            <th>Время выхода</th>
+                        </tr>
+                    </thead>
+                    <tbody id="departmentStatsTableBody">
+                        <!-- Данные будут загружены через JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="departmentStatsLoading" class="loading-message" style="display: none;">
+                <p>Загружаем данные по подразделению...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- Экран HR -->
     <div id="hrScreen" class="screen">
         <header class="app-header">
