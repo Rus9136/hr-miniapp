@@ -234,6 +234,14 @@ body {
   color: #666;
 }
 
+.day-schedule {
+  font-size: 10px;
+  color: #999;
+  text-align: center;
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
 /* Calendar day states */
 .calendar-day--on-time {
   background-color: #28a745;
@@ -247,6 +255,10 @@ body {
 
 .calendar-day--on-time .day-status {
   color: #e8f5e9;
+}
+
+.calendar-day--on-time .day-schedule {
+  color: #c8e6c9;
 }
 
 .calendar-day--late {
@@ -559,22 +571,45 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 8px;
 }
 
 .detail-label {
   color: #666;
   font-weight: 500;
+  flex: 0 0 140px;
 }
 
 .detail-value {
   color: #333;
   font-weight: 600;
+  text-align: right;
+  flex: 1;
 }
 
 .detail-value.status {
   padding: 4px 12px;
   border-radius: 4px;
   font-size: 14px;
+}
+
+/* Modal sections */
+.detail-section {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-top: 15px;
+  border: 1px solid #e9ecef;
+}
+
+.section-title {
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 14px;
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
 }
 
 /* Breadcrumb navigation */

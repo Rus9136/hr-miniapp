@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест исправлений календаря</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+            color: #dc3545;
+        }
+        .success {
+            border-left-color: #28a745;
+            color: #28a745;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .issue {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .fix {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Тест исправлений календаря - АП00-00229</h1>
+        
+        <div class="test-section">
+            <h2>Найденные проблемы и исправления</h2>
+            
+            <div class="issue">
+                <strong>Проблема 1:</strong> При нажатии на дни работы со статусом "Вовремя" не открывается модальное окно или оно пустое
+            </div>
+            <div class="fix">
+                <strong>Исправление 1:</strong> Изменена логика отображения модального окна - теперь показывается информация для всех дней с данными
+            </div>
+            
+            <div class="issue">
+                <strong>Проблема 2:</strong> На будущих датах (например, 25 июня) заполнены поля приход/уход/отработано
+            </div>
+            <div class="fix">
+                <strong>Исправление 2:</strong> Для будущих дат без графика показываются пустые поля ("--"), для будущих дней с графиком - плановое время
+            </div>
+            
+            <div class="issue">
+                <strong>Проблема 3:</strong> Отображение графика в календаре не во всех датах (например, 16 июня)
+            </div>
+            <div class="fix">
+                <strong>Исправление 3:</strong> Время графика теперь показывается для всех дней где есть scheduleStartTime и scheduleEndTime, независимо от статуса
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>Проверка данных сотрудника АП00-00229</h2>
+            <button onclick="testEmployeeData('АП00-00229', 5)">Проверить май 2025</button>
+            <button onclick="testEmployeeData('АП00-00229', 6)">Проверить июнь 2025</button>
+            <div id="employee-result" class="test-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Анализ конкретных дат</h2>
+            <button onclick="analyzeSpecificDates()">Анализировать проблемные даты</button>
+            <div id="analysis-result" class="test-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://madlen.space/api';
+        
+        async function testEmployeeData(tableNumber, month) {
+            const result = document.getElementById('employee-result');
+            result.innerHTML = 'Загрузка данных...';
+            
+            try {
+                const response = await fetch(`${API_URL}/employee/by-number/${tableNumber}/timesheet/2025/${month}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const daysWithSchedule = data.calendar.filter(day => day.scheduleStartTime && day.scheduleEndTime);
+                    const workDaysWithoutSchedule = data.calendar.filter(day => 
+                        day.status === 'on_time' && (!day.scheduleStartTime || !day.scheduleEndTime)
+                    );
+                    const futureDays = data.calendar.filter(day => {
+                        const dayDate = new Date(`2025-${month.toString().padStart(2,'0')}-${day.day.toString().padStart(2,'0')}`);
+                        return dayDate > new Date();
+                    });
+                    
+                    result.innerHTML = `
+                        <h3 class="success">✓ Данные за ${month === 5 ? 'май' : 'июнь'} 2025 загружены</h3>
+                        <p><strong>Сотрудник:</strong> ${data.employee.fullName}</p>
+                        <p><strong>Дней с графиком:</strong> ${daysWithSchedule.length}</p>
+                        <p><strong>Рабочих дней без графика:</strong> ${workDaysWithoutSchedule.length}</p>
+                        <p><strong>Будущих дней:</strong> ${futureDays.length}</p>
+                        
+                        <h4>Дни с графиком работы:</h4>
+                        <pre>${daysWithSchedule.map(day => 
+                            `День ${day.day}: ${day.scheduleStartTime?.substring(0,5)}-${day.scheduleEndTime?.substring(0,5)} (${day.status})`
+                        ).join('\\n')}</pre>
+                        
+                        <h4>Рабочие дни без графика:</h4>
+                        <pre>${workDaysWithoutSchedule.map(day => 
+                            `День ${day.day}: статус ${day.status}, время ${day.checkIn ? 'есть' : 'нет'}`
+                        ).join('\\n')}</pre>
+                    `;
+                } else {
+                    result.innerHTML = `<h3 class="error">✗ Ошибка: ${response.status}</h3>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка: ${error.message}</h3>`;
+            }
+        }
+        
+        async function analyzeSpecificDates() {
+            const result = document.getElementById('analysis-result');
+            result.innerHTML = 'Анализ проблемных дат...';
+            
+            try {
+                // Проверяем май и июнь
+                const mayResponse = await fetch(`${API_URL}/employee/by-number/АП00-00229/timesheet/2025/5`);
+                const mayData = await mayResponse.json();
+                
+                const juneResponse = await fetch(`${API_URL}/employee/by-number/АП00-00229/timesheet/2025/6`);
+                const juneData = await juneResponse.json();
+                
+                // Анализируем конкретные проблемные даты
+                const problemDates = [
+                    { month: 'май', day: 2, data: mayData.calendar.find(d => d.day === 2) },
+                    { month: 'май', day: 16, data: mayData.calendar.find(d => d.day === 16) },
+                    { month: 'июнь', day: 16, data: juneData.calendar.find(d => d.day === 16) },
+                    { month: 'июнь', day: 25, data: juneData.calendar.find(d => d.day === 25) }
+                ];
+                
+                let analysis = '';
+                problemDates.forEach(({ month, day, data }) => {
+                    analysis += `\\n=== ${day} ${month} ===\\n`;
+                    analysis += `Статус: ${data.status}\\n`;
+                    analysis += `График: ${data.scheduleStartTime ? data.scheduleStartTime.substring(0,5) + '-' + data.scheduleEndTime.substring(0,5) : 'НЕТ'}\\n`;
+                    analysis += `Фактический приход: ${data.checkIn ? data.checkIn : 'НЕТ'}\\n`;
+                    analysis += `Фактический уход: ${data.checkOut ? data.checkOut : 'НЕТ'}\\n`;
+                    analysis += `isScheduledWorkDay: ${data.isScheduledWorkDay}\\n`;
+                });
+                
+                result.innerHTML = `
+                    <h3 class="success">✓ Анализ завершен</h3>
+                    <h4>Детальный анализ проблемных дат:</h4>
+                    <pre>${analysis}</pre>
+                    
+                    <h4>Ожидаемые исправления:</h4>
+                    <ul>
+                        <li><strong>2 мая:</strong> Должен показывать время входа/выхода в модальном окне (есть фактические данные)</li>
+                        <li><strong>16 мая:</strong> Должен показывать "absent" но с графиком 09:00-22:00</li>
+                        <li><strong>16 июня:</strong> Должен показывать время графика 09:00-22:00 в календаре</li>
+                        <li><strong>25 июня:</strong> Будущий день - должен показывать только плановое время 09:00-22:00</li>
+                    </ul>
+                `;
+                
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка анализа: ${error.message}</h3>`;
+            }
+        }
+    </script>
+</body>
+</html>

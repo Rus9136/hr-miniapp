@@ -409,21 +409,82 @@ router.get('/employee/by-number/:tableNumber/timesheet/:year/:month', async (req
       console.log(`Mapped date key: ${dateKey}`);
     });
 
+    // Get employee schedule for the month to determine work days
+    const scheduleAssignment = await db.queryRow(`
+      SELECT esa.schedule_code, esa.start_date, esa.end_date, ws.schedule_name
+      FROM employee_schedule_assignments esa
+      LEFT JOIN (
+        SELECT DISTINCT schedule_code, schedule_name 
+        FROM work_schedules_1c
+      ) ws ON esa.schedule_code = ws.schedule_code
+      WHERE esa.employee_number = $1 
+      AND (esa.end_date IS NULL OR esa.end_date >= $2)
+      ORDER BY esa.start_date DESC
+      LIMIT 1
+    `, [employee.table_number, dateStart]);
+
+    // Get work days from schedule if exists
+    let scheduleWorkDays = {};
+    if (scheduleAssignment && scheduleAssignment.schedule_code) {
+      const workDays = await db.queryRows(`
+        SELECT 
+          to_char(work_date, 'YYYY-MM-DD') as work_date,
+          work_start_time,
+          work_end_time,
+          work_hours
+        FROM work_schedules_1c 
+        WHERE schedule_code = $1 
+        AND work_date BETWEEN $2 AND $3
+        AND work_hours > 0
+      `, [scheduleAssignment.schedule_code, dateStart, dateStop]);
+      
+      workDays.forEach(workDay => {
+        scheduleWorkDays[workDay.work_date] = {
+          isWorkDay: true,
+          startTime: workDay.work_start_time,
+          endTime: workDay.work_end_time,
+          workHours: workDay.work_hours
+        };
+      });
+    }
+
     // Generate calendar data
     const calendar = [];
     for (let day = 1; day <= lastDay; day++) {
       const date = `${year}-${month.padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
       const dayOfWeek = new Date(date).getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      // Check if this is a work day according to schedule
+      const scheduleDay = scheduleWorkDays[date];
+      const isScheduledWorkDay = scheduleDay && scheduleDay.isWorkDay;
+      
+      // Use old logic as fallback if no schedule
+      const isWeekend = !scheduleAssignment && (dayOfWeek === 0 || dayOfWeek === 6);
       
       const record = recordsMap[date];
+      
+      // Determine status based on schedule or fallback to weekend logic
+      let status;
+      if (record) {
+        status = record.status;
+      } else if (isScheduledWorkDay) {
+        status = 'absent'; // Should be working but no record
+      } else if (scheduleAssignment && !isScheduledWorkDay) {
+        status = 'weekend'; // Not a work day according to schedule
+      } else {
+        status = isWeekend ? 'weekend' : 'absent'; // Fallback to old logic
+      }
       
       calendar.push({
         date,
         day,
         dayOfWeek,
-        isWeekend,
-        status: record ? record.status : (isWeekend ? 'weekend' : 'absent'),
+        isWeekend: !isScheduledWorkDay && (scheduleAssignment ? true : isWeekend),
+        isScheduledWorkDay,
+        scheduleStartTime: scheduleDay ? scheduleDay.startTime : null,
+        scheduleEndTime: scheduleDay ? scheduleDay.endTime : null,
+        scheduleHours: scheduleDay ? scheduleDay.workHours : null,
+        status,
         checkIn: record ? record.check_in : null,
         checkOut: record ? record.check_out : null,
         hoursWorked: record ? record.hours_worked : 0
@@ -547,6 +608,90 @@ router.get('/employee/by-number/:tableNumber/time-events', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting time events by table_number:', error.message);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Get employee's current schedule for a specific month
+router.get('/employee/by-number/:tableNumber/schedule/:year/:month', async (req, res) => {
+  const { tableNumber, year, month } = req.params;
+  
+  try {
+    console.log(`Getting schedule for employee ${tableNumber} for ${year}-${month}`);
+    
+    // Get employee's current schedule assignment
+    const scheduleAssignment = await db.queryRow(`
+      SELECT 
+        esa.schedule_code,
+        esa.start_date,
+        esa.end_date,
+        ws.schedule_name
+      FROM employee_schedule_assignments esa
+      LEFT JOIN (
+        SELECT DISTINCT schedule_code, schedule_name 
+        FROM work_schedules_1c
+      ) ws ON esa.schedule_code = ws.schedule_code
+      WHERE esa.employee_number = $1 
+      AND (esa.end_date IS NULL OR esa.end_date >= $2)
+      AND esa.start_date <= $3
+      ORDER BY esa.start_date DESC
+      LIMIT 1
+    `, [
+      tableNumber, 
+      `${year}-${month.padStart(2, '0')}-01`,
+      `${year}-${month.padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+    ]);
+    
+    if (!scheduleAssignment) {
+      console.log(`No schedule found for employee ${tableNumber}`);
+      return res.json({
+        success: true,
+        hasSchedule: false,
+        schedule: null,
+        workDays: []
+      });
+    }
+    
+    console.log(`Found schedule: ${scheduleAssignment.schedule_name} (${scheduleAssignment.schedule_code})`);
+    
+    // Get work days for this schedule in the requested month
+    const workDays = await db.queryRows(`
+      SELECT 
+        work_date,
+        time_type,
+        work_hours,
+        work_start_time,
+        work_end_time
+      FROM work_schedules_1c
+      WHERE schedule_code = $1
+      AND EXTRACT(YEAR FROM work_date) = $2
+      AND EXTRACT(MONTH FROM work_date) = $3
+      ORDER BY work_date
+    `, [scheduleAssignment.schedule_code, year, month]);
+    
+    console.log(`Found ${workDays.length} work days for schedule`);
+    
+    res.json({
+      success: true,
+      hasSchedule: true,
+      schedule: {
+        code: scheduleAssignment.schedule_code,
+        name: scheduleAssignment.schedule_name,
+        startDate: scheduleAssignment.start_date,
+        endDate: scheduleAssignment.end_date
+      },
+      workDays: workDays.map(day => ({
+        date: day.work_date,
+        timeType: day.time_type,
+        workHours: day.work_hours,
+        startTime: day.work_start_time,
+        endTime: day.work_end_time,
+        isWorkDay: day.time_type === 'Рабочее'
+      }))
+    });
+    
+  } catch (error) {
+    console.error('Error getting employee schedule:', error.message);
     res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });

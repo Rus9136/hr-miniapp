@@ -452,6 +452,25 @@ async function loadCalendarData() {
     }
     
     try {
+        // Load employee schedule first
+        const scheduleUrl = `${API_BASE_URL}/employee/by-number/${tableNumber}/schedule/${currentYear}/${currentMonth + 1}`;
+        console.log('📅 Loading employee schedule:', scheduleUrl);
+        
+        const scheduleResponse = await fetch(scheduleUrl + '?v=' + Date.now());
+        let employeeSchedule = null;
+        
+        if (scheduleResponse.ok) {
+            const scheduleData = await scheduleResponse.json();
+            if (scheduleData.hasSchedule) {
+                employeeSchedule = scheduleData;
+                console.log('✅ Employee schedule loaded:', scheduleData.schedule.name);
+            } else {
+                console.log('ℹ️ Employee has no assigned schedule');
+            }
+        } else {
+            console.log('⚠️ Failed to load employee schedule');
+        }
+        
         // Try new API first (by table number)
         let url = `${API_BASE_URL}/employee/by-number/${tableNumber}/timesheet/${currentYear}/${currentMonth + 1}`;
         console.log('🚀 FINAL v4.0 - NEW API:', url);
@@ -480,13 +499,41 @@ async function loadCalendarData() {
         console.log('Calendar data:', data);
         calendarData = data.calendar;
         
-        // Update month display
+        // Merge schedule data with calendar data
+        if (employeeSchedule && employeeSchedule.workDays) {
+            const scheduleMap = {};
+            employeeSchedule.workDays.forEach(day => {
+                const dateStr = day.date.split('T')[0];
+                scheduleMap[dateStr] = day;
+            });
+            
+            calendarData.forEach(day => {
+                const scheduleDay = scheduleMap[day.date];
+                if (scheduleDay) {
+                    day.scheduleStartTime = scheduleDay.startTime;
+                    day.scheduleEndTime = scheduleDay.endTime;
+                    day.scheduleHours = scheduleDay.workHours;
+                    day.isScheduledWorkDay = scheduleDay.isWorkDay;
+                }
+            });
+        }
+        
+        // Update month display with schedule info
         const monthNames = [
             'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
             'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
         ];
-        document.getElementById('currentMonth').textContent = 
-            `${monthNames[currentMonth]} ${currentYear}`;
+        let monthTitle = `${monthNames[currentMonth]} ${currentYear}`;
+        
+        if (employeeSchedule && employeeSchedule.hasSchedule) {
+            document.getElementById('currentMonth').innerHTML = 
+                `${monthTitle}<br><small style="font-size: 0.8em; color: #666;">График: ${employeeSchedule.schedule.name}</small>`;
+        } else {
+            document.getElementById('currentMonth').textContent = monthTitle;
+        }
+        
+        // Store schedule for later use
+        window.currentEmployeeSchedule = employeeSchedule;
         
         // Render calendar
         renderCalendar();
@@ -532,10 +579,24 @@ function renderCalendar() {
         // Convert underscores to dashes for CSS class names
         const cssStatus = day.status.replace(/_/g, '-');
         dayElement.className = `calendar-day calendar-day--${cssStatus}`;
-        dayElement.innerHTML = `
-            <div class="day-number">${day.day}</div>
-            <div class="day-status">${getStatusText(day.status)}</div>
-        `;
+        
+        // Build day content with schedule info if available
+        let dayContent = `<div class="day-number">${day.day}</div>`;
+        
+        // Show schedule time if available (for work days with schedule, not weekends)
+        if (day.scheduleStartTime && day.scheduleEndTime && day.status !== 'weekend') {
+            // Format schedule time
+            const formatTime = (time) => time ? time.substring(0, 5) : '';
+            dayContent += `
+                <div class="day-schedule" style="font-size: 0.7em; color: #666; margin-top: 2px;">
+                    ${formatTime(day.scheduleStartTime)}-${formatTime(day.scheduleEndTime)}
+                </div>
+            `;
+        }
+        
+        dayContent += `<div class="day-status">${getStatusText(day.status)}</div>`;
+        
+        dayElement.innerHTML = dayContent;
         
         dayElement.addEventListener('click', () => showDayDetails(day));
         calendar.appendChild(dayElement);
@@ -557,33 +618,89 @@ function getStatusText(status) {
 
 // Show day details in modal
 function showDayDetails(day) {
+    console.log('Opening modal for day:', day);
+    
     const monthNames = [
         'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
         'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
     ];
     
+    // Set modal title
     document.getElementById('modalDate').textContent = 
         `${day.day} ${monthNames[currentMonth]} ${currentYear}`;
     
     // Format times
     const formatTime = (datetime) => {
         if (!datetime) return '--';
-        const time = datetime.split(' ')[1];
-        return time ? time.substring(0, 5) : '--';
+        try {
+            // Handle both ISO format (2025-05-02T02:57:55.000Z) and SQL format (2025-05-02 02:57:55)
+            const date = new Date(datetime);
+            return date.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'Asia/Almaty'
+            });
+        } catch (error) {
+            console.error('Error formatting time:', datetime, error);
+            return '--';
+        }
     };
     
-    document.getElementById('arrivalTime').textContent = formatTime(day.checkIn);
-    document.getElementById('departureTime').textContent = formatTime(day.checkOut);
-    
-    // Format hours worked
-    const hoursWorked = day.hoursWorked ? `${day.hoursWorked.toFixed(1)} ч` : '--';
-    document.getElementById('workedHours').textContent = hoursWorked;
-    
-    // Set status
+    // Field 1: Status
     const statusElement = document.getElementById('dayStatus');
     statusElement.textContent = getStatusText(day.status);
-    statusElement.className = `detail-value status status--${day.status}`;
+    statusElement.className = `detail-value status status--${day.status.replace(/_/g, '-')}`;
     
+    // Check if there's schedule data
+    const hasSchedule = day.scheduleStartTime && day.scheduleEndTime;
+    const hasActualData = day.checkIn || day.checkOut;
+    const isWeekend = day.status === 'weekend';
+    
+    // Field 2: Planned time
+    let plannedTime;
+    if (isWeekend) {
+        // For weekends, don't show planned time
+        plannedTime = '--';
+    } else if (hasSchedule) {
+        plannedTime = `${formatTime('2025-01-01 ' + day.scheduleStartTime)} - ${formatTime('2025-01-01 ' + day.scheduleEndTime)}`;
+    } else if (hasActualData) {
+        plannedTime = 'Нет графика';
+    } else {
+        plannedTime = '--';
+    }
+    document.getElementById('plannedTime').textContent = plannedTime;
+    
+    // Field 3: Planned hours
+    let plannedHours;
+    if (isWeekend) {
+        // For weekends, don't show planned hours
+        plannedHours = '--';
+    } else if (day.scheduleHours) {
+        plannedHours = `${day.scheduleHours} ч`;
+    } else if (hasActualData) {
+        plannedHours = 'Нет графика';
+    } else {
+        plannedHours = '--';
+    }
+    document.getElementById('plannedHours').textContent = plannedHours;
+    
+    // Field 4: Actual arrival
+    document.getElementById('actualArrival').textContent = formatTime(day.checkIn);
+    
+    // Field 5: Actual departure
+    document.getElementById('actualDeparture').textContent = formatTime(day.checkOut);
+    
+    // Hide/show planned section based on data availability
+    const plannedSection = document.querySelector('.detail-section:first-of-type');
+    if (plannedSection) {
+        if ((!hasSchedule && !hasActualData) || isWeekend) {
+            plannedSection.style.display = 'none';
+        } else {
+            plannedSection.style.display = 'block';
+        }
+    }
+    
+    // Open modal
     dayModal.classList.add('active');
 }
 

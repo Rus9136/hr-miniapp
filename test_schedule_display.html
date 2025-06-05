@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест отображения графика в календаре</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+            color: #dc3545;
+        }
+        .success {
+            border-left-color: #28a745;
+            color: #28a745;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .calendar-preview {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .day-cell {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            background: white;
+        }
+        .day-cell.work-day {
+            background: #e3f2fd;
+        }
+        .day-cell .schedule-time {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Тест отображения графика работы в календаре</h1>
+        
+        <div class="test-section">
+            <h2>1. Тест API получения графика сотрудника</h2>
+            <p>Тестовые сотрудники:</p>
+            <button onclick="testScheduleAPI('АП00-00358')">Тест АП00-00358 (Дневная смена)</button>
+            <button onclick="testScheduleAPI('АП00-00467')">Тест АП00-00467 (Ночная смена)</button>
+            <div id="scheduleAPIResult" class="test-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Тест загрузки календаря с графиком</h2>
+            <button onclick="testCalendarWithSchedule('АП00-00358')">Загрузить календарь АП00-00358</button>
+            <button onclick="testCalendarWithSchedule('АП00-00467')">Загрузить календарь АП00-00467</button>
+            <div id="calendarResult" class="test-result"></div>
+            <div id="calendarPreview" class="calendar-preview"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Проверка интеграции</h2>
+            <button onclick="testFullIntegration()">Полный тест интеграции</button>
+            <div id="integrationResult" class="test-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3030/api';
+        
+        async function testScheduleAPI(tableNumber) {
+            const result = document.getElementById('scheduleAPIResult');
+            result.innerHTML = 'Загрузка...';
+            
+            try {
+                const year = new Date().getFullYear();
+                const month = new Date().getMonth() + 1;
+                
+                const response = await fetch(`${API_URL}/employee/by-number/${tableNumber}/schedule/${year}/${month}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    result.innerHTML = `
+                        <h3 class="success">✓ API работает корректно</h3>
+                        <p><strong>Сотрудник:</strong> ${tableNumber}</p>
+                        <p><strong>Есть график:</strong> ${data.hasSchedule ? 'Да' : 'Нет'}</p>
+                        ${data.hasSchedule ? `
+                            <p><strong>График:</strong> ${data.schedule.name}</p>
+                            <p><strong>Код графика:</strong> ${data.schedule.code}</p>
+                            <p><strong>Рабочих дней в месяце:</strong> ${data.workDays.filter(d => d.isWorkDay).length}</p>
+                            <details>
+                                <summary>Подробные данные</summary>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </details>
+                        ` : '<p>У сотрудника нет назначенного графика</p>'}
+                    `;
+                } else {
+                    result.innerHTML = `<h3 class="error">✗ Ошибка API: ${response.status}</h3>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка: ${error.message}</h3>`;
+            }
+        }
+        
+        async function testCalendarWithSchedule(tableNumber) {
+            const result = document.getElementById('calendarResult');
+            const preview = document.getElementById('calendarPreview');
+            result.innerHTML = 'Загрузка...';
+            preview.innerHTML = '';
+            
+            try {
+                const year = new Date().getFullYear();
+                const month = new Date().getMonth() + 1;
+                
+                // Сначала загружаем график
+                const scheduleResponse = await fetch(`${API_URL}/employee/by-number/${tableNumber}/schedule/${year}/${month}`);
+                const scheduleData = await scheduleResponse.json();
+                
+                // Затем загружаем календарь
+                const calendarResponse = await fetch(`${API_URL}/employee/by-number/${tableNumber}/timesheet/${year}/${month}`);
+                const calendarData = await calendarResponse.json();
+                
+                if (scheduleResponse.ok && calendarResponse.ok) {
+                    result.innerHTML = `
+                        <h3 class="success">✓ Календарь загружен</h3>
+                        <p><strong>Сотрудник:</strong> ${calendarData.employee.fullName}</p>
+                        <p><strong>График:</strong> ${scheduleData.hasSchedule ? scheduleData.schedule.name : 'Не назначен'}</p>
+                        <p><strong>Период:</strong> ${month}/${year}</p>
+                    `;
+                    
+                    // Создаем превью календаря
+                    if (scheduleData.hasSchedule && calendarData.calendar) {
+                        const scheduleMap = {};
+                        scheduleData.workDays.forEach(day => {
+                            const dateStr = day.date.split('T')[0];
+                            scheduleMap[dateStr] = day;
+                        });
+                        
+                        // Показываем первую неделю
+                        const firstWeek = calendarData.calendar.slice(0, 7);
+                        firstWeek.forEach(day => {
+                            const scheduleDay = scheduleMap[day.date];
+                            const cell = document.createElement('div');
+                            cell.className = 'day-cell' + (scheduleDay && scheduleDay.isWorkDay ? ' work-day' : '');
+                            cell.innerHTML = `
+                                <div><strong>День ${day.day}</strong></div>
+                                <div>${day.status}</div>
+                                ${scheduleDay && scheduleDay.isWorkDay ? `
+                                    <div class="schedule-time">
+                                        ${scheduleDay.startTime || '--'} - ${scheduleDay.endTime || '--'}
+                                    </div>
+                                ` : '<div class="schedule-time">Выходной</div>'}
+                            `;
+                            preview.appendChild(cell);
+                        });
+                    }
+                } else {
+                    result.innerHTML = `<h3 class="error">✗ Ошибка загрузки данных</h3>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка: ${error.message}</h3>`;
+            }
+        }
+        
+        async function testFullIntegration() {
+            const result = document.getElementById('integrationResult');
+            result.innerHTML = 'Выполняется комплексная проверка...';
+            
+            const tests = [
+                { name: 'API эндпоинт графика', passed: false },
+                { name: 'Загрузка календаря', passed: false },
+                { name: 'Объединение данных', passed: false },
+                { name: 'Отображение времени работы', passed: false }
+            ];
+            
+            try {
+                // Тест 1: API эндпоинт
+                const scheduleResponse = await fetch(`${API_URL}/employee/by-number/АП00-00358/schedule/2025/5`);
+                tests[0].passed = scheduleResponse.ok;
+                
+                // Тест 2: Календарь
+                const calendarResponse = await fetch(`${API_URL}/employee/by-number/АП00-00358/timesheet/2025/5`);
+                tests[1].passed = calendarResponse.ok;
+                
+                // Тест 3: Объединение данных
+                if (tests[0].passed && tests[1].passed) {
+                    const scheduleData = await scheduleResponse.json();
+                    const calendarData = await calendarResponse.json();
+                    tests[2].passed = scheduleData.hasSchedule && calendarData.calendar.length > 0;
+                    
+                    // Тест 4: Проверка времени
+                    if (scheduleData.hasSchedule) {
+                        tests[3].passed = scheduleData.workDays.some(day => day.startTime && day.endTime);
+                    }
+                }
+                
+                const allPassed = tests.every(t => t.passed);
+                result.innerHTML = `
+                    <h3 class="${allPassed ? 'success' : 'error'}">
+                        ${allPassed ? '✓ Все тесты пройдены!' : '✗ Некоторые тесты не пройдены'}
+                    </h3>
+                    <ul>
+                        ${tests.map(test => `
+                            <li style="color: ${test.passed ? 'green' : 'red'}">
+                                ${test.passed ? '✓' : '✗'} ${test.name}
+                            </li>
+                        `).join('')}
+                    </ul>
+                `;
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка тестирования: ${error.message}</h3>`;
+            }
+        }
+    </script>
+</body>
+</html>

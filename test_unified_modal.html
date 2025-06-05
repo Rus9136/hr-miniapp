@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест унифицированного модального окна</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+            color: #dc3545;
+        }
+        .success {
+            border-left-color: #28a745;
+            color: #28a745;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .expectations {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Тест унифицированного модального окна</h1>
+        
+        <div class="test-section">
+            <h2>Проверка модального окна для сотрудника АП00-00229</h2>
+            
+            <div class="expectations">
+                <h3>Ожидаемое поведение:</h3>
+                <ul>
+                    <li><strong>Убраны верхние поля:</strong> "Приход", "Уход", "Отработано" больше не должны отображаться сверху</li>
+                    <li><strong>Унифицированная форма:</strong> Все дни должны показывать единую структуру с плановым и фактическим временем</li>
+                    <li><strong>28 мая:</strong> 
+                        <ul>
+                            <li>Статус: Опоздание</li>
+                            <li>График работы: Плановое время 09:00-22:00, Плановые часы 12 ч</li>
+                            <li>Фактическое время: Приход 14:44, Уход --, Отработано --</li>
+                        </ul>
+                    </li>
+                    <li><strong>Дни без графика:</strong> Должны показывать только "Время посещения" если есть фактические данные</li>
+                    <li><strong>Дни без данных:</strong> Должны показывать "Нет данных о времени работы"</li>
+                </ul>
+            </div>
+            
+            <button onclick="testModalForEmployee()">Проверить модальные окна</button>
+            <div id="modal-test-result" class="test-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Проверка HTML структуры</h2>
+            <button onclick="checkModalHTML()">Проверить HTML модального окна</button>
+            <div id="html-test-result" class="test-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://madlen.space/api';
+        
+        async function testModalForEmployee() {
+            const result = document.getElementById('modal-test-result');
+            result.innerHTML = 'Проверка модальных окон...';
+            
+            try {
+                // Проверяем данные за май для АП00-00229
+                const response = await fetch(`${API_URL}/employee/by-number/АП00-00229/timesheet/2025/5`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const day28 = data.calendar.find(day => day.day === 28);
+                    const dayWithScheduleOnly = data.calendar.find(day => 
+                        day.scheduleStartTime && !day.checkIn && !day.checkOut
+                    );
+                    const dayWithActualOnly = data.calendar.find(day => 
+                        (day.checkIn || day.checkOut) && !day.scheduleStartTime
+                    );
+                    const emptyDay = data.calendar.find(day => 
+                        !day.scheduleStartTime && !day.checkIn && !day.checkOut
+                    );
+                    
+                    let testResults = '';
+                    
+                    // Тест 28 мая
+                    if (day28) {
+                        testResults += `
+                            <h4>✓ 28 мая найден</h4>
+                            <p><strong>Статус:</strong> ${day28.status}</p>
+                            <p><strong>Плановое время:</strong> ${day28.scheduleStartTime?.substring(0,5)}-${day28.scheduleEndTime?.substring(0,5)}</p>
+                            <p><strong>Плановые часы:</strong> ${day28.scheduleHours} ч</p>
+                            <p><strong>Фактический приход:</strong> ${day28.checkIn ? new Date(day28.checkIn).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'}) : '--'}</p>
+                            <p><strong>Фактический уход:</strong> ${day28.checkOut ? new Date(day28.checkOut).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'}) : '--'}</p>
+                        `;
+                    }
+                    
+                    // Другие тесты
+                    if (dayWithScheduleOnly) {
+                        testResults += `<h4>✓ День только с графиком найден: День ${dayWithScheduleOnly.day}</h4>`;
+                    }
+                    
+                    if (dayWithActualOnly) {
+                        testResults += `<h4>✓ День только с фактическими данными найден: День ${dayWithActualOnly.day}</h4>`;
+                    }
+                    
+                    if (emptyDay) {
+                        testResults += `<h4>✓ Пустой день найден: День ${emptyDay.day}</h4>`;
+                    }
+                    
+                    result.innerHTML = `
+                        <h3 class="success">✓ Тестовые данные загружены</h3>
+                        ${testResults}
+                        <p><strong>Инструкция:</strong> Теперь откройте https://madlen.space, войдите под логином АП00-00229 и проверьте модальные окна на календаре за май 2025.</p>
+                    `;
+                } else {
+                    result.innerHTML = `<h3 class="error">✗ Ошибка загрузки данных: ${response.status}</h3>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка: ${error.message}</h3>`;
+            }
+        }
+        
+        async function checkModalHTML() {
+            const result = document.getElementById('html-test-result');
+            
+            try {
+                const response = await fetch('https://madlen.space/');
+                const html = await response.text();
+                
+                // Проверяем, что старые поля удалены
+                const hasOldFields = html.includes('id="arrivalTime"') || 
+                                   html.includes('id="departureTime"') || 
+                                   html.includes('id="workedHours"');
+                
+                // Проверяем, что остался только статус
+                const hasOnlyStatus = html.includes('id="dayStatus"') && 
+                                     html.includes('<span class="detail-label">Статус:</span>');
+                
+                // Проверяем версию JavaScript
+                const hasNewJS = html.includes('app.js?v=unified-modal&ts=20250605-1400');
+                
+                let checks = '';
+                
+                if (!hasOldFields) {
+                    checks += '<p style="color: green;">✓ Старые поля (Приход, Уход, Отработано) удалены из HTML</p>';
+                } else {
+                    checks += '<p style="color: red;">✗ Старые поля все еще присутствуют в HTML</p>';
+                }
+                
+                if (hasOnlyStatus) {
+                    checks += '<p style="color: green;">✓ Поле Статус остается в модальном окне</p>';
+                } else {
+                    checks += '<p style="color: red;">✗ Поле Статус отсутствует</p>';
+                }
+                
+                if (hasNewJS) {
+                    checks += '<p style="color: green;">✓ Новая версия JavaScript подключена</p>';
+                } else {
+                    checks += '<p style="color: red;">✗ Старая версия JavaScript</p>';
+                }
+                
+                result.innerHTML = `
+                    <h3 class="success">✓ Проверка HTML структуры</h3>
+                    ${checks}
+                `;
+            } catch (error) {
+                result.innerHTML = `<h3 class="error">✗ Ошибка проверки: ${error.message}</h3>`;
+            }
+        }
+    </script>
+</body>
+</html>
