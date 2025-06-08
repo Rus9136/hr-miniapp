@@ -196,7 +196,7 @@ function switchSection(sectionName) {
             initUploadSection();
             break;
         case 'news':
-            loadNews();
+            loadAdminNews();
             initNewsSection();
             break;
     }
@@ -2366,10 +2366,10 @@ async function applyTimesToAllDays() {
 // News management functions
 let currentEditingNewsId = null;
 
-// Load news
-async function loadNews() {
+// Load news for admin panel
+async function loadAdminNews() {
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/news`);
         if (!response.ok) throw new Error('Failed to load news');
         
         const data = await response.json();
@@ -2427,7 +2427,7 @@ function showNewsModal(newsId = null) {
 // Load news data for editing
 async function loadNewsData(newsId) {
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news/${newsId}`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/news/${newsId}`);
         if (!response.ok) throw new Error('Failed to load news');
         
         const news = await response.json();
@@ -2452,13 +2452,13 @@ window.deleteNews = async function(newsId) {
     if (!confirm('Вы уверены, что хотите удалить эту новость?')) return;
     
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news/${newsId}`, {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/news/${newsId}`, {
             method: 'DELETE'
         });
         
         if (!response.ok) throw new Error('Failed to delete news');
         
-        loadNews();
+        loadAdminNews();
     } catch (error) {
         console.error('Error deleting news:', error);
         alert('Ошибка удаления новости');
@@ -2518,8 +2518,8 @@ async function handleNewsSubmit(e) {
     try {
         const newsId = document.getElementById('newsId').value;
         const url = newsId 
-            ? `${ADMIN_API_BASE_URL}/admin/news/${newsId}`
-            : `${ADMIN_API_BASE_URL}/admin/news`;
+            ? `${ADMIN_API_BASE_URL}/news/${newsId}`
+            : `${ADMIN_API_BASE_URL}/news`;
         const method = newsId ? 'PUT' : 'POST';
         
         const response = await fetch(url, {
@@ -2531,7 +2531,7 @@ async function handleNewsSubmit(e) {
         if (!response.ok) throw new Error('Failed to save news');
         
         document.getElementById('newsModal').classList.remove('active');
-        loadNews();
+        loadAdminNews();
     } catch (error) {
         console.error('Error saving news:', error);
         alert('Ошибка сохранения новости');

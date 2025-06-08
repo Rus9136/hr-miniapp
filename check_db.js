@@ -28,6 +28,21 @@ async function checkData() {
       console.log(`${event.event_datetime} | Type: ${event.event_type}`);
     });
     
+    // Check news table
+    const news = await db.queryRows(
+      'SELECT id, title, author, created_at FROM news ORDER BY created_at DESC LIMIT 10'
+    );
+    
+    console.log('\n=== NEWS TABLE ===');
+    console.log(`Found ${news.length} news items:`);
+    if (news.length === 0) {
+      console.log('❌ No news found in database!');
+    } else {
+      news.forEach(newsItem => {
+        console.log(`${newsItem.id} | ${newsItem.title} | ${newsItem.author} | ${newsItem.created_at}`);
+      });
+    }
+    
     process.exit(0);
   } catch (error) {
     console.error('Error checking data:', error);

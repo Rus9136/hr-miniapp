@@ -1013,14 +1013,21 @@ async function loadNews(reset = false) {
     isLoadingNews = true;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/admin/news?page=${newsPage}&limit=10`);
+        const newsUrl = `${API_BASE_URL}/news?page=${newsPage}&limit=10`;
+        console.log('🗞️ Loading news from:', newsUrl);
+        
+        const response = await fetch(newsUrl);
+        
+        console.log('🗞️ News response status:', response.status);
         
         if (!response.ok) {
-            throw new Error('Failed to load news');
+            const errorText = await response.text();
+            console.error('🗞️ News API error:', response.status, errorText);
+            throw new Error(`Failed to load news: ${response.status} - ${errorText}`);
         }
         
         const data = await response.json();
-        console.log('Loaded news:', data);
+        console.log('🗞️ Loaded news data:', data);
         
         if (data.news.length === 0 && newsPage === 1) {
             renderEmptyNews();
@@ -1041,7 +1048,13 @@ async function loadNews(reset = false) {
 }
 
 function renderNews() {
+    console.log('🗞️ Rendering news, newsData length:', newsData.length);
     const newsContainer = document.querySelector('.news-container');
+    
+    if (!newsContainer) {
+        console.error('🗞️ News container not found!');
+        return;
+    }
     
     // Clear loading message if it's the first page
     if (newsPage === 1) {
@@ -1092,9 +1105,23 @@ function renderNews() {
     }
     
     // Attach event listeners to "Read more" buttons
-    document.querySelectorAll('.news-read-more').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    attachNewsEventListeners();
+}
+
+// Separate function to attach event listeners to news buttons
+function attachNewsEventListeners() {
+    console.log('🗞️ Attaching event listeners to news buttons');
+    const buttons = document.querySelectorAll('.news-read-more');
+    console.log('🗞️ Found', buttons.length, 'news buttons');
+    
+    buttons.forEach((btn, index) => {
+        // Remove any existing listeners first
+        btn.replaceWith(btn.cloneNode(true));
+        const newBtn = document.querySelectorAll('.news-read-more')[index];
+        
+        newBtn.addEventListener('click', (e) => {
             const newsId = e.target.dataset.id;
+            console.log('🗞️ News button clicked, ID:', newsId);
             showFullNews(newsId);
         });
     });
@@ -1124,13 +1151,21 @@ async function showFullNews(newsId) {
     currentNewsId = newsId;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/admin/news/${newsId}`);
+        const newsDetailUrl = `${API_BASE_URL}/news/${newsId}`;
+        console.log('🗞️ Loading news details from:', newsDetailUrl);
+        
+        const response = await fetch(newsDetailUrl);
+        
+        console.log('🗞️ News details response status:', response.status);
         
         if (!response.ok) {
-            throw new Error('Failed to load news details');
+            const errorText = await response.text();
+            console.error('🗞️ News details API error:', response.status, errorText);
+            throw new Error(`Failed to load news details: ${response.status} - ${errorText}`);
         }
         
         const news = await response.json();
+        console.log('🗞️ Loaded news details:', news);
         
         // Format date
         const date = new Date(news.created_at);
@@ -1176,8 +1211,14 @@ async function showFullNews(newsId) {
         const backToNewsList = () => {
             currentNewsId = null;  // Reset currentNewsId when going back
             newsScreen.innerHTML = originalContent;
-            initializeNavigation();
-            loadNews(false);
+            // Reinitialize back navigation for restored content
+            initializeBackNavigation();
+            // Reset news state and reload completely to ensure event listeners are reattached
+            newsPage = 1;
+            newsData = [];
+            hasMoreNews = true;
+            isLoadingNews = false;
+            loadNews(true);  // Force full reload with reset=true
         };
         
         document.getElementById('backToNewsList').addEventListener('click', backToNewsList);
@@ -1190,8 +1231,11 @@ async function showFullNews(newsId) {
         document.querySelector('[data-back="menu"]').addEventListener('click', (e) => {
             e.preventDefault();
             currentNewsId = null;  // Reset currentNewsId when going back
-            newsScreen.innerHTML = originalContent;
-            initializeNavigation();
+            // Reset news state for next time
+            newsPage = 1;
+            newsData = [];
+            hasMoreNews = true;
+            isLoadingNews = false;
             showScreen('menu', menuScreen);
         });
         
@@ -1262,12 +1306,27 @@ function initializeNavigation() {
     });
 
     // Back navigation (only for web browser)
+    initializeBackNavigation();
+}
+
+// Initialize back navigation handlers (safe for multiple calls)
+function initializeBackNavigation() {
     if (!isInTelegram) {
-        document.querySelectorAll('.btn-back, .breadcrumb-item').forEach(btn => {
+        console.log('🔙 Initializing back navigation');
+        const backElements = document.querySelectorAll('.btn-back, .breadcrumb-item');
+        console.log('🔙 Found', backElements.length, 'back navigation elements');
+        
+        backElements.forEach((btn, index) => {
             if (btn.dataset.back) {
-                btn.addEventListener('click', (e) => {
+                // Remove existing listeners by cloning and replacing element
+                btn.replaceWith(btn.cloneNode(true));
+                const newBtn = document.querySelectorAll('.btn-back, .breadcrumb-item')[index];
+                
+                newBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const target = btn.dataset.back;
+                    const target = newBtn.dataset.back;
+                    console.log('🔙 Back button clicked, target:', target);
+                    
                     if (target === 'menu') {
                         showScreen('menu', menuScreen);
                     } else if (target === 'main') {
