@@ -2,7 +2,9 @@
 
 ## ✅ Готово к деплою!
 
-Приложение полностью готово к развертыванию на `https://madlen.space/HR/`
+Приложение полностью готово к развертыванию на `https://madlen.space/`
+
+**Последнее обновление**: 2025-06-08
 
 ## 📦 Что реализовано
 
@@ -12,6 +14,9 @@
 - ✅ **Telegram Web App интеграция** с валидацией
 - ✅ **HTTPS сервер** с SSL сертификатами
 - ✅ **Синхронизация** с внешним API
+- ✅ **Система новостей** с пагинацией
+- ✅ **Поддержка ночных смен** (22:00-06:00)
+- ✅ **Графики работы из 1С** (115 различных графиков)
 
 ### Frontend (Vanilla JS + Telegram SDK)
 - ✅ **Автоопределение платформы** (Telegram/браузер)
@@ -19,6 +24,8 @@
 - ✅ **Telegram UI компоненты** (BackButton, MainButton)
 - ✅ **Haptic feedback** и нативная навигация
 - ✅ **Fallback для веб-браузеров**
+- ✅ **Темная тема** (#232e3c - как в Telegram)
+- ✅ **Адаптивный календарь** для мобильных устройств
 
 ### Telegram Mini App функции
 - ✅ **Автоматический вход** при наличии связки
@@ -68,14 +75,35 @@ docker-compose up -d
 # Проверка статуса
 docker-compose ps
 docker-compose logs hr-app
+
+# Перезапуск при обновлении кода
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# Альтернативный вариант с использованием скрипта
+./rebuild_docker.sh
+```
+
+### ⚠️ Важно: Конфликт портов с системным nginx
+Если при запуске nginx контейнера возникает ошибка "bind: address already in use", необходимо:
+```bash
+# Остановить и отключить системный nginx
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# Затем запустить docker контейнер
+docker start hr-nginx
 ```
 
 ## 🔗 URL endpoints
 
 ### Production URLs
-- **Telegram Mini App**: `https://madlen.space/`
+- **Web App**: `https://madlen.space/`
+- **Telegram Mini App**: `https://madlen.space/` (через Telegram WebApp)
 - **API**: `https://madlen.space/api/`
 - **Health Check**: `https://madlen.space/api/health`
+- **Admin Panel**: `https://madlen.space/` (вход через табельный номер `admin12qw`)
 
 ### Development URLs  
 - **Frontend**: `http://localhost:5555/`
@@ -85,8 +113,8 @@ docker-compose logs hr-app
 ## 📱 Telegram Bot настройка
 
 ### Bot Configuration
-- **Token**: `-7765333400:AAG0rFD5IvUwlc83WiXZ5sjqo-YJF-xgmAs`
-- **WebApp URL**: `https://madlen.space/HR/`
+- **Token**: Хранится в `.env` файле (BOT_TOKEN)
+- **WebApp URL**: `https://madlen.space/`
 - **Domain**: `madlen.space` (whitelisted)
 
 ### Bot Commands (для настройки через @BotFather)
@@ -102,23 +130,24 @@ help - Помощь
 ### API тесты
 ```bash
 # Health check
-curl https://madlen.space/HR/api/health
+curl https://madlen.space/api/health
 
 # Обычная авторизация  
-curl -X POST https://madlen.space/HR/api/login \
+curl -X POST https://madlen.space/api/login \
   -H "Content-Type: application/json" \
   -d '{"tableNumber":"АП00-00358"}'
 
 # Telegram авторизация (dev)
-curl -X POST https://madlen.space/HR/api/telegram/auth \
+curl -X POST https://madlen.space/api/telegram/auth \
   -H "Content-Type: application/json" \
   -d '{"initData":"dev_mode"}'
 ```
 
 ### Тестовые данные
 - **Сотрудник**: `АП00-00358` (Суиндикова Сайраш Агабековна)
+- **Сотрудник с ночной сменой**: `АП00-00467` (Шегирбаева Гульнур Бегалиевна)
 - **Админ**: `admin12qw`
-- **База данных**: 2916 сотрудников, 535 подразделений, 6606 должностей
+- **База данных**: 2901 сотрудников, 536 подразделений, 6070 должностей
 
 ## 🔒 Безопасность
 
@@ -155,7 +184,7 @@ curl -X POST https://madlen.space/HR/api/telegram/auth \
 
 ### Проблема: Telegram не может открыть Mini App
 **Решение**: Проверить что:
-1. URL точно `https://madlen.space/HR/`
+1. URL точно `https://madlen.space/`
 2. SSL сертификат валиден
 3. CORS настроен для `web.telegram.org`
 
@@ -182,6 +211,29 @@ psql -h localhost -U hr_user -d hr_tracker
 - **Email**: admin@madlen.space
 - **Logs**: `docker-compose logs hr-app`
 
+## 🐳 Docker архитектура
+
+### Контейнеры
+1. **hr-postgres** - PostgreSQL 16 база данных
+   - Порт: 5433 (внешний) → 5432 (внутренний)
+   - Timezone: Asia/Almaty
+   - Healthcheck каждые 10 секунд
+
+2. **hr-miniapp** - Node.js приложение
+   - Порт: 3030
+   - Автоматический рестарт
+   - Зависит от PostgreSQL
+
+3. **hr-nginx** - Nginx reverse proxy
+   - Порты: 80, 443
+   - SSL сертификаты Let's Encrypt
+   - Rate limiting для API
+
+### Volumes
+- `postgres_data` - данные PostgreSQL
+- `logs` - логи приложения
+- SSL сертификаты монтируются из `/root/projects/infra/infra/certbot/conf`
+
 ---
 
 ## ✨ Финальный статус
@@ -195,3 +247,6 @@ psql -h localhost -U hr_user -d hr_tracker
 - ✅ HTTPS конфигурация
 - ✅ Docker контейнеры
 - ✅ Мониторинг и безопасность
+- ✅ Темная тема и мобильная адаптация
+- ✅ Система новостей
+- ✅ Поддержка ночных смен

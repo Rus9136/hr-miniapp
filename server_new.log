@@ -5,16 +5,8 @@ Database timezone set to Asia/Almaty
 Database initialized successfully
 Starting initial data sync...
 Starting data synchronization...
-Synced 535 departments
-Synced 6068 positions
-Getting timesheet for employee table_number: АП00-00358
-Found employee: Суиндикова Сайраш Агабековна (АП00-00358)
-Error syncing events for employee АП00-00358: Request failed with status code 404
-Found 0 time records for АП00-00358
-Synced 2946 employees
-Sync completed: 535 departments, 6068 positions, 2946 employees
+Synced 536 departments
+Synced 6070 positions
+Synced 2901 employees
+Sync completed: 536 departments, 6070 positions, 2901 employees
 Initial data sync completed
-Getting timesheet for employee table_number: 911027402151
-Found employee: Мирзахметова Наргиза Мавзуровна (911027402151)
-Error syncing events for employee 911027402151: Request failed with status code 404
-Found 0 time records for 911027402151

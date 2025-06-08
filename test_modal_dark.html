@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Test Modal Dark Theme</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="telegram.css">
+    <style>
+        /* Force telegram theme for testing */
+        body {
+            --tg-theme-bg-color: #232e3c;
+            --tg-theme-text-color: #e1e1e1;
+            --tg-theme-hint-color: #8a8a8a;
+            --tg-theme-link-color: #667eea;
+            --tg-theme-button-color: #667eea;
+            --tg-theme-button-text-color: #ffffff;
+            --tg-theme-secondary-bg-color: #2b3544;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-modal {
+            display: block !important;
+            position: relative !important;
+            background: transparent !important;
+            padding: 0 !important;
+        }
+        .test-modal .modal-content {
+            position: relative !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+    </style>
+</head>
+<body class="telegram-theme">
+    <div class="container">
+        <h1>Тест модального окна</h1>
+        
+        <!-- Симуляция модального окна -->
+        <div class="modal test-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>5 июня 2025</h3>
+                    <button class="btn-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="day-details">
+                        <!-- Поле 1: Статус -->
+                        <div class="detail-row">
+                            <span class="detail-label">Статус:</span>
+                            <span class="detail-value status status--on-time">Вовремя</span>
+                        </div>
+                        
+                        <!-- Секция: Плановые данные -->
+                        <div class="detail-section">
+                            <div class="section-title">Плановые данные</div>
+                            
+                            <!-- Поле 2: Плановое время -->
+                            <div class="detail-row">
+                                <span class="detail-label">Плановое время:</span>
+                                <span class="detail-value">09:00 - 18:00</span>
+                            </div>
+                            
+                            <!-- Поле 3: Плановые часы -->
+                            <div class="detail-row">
+                                <span class="detail-label">Плановые часы:</span>
+                                <span class="detail-value">8 ч</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Секция: Фактические данные -->
+                        <div class="detail-section">
+                            <div class="section-title">Фактические данные</div>
+                            
+                            <!-- Поле 4: Фактический приход -->
+                            <div class="detail-row">
+                                <span class="detail-label">Фактический приход:</span>
+                                <span class="detail-value">08:55</span>
+                            </div>
+                            
+                            <!-- Поле 5: Фактический уход -->
+                            <div class="detail-row">
+                                <span class="detail-label">Фактический уход:</span>
+                                <span class="detail-value">18:10</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Тест заголовка приложения</h2>
+        <header class="app-header">
+            <button class="btn-header btn-back">← Назад</button>
+            <h2>Иванов Иван Иванович</h2>
+            <button class="btn-header">Статистика</button>
+        </header>
+        
+        <h2>Тест блоков меню</h2>
+        <div class="menu-grid">
+            <div class="menu-card">
+                <div class="menu-card-icon">📰</div>
+                <h3 class="menu-card-title">Новости компании</h3>
+                <p class="menu-card-description">Последние новости и объявления</p>
+            </div>
+            
+            <div class="menu-card">
+                <div class="menu-card-icon">📅</div>
+                <h3 class="menu-card-title">Проверить посещаемость</h3>
+                <p class="menu-card-description">Календарь посещений и статистика</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

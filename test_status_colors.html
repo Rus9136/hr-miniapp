@@ -1,84 +1,89 @@
-<!DOCTYPE html>
+<\!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Тест цветов статусов</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Test Status Colors</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="telegram.css">
+    <style>
+        body {
+            background: #232e3c;
+            color: #e1e1e1;
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .test-section {
+            background: #2b3544;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #3a4553;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #3a4553;
+        }
+        .status-row:last-child {
+            border-bottom: none;
+        }
+    </style>
 </head>
-<body>
-    <div style="padding: 20px;">
-        <h1>Тест отображения статусов календаря</h1>
+<body class="telegram-theme">
+    <div class="container">
+        <h1>Тест нейтральных цветов статусов</h1>
         
-        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; max-width: 700px; margin: 20px 0;">
-            
-            <!-- Статус: Вовремя -->
-            <div class="calendar-day calendar-day--on-time">
-                <div class="day-number">5</div>
-                <div class="day-status">Вовремя</div>
+        <div class="test-section">
+            <h3>Статусы в модальном окне детализации дня</h3>
+            <div class="status-row">
+                <span>Вовремя:</span>
+                <span class="detail-status status--on-time">Вовремя</span>
             </div>
-            
-            <!-- Статус: Опоздание -->
-            <div class="calendar-day calendar-day--late">
-                <div class="day-number">6</div>
-                <div class="day-status">Опоздание</div>
+            <div class="status-row">
+                <span>Опоздание:</span>
+                <span class="detail-status status--late">Опоздание</span>
             </div>
-            
-            <!-- Статус: Отсутствие -->
-            <div class="calendar-day calendar-day--absent">
-                <div class="day-number">7</div>
-                <div class="day-status">Отсутствие</div>
+            <div class="status-row">
+                <span>Ранний уход:</span>
+                <span class="detail-status status--early-leave">Ранний уход</span>
             </div>
-            
-            <!-- Статус: Ранний уход -->
-            <div class="calendar-day calendar-day--early-leave">
-                <div class="day-number">8</div>
-                <div class="day-status">Ранний уход</div>
+            <div class="status-row">
+                <span>Отсутствие:</span>
+                <span class="detail-status status--absent">Отсутствие</span>
             </div>
-            
-            <!-- Статус: Нет выхода -->
-            <div class="calendar-day calendar-day--no-exit">
-                <div class="day-number">9</div>
-                <div class="day-status">Нет выхода</div>
+            <div class="status-row">
+                <span>Выходной:</span>
+                <span class="detail-status status--weekend">Выходной</span>
             </div>
-            
-            <!-- Статус: Выходной -->
-            <div class="calendar-day calendar-day--weekend">
-                <div class="day-number">10</div>
-                <div class="day-status">Выходной</div>
+            <div class="status-row">
+                <span>Работа в выходной:</span>
+                <span class="detail-status status--weekend-worked">Работа в выходной</span>
             </div>
-            
-            <!-- Пустая ячейка для красоты -->
-            <div></div>
-            
+            <div class="status-row">
+                <span>Нет графика:</span>
+                <span class="detail-status status--no-schedule">Нет графика</span>
+            </div>
+            <div class="status-row">
+                <span>Нет выхода:</span>
+                <span class="detail-status status--no-exit">Нет выхода</span>
+            </div>
         </div>
         
-        <h2>Проверочная информация:</h2>
-        <ul>
-            <li><strong>Вовремя</strong> - должен быть ЗЕЛЕНЫМ (#28a745)</li>
-            <li><strong>Опоздание</strong> - должен быть желтоватым (#fff3cd)</li>
-            <li><strong>Отсутствие</strong> - должен быть красноватым (#f8d7da)</li>
-            <li><strong>Ранний уход</strong> - должен быть оранжевым (#ffe0b2)</li>
-            <li><strong>Нет выхода</strong> - должен быть розовым (#ffcdd2)</li>
-            <li><strong>Выходной</strong> - должен быть серым (#e9ecef)</li>
-        </ul>
-        
-        <h2>Инструкция:</h2>
-        <ol>
-            <li>Проверьте, что "Вовремя" отображается зеленым цветом</li>
-            <li>Если все статусы отображаются корректно, протестируйте с сотрудником 911027402151</li>
-            <li>Войдите на <a href="http://localhost:5555" target="_blank">http://localhost:5555</a></li>
-            <li>Введите табельный номер: <strong>911027402151</strong></li>
-            <li>Перейдите в раздел "Проверить посещаемость"</li>
-            <li>Убедитесь, что дни со статусом "Вовремя" отображаются зеленым</li>
-        </ol>
-        
-        <div style="margin-top: 30px; padding: 15px; background: #d1ecf1; border-radius: 5px;">
-            <h3>Технические детали исправления:</h3>
-            <p>Проблема была в том, что сервер возвращает статус "on_time" (с подчеркиванием), 
-            а CSS класс определен как "calendar-day--on-time" (с дефисом). 
-            Добавлено преобразование подчеркиваний в дефисы при создании CSS классов.</p>
+        <div class="test-section">
+            <h3>Результат изменений для Telegram темы:</h3>
+            <ul>
+                <li>✅ Все статусы имеют нейтральный цвет #e1e1e1</li>
+                <li>✅ Прозрачный фон без ярких цветов</li>
+                <li>✅ Единая граница #3a4553 для всех статусов</li>
+                <li>✅ Статусы хорошо видны на темном фоне</li>
+                <li>✅ Сохранена читаемость и единообразие стиля</li>
+            </ul>
         </div>
     </div>
 </body>
 </html>
+EOF < /dev/null
