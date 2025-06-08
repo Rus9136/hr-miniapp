@@ -195,6 +195,10 @@ function switchSection(sectionName) {
         case 'upload':
             initUploadSection();
             break;
+        case 'news':
+            loadNews();
+            initNewsSection();
+            break;
     }
 }
 
@@ -1427,6 +1431,9 @@ async function loadSchedules() {
         schedulesData = await response.json();
         displaySchedules(schedulesData);
         document.getElementById('schedules-total').textContent = schedulesData.length;
+        
+        // Initialize search functionality
+        initSchedulesSearch();
     } catch (error) {
         console.error('Error loading schedules:', error);
         tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
@@ -1436,13 +1443,30 @@ async function loadSchedules() {
 // Display schedules from 1C
 function displaySchedules(schedules) {
     const tbody = document.getElementById('schedules-tbody');
+    const searchValue = document.getElementById('schedules-search')?.value.toLowerCase() || '';
     
-    if (schedules.length === 0) {
+    // Filter schedules based on search
+    const filteredSchedules = searchValue 
+        ? schedules.filter(schedule => 
+            schedule.schedule_name.toLowerCase().includes(searchValue)
+          )
+        : schedules;
+    
+    // Update filtered count
+    const totalSpan = document.getElementById('schedules-total');
+    if (totalSpan) {
+        totalSpan.textContent = filteredSchedules.length;
+        if (searchValue && filteredSchedules.length !== schedules.length) {
+            totalSpan.innerHTML = `${filteredSchedules.length} <span style="color: #6c757d;">(из ${schedules.length})</span>`;
+        }
+    }
+    
+    if (filteredSchedules.length === 0) {
         tbody.innerHTML = '<tr><td colspan="2" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
-    tbody.innerHTML = schedules.map(schedule => {
+    tbody.innerHTML = filteredSchedules.map(schedule => {
         return `
             <tr>
                 <td>${schedule.schedule_name}</td>
@@ -1452,6 +1476,30 @@ function displaySchedules(schedules) {
             </tr>
         `;
     }).join('');
+}
+
+// Initialize search functionality for schedules
+function initSchedulesSearch() {
+    const searchInput = document.getElementById('schedules-search');
+    if (searchInput && !searchInput.hasAttribute('data-initialized')) {
+        searchInput.setAttribute('data-initialized', 'true');
+        
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                displaySchedules(schedulesData);
+            }, 300); // Debounce for 300ms
+        });
+        
+        // Clear search on Escape key
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                displaySchedules(schedulesData);
+            }
+        });
+    }
 }
 
 // Open schedule card for creating new schedule
@@ -2315,6 +2363,185 @@ async function applyTimesToAllDays() {
     }
 }
 
+// News management functions
+let currentEditingNewsId = null;
+
+// Load news
+async function loadNews() {
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news`);
+        if (!response.ok) throw new Error('Failed to load news');
+        
+        const data = await response.json();
+        const tbody = document.getElementById('news-tbody');
+        const totalSpan = document.getElementById('news-total');
+        
+        tbody.innerHTML = '';
+        totalSpan.textContent = data.pagination.total;
+        
+        data.news.forEach(item => {
+            const row = document.createElement('tr');
+            const createdDate = new Date(item.created_at).toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            
+            row.innerHTML = `
+                <td>${createdDate}</td>
+                <td>${item.title}</td>
+                <td>${item.author}</td>
+                <td>
+                    <button class="btn btn--sm btn--outline" onclick="editNews(${item.id})">Редактировать</button>
+                    <button class="btn btn--sm btn--danger" onclick="deleteNews(${item.id})">Удалить</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading news:', error);
+    }
+}
+
+// Show news modal
+function showNewsModal(newsId = null) {
+    const modal = document.getElementById('newsModal');
+    const modalTitle = document.getElementById('newsModalTitle');
+    const form = document.getElementById('newsForm');
+    
+    currentEditingNewsId = newsId;
+    
+    if (newsId) {
+        modalTitle.textContent = 'Редактировать новость';
+        // Load news data
+        loadNewsData(newsId);
+    } else {
+        modalTitle.textContent = 'Добавить новость';
+        form.reset();
+        document.getElementById('newsId').value = '';
+    }
+    
+    modal.classList.add('active');
+}
+
+// Load news data for editing
+async function loadNewsData(newsId) {
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news/${newsId}`);
+        if (!response.ok) throw new Error('Failed to load news');
+        
+        const news = await response.json();
+        
+        document.getElementById('newsId').value = news.id;
+        document.getElementById('newsTitle').value = news.title;
+        document.getElementById('newsDescription').value = news.description;
+        document.getElementById('newsImage').value = news.image_url || '';
+    } catch (error) {
+        console.error('Error loading news data:', error);
+        alert('Ошибка загрузки новости');
+    }
+}
+
+// Edit news
+window.editNews = function(newsId) {
+    showNewsModal(newsId);
+};
+
+// Delete news
+window.deleteNews = async function(newsId) {
+    if (!confirm('Вы уверены, что хотите удалить эту новость?')) return;
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/news/${newsId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Failed to delete news');
+        
+        loadNews();
+    } catch (error) {
+        console.error('Error deleting news:', error);
+        alert('Ошибка удаления новости');
+    }
+};
+
+// Initialize news section event handlers
+function initNewsSection() {
+    const addNewsBtn = document.getElementById('add-news-btn');
+    const closeNewsModalBtn = document.getElementById('closeNewsModal');
+    const cancelNewsBtn = document.getElementById('cancelNewsBtn');
+    const newsForm = document.getElementById('newsForm');
+    
+    if (addNewsBtn && !addNewsBtn.hasEventListener) {
+        addNewsBtn.addEventListener('click', () => showNewsModal());
+        addNewsBtn.hasEventListener = true;
+    }
+    
+    if (closeNewsModalBtn && !closeNewsModalBtn.hasEventListener) {
+        closeNewsModalBtn.addEventListener('click', () => {
+            document.getElementById('newsModal').classList.remove('active');
+        });
+        closeNewsModalBtn.hasEventListener = true;
+    }
+    
+    if (cancelNewsBtn && !cancelNewsBtn.hasEventListener) {
+        cancelNewsBtn.addEventListener('click', () => {
+            document.getElementById('newsModal').classList.remove('active');
+        });
+        cancelNewsBtn.hasEventListener = true;
+    }
+    
+    if (newsForm && !newsForm.hasEventListener) {
+        newsForm.addEventListener('submit', handleNewsSubmit);
+        newsForm.hasEventListener = true;
+    }
+}
+
+// Handle news form submission
+async function handleNewsSubmit(e) {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    
+    const formData = {
+        title: document.getElementById('newsTitle').value,
+        description: document.getElementById('newsDescription').value,
+        image_url: document.getElementById('newsImage').value || null
+    };
+    
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline-block';
+    
+    try {
+        const newsId = document.getElementById('newsId').value;
+        const url = newsId 
+            ? `${ADMIN_API_BASE_URL}/admin/news/${newsId}`
+            : `${ADMIN_API_BASE_URL}/admin/news`;
+        const method = newsId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save news');
+        
+        document.getElementById('newsModal').classList.remove('active');
+        loadNews();
+    } catch (error) {
+        console.error('Error saving news:', error);
+        alert('Ошибка сохранения новости');
+    } finally {
+        submitBtn.disabled = false;
+        btnText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+}
+
 // Export functions for debugging
 window.switchSection = switchSection;
 window.loadEmployees = loadEmployees;
@@ -2324,5 +2551,6 @@ window.showScheduleDetails = showScheduleDetails;
 window.openScheduleCard = openScheduleCard;
 window.confirmAddDate = confirmAddDate;
 window.cancelAddDate = cancelAddDate;
+window.loadNews = loadNews;
 window.removeWorkDate = removeWorkDate;
 window.handleEmployeeSelection = handleEmployeeSelection;

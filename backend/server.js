@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
 const adminRoutes = require('./routes/admin');
 const telegramRoutes = require('./routes/telegram');
+const newsRoutes = require('./routes/news');
 
 const app = express();
 const PORT = process.env.PORT || 3030;
@@ -76,6 +77,7 @@ app.use('/api', authRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', telegramRoutes);
+app.use('/api', newsRoutes);
 
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {

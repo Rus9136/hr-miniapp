@@ -291,6 +291,66 @@ body.telegram-theme {
   color: #b0b0b0 !important;
 }
 
+/* Нейтральные статусы в модальных окнах детализации */
+.telegram-theme .detail-status {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Переопределяем все цветные статусы для Telegram */
+.telegram-theme .status--on-time {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--late {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--absent {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--early-leave {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--weekend {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--weekend-worked {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--no-schedule {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.telegram-theme .status--no-exit {
+  background-color: transparent !important;
+  color: #e1e1e1 !important;
+  border: 1px solid #3a4553 !important;
+}
+
 /* Department stats table specific fixes for Telegram */
 .telegram-theme .department-stats-table {
   background-color: #2b3544 !important;

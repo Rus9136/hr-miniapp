@@ -12,6 +12,11 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let calendarData = [];
 let timeEventsData = null;
+let newsData = [];
+let newsPage = 1;
+let isLoadingNews = false;
+let hasMoreNews = true;
+let currentNewsId = null;
 
 // Platform detection
 const isInTelegram = window.tgApp ? window.tgApp.isInTelegram : false;
@@ -986,9 +991,238 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Re-initialize navigation after DOM is loaded
     initializeNavigation();
     
+    // Setup news scroll handler
+    setupNewsScroll();
+    
     // Initialize the application (Telegram auth or regular login)
     await initApp();
 });
+
+// News functions
+async function loadNews(reset = false) {
+    if (isLoadingNews || (!hasMoreNews && !reset)) return;
+    
+    if (reset) {
+        newsPage = 1;
+        newsData = [];
+        hasMoreNews = true;
+        const newsContainer = document.querySelector('.news-container');
+        newsContainer.innerHTML = '<div class="news-loading">Загрузка новостей...</div>';
+    }
+    
+    isLoadingNews = true;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/news?page=${newsPage}&limit=10`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to load news');
+        }
+        
+        const data = await response.json();
+        console.log('Loaded news:', data);
+        
+        if (data.news.length === 0 && newsPage === 1) {
+            renderEmptyNews();
+        } else {
+            newsData = newsData.concat(data.news);
+            hasMoreNews = data.pagination.page < data.pagination.pages;
+            renderNews();
+            newsPage++;
+        }
+    } catch (error) {
+        console.error('Error loading news:', error);
+        if (newsPage === 1) {
+            renderNewsError();
+        }
+    } finally {
+        isLoadingNews = false;
+    }
+}
+
+function renderNews() {
+    const newsContainer = document.querySelector('.news-container');
+    
+    // Clear loading message if it's the first page
+    if (newsPage === 1) {
+        newsContainer.innerHTML = '';
+    }
+    
+    // Remove existing loading indicator
+    const existingLoader = newsContainer.querySelector('.news-loading');
+    if (existingLoader) {
+        existingLoader.remove();
+    }
+    
+    newsData.forEach(news => {
+        const newsItem = document.createElement('div');
+        newsItem.className = 'news-item';
+        newsItem.dataset.newsId = news.id;
+        
+        // Format date
+        const date = new Date(news.created_at);
+        const monthNames = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ];
+        const dateStr = `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        
+        // Truncate description for preview (150 characters)
+        const preview = news.description.length > 150 
+            ? news.description.substring(0, 150) + '...' 
+            : news.description;
+        
+        newsItem.innerHTML = `
+            ${news.image_url ? `<img src="${news.image_url}" alt="${news.title}" class="news-image">` : ''}
+            <div class="news-date">${dateStr}</div>
+            <h3 class="news-title">${news.title}</h3>
+            <p class="news-content">${preview}</p>
+            <button class="btn btn--outline btn--sm news-read-more" data-id="${news.id}">Читать далее</button>
+        `;
+        
+        newsContainer.appendChild(newsItem);
+    });
+    
+    // Add load more indicator if there are more news
+    if (hasMoreNews) {
+        const loadMoreDiv = document.createElement('div');
+        loadMoreDiv.className = 'news-loading';
+        loadMoreDiv.innerHTML = '<p>Загрузка...</p>';
+        newsContainer.appendChild(loadMoreDiv);
+    }
+    
+    // Attach event listeners to "Read more" buttons
+    document.querySelectorAll('.news-read-more').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const newsId = e.target.dataset.id;
+            showFullNews(newsId);
+        });
+    });
+}
+
+function renderEmptyNews() {
+    const newsContainer = document.querySelector('.news-container');
+    newsContainer.innerHTML = `
+        <div class="placeholder-message">
+            <p>📰 Новостей пока нет</p>
+            <p>Здесь будут отображаться корпоративные новости и объявления</p>
+        </div>
+    `;
+}
+
+function renderNewsError() {
+    const newsContainer = document.querySelector('.news-container');
+    newsContainer.innerHTML = `
+        <div class="placeholder-message">
+            <p>⚠️ Ошибка загрузки новостей</p>
+            <p>Пожалуйста, попробуйте позже</p>
+        </div>
+    `;
+}
+
+async function showFullNews(newsId) {
+    currentNewsId = newsId;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/news/${newsId}`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to load news details');
+        }
+        
+        const news = await response.json();
+        
+        // Format date
+        const date = new Date(news.created_at);
+        const monthNames = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ];
+        const dateStr = `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+        
+        // Create full news view
+        const newsScreen = document.getElementById('newsScreen');
+        const originalContent = newsScreen.innerHTML;
+        
+        newsScreen.innerHTML = `
+            <header class="app-header">
+                <button class="btn-header btn-back" id="backToNewsList">← Назад</button>
+                <h2>Новость</h2>
+                <div></div>
+            </header>
+            
+            <div class="container">
+                <nav class="breadcrumb">
+                    <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                    <span class="breadcrumb-separator">/</span>
+                    <a href="#" class="breadcrumb-item" id="backToNewsListBreadcrumb">Новости компании</a>
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-item active">Просмотр новости</span>
+                </nav>
+                
+                <div class="news-full">
+                    ${news.image_url ? `<img src="${news.image_url}" alt="${news.title}" class="news-full-image">` : ''}
+                    <div class="news-meta">
+                        <span class="news-date">${dateStr}</span>
+                        <span class="news-author">Автор: ${news.author}</span>
+                    </div>
+                    <h1 class="news-full-title">${news.title}</h1>
+                    <div class="news-full-content">${news.description.replace(/\n/g, '<br>')}</div>
+                </div>
+            </div>
+        `;
+        
+        // Add back button handlers
+        const backToNewsList = () => {
+            currentNewsId = null;  // Reset currentNewsId when going back
+            newsScreen.innerHTML = originalContent;
+            initializeNavigation();
+            loadNews(false);
+        };
+        
+        document.getElementById('backToNewsList').addEventListener('click', backToNewsList);
+        document.getElementById('backToNewsListBreadcrumb').addEventListener('click', (e) => {
+            e.preventDefault();
+            backToNewsList();
+        });
+        
+        // Handle breadcrumb back to menu
+        document.querySelector('[data-back="menu"]').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentNewsId = null;  // Reset currentNewsId when going back
+            newsScreen.innerHTML = originalContent;
+            initializeNavigation();
+            showScreen('menu', menuScreen);
+        });
+        
+    } catch (error) {
+        console.error('Error loading news details:', error);
+        if (isInTelegram && window.tgApp) {
+            window.tgApp.showAlert('Ошибка загрузки новости');
+        } else {
+            alert('Ошибка загрузки новости');
+        }
+    }
+}
+
+// Handle infinite scroll for news
+function setupNewsScroll() {
+    const newsScreen = document.getElementById('newsScreen');
+    
+    newsScreen.addEventListener('scroll', () => {
+        // Check if we're on the news list (not full news view)
+        if (currentNewsId !== null) return;
+        
+        const scrollTop = newsScreen.scrollTop;
+        const scrollHeight = newsScreen.scrollHeight;
+        const clientHeight = newsScreen.clientHeight;
+        
+        // Load more when user is near the bottom (within 200px)
+        if (scrollTop + clientHeight >= scrollHeight - 200) {
+            loadNews(false);
+        }
+    });
+}
 
 // Initialize navigation handlers
 function initializeNavigation() {
@@ -1005,6 +1239,7 @@ function initializeNavigation() {
             switch(section) {
                 case 'news':
                     showScreen('news', newsScreen);
+                    await loadNews(true);
                     break;
                 case 'attendance':
                     showScreen('main', mainScreen);
