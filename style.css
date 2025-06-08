@@ -82,14 +82,14 @@ body {
   border-radius: 5px;
   font-size: 16px;
   transition: border-color 0.3s;
-  background-color: #1c2733;
-  color: #e1e1e1;
+  background-color: #1c2733 !important;
+  color: #ffffff !important;
 }
 
 .form-control:focus {
   outline: none;
   border-color: #667eea;
-  background-color: #232e3c;
+  background-color: #232e3c !important;
 }
 
 /* Buttons */
@@ -814,6 +814,26 @@ body {
   color: #e1e1e1;
 }
 
+.menu-card-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: #b8c5d1;
+  line-height: 1.4;
+}
+
+/* Специальные стили для блока настроек без иконки */
+.menu-card.telegram-only {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.menu-card.telegram-only .menu-card-title {
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
 .menu-card-description {
   color: #b0b0b0;
   font-size: 14px;
@@ -1278,3 +1298,83 @@ body {
     font-size: 14px;
   }
 }
+/* Settings Screen Styles */
+.settings-content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Настройки - убираем светлый фон карточек */
+.settings-content .card {
+  background: #2b3544 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+#settingsScreen .card {
+  background: #2b3544 !important;
+  border: 1px solid #3a4553 !important;
+}
+
+.setting-item {
+  padding: 15px 0;
+  border-bottom: 1px solid #3a4553;
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.setting-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.setting-label {
+  font-weight: 500;
+  color: #b8c5d1;
+}
+
+.setting-value {
+  color: #e1e1e1;
+  font-weight: 600;
+}
+
+.setting-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #3a4553;
+}
+
+.setting-warning {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #3a2a20;
+  border-left: 4px solid #f39c12;
+  border-radius: 5px;
+}
+
+.setting-warning p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #f39c12;
+}
+
+.setting-warning strong {
+  color: #e67e22;
+}
+
+/* Telegram-only elements */
+.telegram-only {
+  display: none \!important;
+}
+
+/* Show telegram-only elements when in Telegram */
+body.in-telegram .telegram-only {
+  display: block \!important;
+}
+
+body.in-telegram .menu-card.telegram-only {
+  display: flex \!important;
+}
+

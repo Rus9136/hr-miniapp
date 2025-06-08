@@ -8,11 +8,11 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="cache-control" content="no-cache">
-    <meta name="last-modified" content="2025-06-02T19:00:00Z">
+    <meta name="last-modified" content="2025-06-08T20:15:00Z">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css?v=admin-fixes&ts=20250606-1600">
-    <link rel="stylesheet" href="admin.css?v=news-modal-fixes&ts=20250606-1600">
-    <link rel="stylesheet" href="telegram.css?v=neutral-status-colors&ts=20250606-1600">
+    <link rel="stylesheet" href="style.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
+    <link rel="stylesheet" href="admin.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
+    <link rel="stylesheet" href="telegram.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -22,15 +22,17 @@
         <div class="container">
             <div class="login-content">
                 <h1>Учет рабочего времени</h1>
-                <p class="login-subtitle">Введите ваш табельный номер</p>
+                <p class="login-subtitle">Введите ваш ИИН</p>
                 
                 <form id="loginForm" class="login-form">
                     <div class="form-group">
-                        <label for="employeeId" class="form-label">Табельный номер</label>
-                        <input type="text" id="employeeId" class="form-control" placeholder="Например: АП00-00358" required>
+                        <label for="employeeId" class="form-label">ИИН</label>
+                        <input type="text" id="employeeId" class="form-control" placeholder="Например: 951026301078" required>
                     </div>
                     <button type="submit" class="btn btn--primary btn--full-width">Войти</button>
                 </form>
+                
+                <div id="loginError" class="login-error" style="display: none; color: #dc3545; text-align: center; margin-top: 15px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;"></div>
             </div>
         </div>
     </div>
@@ -77,6 +79,11 @@
                     <div class="menu-card-icon">👥</div>
                     <h3 class="menu-card-title">HR</h3>
                     <p class="menu-card-description">Обращение к HR отделу</p>
+                </div>
+                
+                <!-- Настройки - только для Telegram -->
+                <div class="menu-card telegram-only" data-section="settings" style="display: none;">
+                    <h3 class="menu-card-title">Настройки<br><span class="menu-card-subtitle">Управление Telegram аккаунтом</span></h3>
                 </div>
             </div>
         </div>
@@ -330,6 +337,64 @@
         </div>
     </div>
 
+    <!-- Экран настроек (только для Telegram) -->
+    <div id="settingsScreen" class="screen">
+        <header class="app-header">
+            <button class="btn-header btn-back" data-back="menu">← Назад</button>
+            <h2>Настройки</h2>
+            <div></div>
+        </header>
+        
+        <div class="container">
+            <nav class="breadcrumb">
+                <a href="#" class="breadcrumb-item" data-back="menu">Главное меню</a>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Настройки</span>
+            </nav>
+            
+            <div class="settings-content">
+                <!-- Информация о Telegram аккаунте -->
+                <div class="card">
+                    <div class="card__body">
+                        <h3>📱 Telegram аккаунт</h3>
+                        
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">Статус привязки:</div>
+                                <div id="linkStatus" class="setting-value">Привязан</div>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">Сотрудник:</div>
+                                <div id="linkedEmployee" class="setting-value">Загрузка...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">ИИН:</div>
+                                <div id="linkedIIN" class="setting-value">Загрузка...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-actions">
+                            <button id="unlinkAccountBtn" class="btn btn--danger btn--full-width">
+                                🔓 Отвязать аккаунт
+                            </button>
+                        </div>
+                        
+                        <div class="setting-warning">
+                            <p><strong>⚠️ Внимание:</strong></p>
+                            <p>После отвязки аккаунта вам потребуется заново ввести ваш ИИН для входа в приложение через Telegram.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно статистики -->
     <div id="statsModal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
@@ -387,7 +452,7 @@
                     <h3 class="section-title">Графики работы</h3>
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="schedules" class="menu-item">Шаблоны графиков</a></li>
-                        <li><a href="#" data-section="schedule-assign" class="menu-item">Назначение графиков</a></li>
+                        <li style="display: none;"><a href="#" data-section="schedule-assign" class="menu-item">Назначение графиков</a></li>
                     </ul>
                 </div>
                 
@@ -975,8 +1040,8 @@
     </div>
 
 
-    <script src="telegram.js?v=final"></script>
-    <script src="app.js?v=department-stats-fix&ts=20250605-1710"></script>
-    <script src="admin.js?v=schedules-search-filter&ts=20250606-1600"></script>
+    <script src="telegram.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915"></script>
+    <script src="app.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915&bust=true"></script>
+    <script src="admin.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915"></script>
 </body>
 </html>

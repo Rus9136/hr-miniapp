@@ -1,8 +1,8 @@
 # HR Time Tracking Mini App - Project State
 
 ## Current Status: PRODUCTION READY 🚀
-**Last Updated**: 2025-06-08 08:30  
-**Major Milestone**: ✅ **News System Fully Fixed + Navigation Complete**
+**Last Updated**: 2025-06-08 13:21  
+**Major Milestone**: ✅ **Telegram Unlink Feature + IIN Interface Fixed**
 
 ## 🎯 Project Overview
 HR Time Tracking application successfully transformed into a **Telegram Mini App** with full production deployment capability.
@@ -10,7 +10,7 @@ HR Time Tracking application successfully transformed into a **Telegram Mini App
 ## ✅ Completed Features (FINAL)
 
 ### 🔧 Core Functionality (Stable)
-- [x] Employee login by personnel number
+- [x] **Employee login by IIN (Individual Identification Number)**
 - [x] Personal dashboard with monthly calendar
 - [x] Time tracking display (arrival/departure times)
 - [x] Monthly statistics calculation
@@ -23,13 +23,17 @@ HR Time Tracking application successfully transformed into a **Telegram Mini App
 - [x] **Telegram Web App SDK integration**
 - [x] **Automatic platform detection** (Telegram vs Browser)
 - [x] **Telegram authentication** with initData validation
-- [x] **Account linking system** (Telegram ID ↔ employee_number)
+- [x] **Account linking system** (Telegram ID ↔ employee_IIN)
 - [x] **Automatic login** for linked accounts
 - [x] **Haptic feedback** and native navigation
 - [x] **BackButton/MainButton** integration
 - [x] **Mobile-optimized UI** for Telegram
 - [x] **Secure HMAC-SHA256 validation** of Telegram data
 - [x] **JWT token system** for session management
+- [x] **🆕 Account unlinking feature (2025-06-08)**
+  - [x] Settings screen with account management
+  - [x] Secure unlink process with confirmation
+  - [x] Automatic logout and re-authentication flow
 
 ### 🔐 **NEW: Enhanced Security (2025-06-01)**
 - [x] **HTTPS server** with SSL certificates
@@ -146,17 +150,19 @@ help - Помощь
 ### **Telegram Users**
 1. Open Mini App from bot or direct link
 2. **Auto-authentication** if account is linked
-3. **One-time linking** with employee number (if new)
+3. **One-time linking** with employee IIN (if new)
 4. Access calendar and statistics with native Telegram UI
+5. **🆕 Account management** via Settings screen with unlink option
 
 ### **Web Users (Admin)**
 1. Access via browser at `https://madlen.space/HR/`
-2. Traditional login with employee number
+2. Traditional login with employee IIN
 3. Full admin panel access (Telegram users redirected to web)
 
 ## 🧪 Testing & Quality Assurance
 
 ### **Test Data Available**
+- **Employee IIN**: `951026301058` (Абдуназаров Рыскелді Дауренұлы)
 - **Employee**: `АП00-00358` (Суиндикова Сайраш Агабековна)
 - **Night Shift Employee**: `АП00-00467` (Шегирбаева Гульнур Бегалиевна)
 - **Admin**: `admin12qw`
@@ -165,6 +171,7 @@ help - Помощь
 - **Database**: 2946+ employee records
 - **🆕 Debug Tools**: `test_debug.html` for API testing
 - **🌙 Night Shift Test**: `test_night_shift_fix.js` for shift calculation testing
+- **📱 Telegram Unlink**: `/api/telegram/unlink` endpoint for account management
 
 ### **Automated Tests**
 - API endpoint validation  
@@ -194,7 +201,26 @@ help - Помощь
 - **Test Results**: 7/7 PASSED ✅
 - **Production Verification**: Live API testing completed ✅
 
-## 🛠️ **Latest Implementation (2025-06-08 08:30)**
+## 🛠️ **Latest Implementation (2025-06-08 13:21)**
+
+### **📱 Telegram Unlink Feature + IIN Interface Fixed**
+- **Duration**: 2 hours
+- **Problem Solved**: 
+  1. Missing functionality to unlink Telegram accounts
+  2. Incorrect interface texts showing "табельный номер" instead of "ИИН"
+  3. Telegram authentication not working in production environment
+- **Features Added**: Complete account management system for Telegram users
+- **Files Modified**: `index.html`, `app.js`, `style.css`, `backend/routes/telegram.js`
+- **Status**: ✅ **TELEGRAM UNLINK FEATURE COMPLETE + IIN INTERFACE FIXED**
+
+### **Key Features Implemented**
+1. **Settings Screen**: New "⚙️ Настройки" card in main menu (Telegram only)
+2. **Account Management**: View linked employee info (name, IIN)
+3. **Unlink Functionality**: Secure account unlinking with confirmation
+4. **Interface Fix**: All texts now correctly show "ИИН" instead of "табельный номер"
+5. **Production Fix**: Resolved dev_mode authentication in production environment
+
+### **Previous Implementation (2025-06-08 08:30)**
 
 ### **📰 News System Complete Fix + Navigation**
 - **Duration**: 1 hour
@@ -341,6 +367,7 @@ help - Помощь
 11. **🆕 1C Work Schedules Integration with real-time data**
 12. **🌙 Universal Night Shift Calculation System**
 13. **📰 Complete News System with Navigation (2025-06-08)**
+14. **📱 Telegram Account Management System with Unlink Feature (2025-06-08)**
 
 ## 🔄 Migration Notes (SQLite → PostgreSQL)
 

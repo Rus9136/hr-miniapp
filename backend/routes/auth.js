@@ -3,13 +3,14 @@ const router = express.Router();
 const db = require('../database_pg');
 
 router.post('/login', (req, res) => {
-  const { tableNumber } = req.body;
+  const { tableNumber, iin } = req.body;
 
-  if (!tableNumber) {
-    return res.status(400).json({ error: 'Table number is required' });
+  // Support both old (tableNumber) and new (iin) parameters
+  if (!tableNumber && !iin) {
+    return res.status(400).json({ error: 'IIN or table number is required' });
   }
 
-  // Check if admin
+  // Check if admin (using tableNumber for backward compatibility)
   if (tableNumber === 'admin12qw') {
     return res.json({
       id: 0,
@@ -22,16 +23,22 @@ router.post('/login', (req, res) => {
     });
   }
 
+  // If IIN is provided, use it; otherwise fall back to tableNumber
+  const searchParam = iin || tableNumber;
+  const searchField = iin ? 'iin' : 'table_number';
+  
+  // No strict validation - let database handle it
+
   db.queryRow(
     `SELECT e.*, d.object_name as department_name, p.staff_position_name as position_name
      FROM employees e
      LEFT JOIN departments d ON e.object_code = d.object_code
      LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
-     WHERE e.table_number = $1`,
-    [tableNumber]
+     WHERE e.${searchField} = $1`,
+    [searchParam]
   ).then(employee => {
     if (!employee) {
-      return res.status(404).json({ error: 'Employee not found' });
+      return res.status(404).json({ error: iin ? 'Сотрудник с таким ИИН не найден' : 'Employee not found' });
     }
 
     res.json({
@@ -40,7 +47,8 @@ router.post('/login', (req, res) => {
       fullName: employee.full_name,
       department: employee.department_name,
       position: employee.position_name,
-      objectBin: employee.object_bin
+      objectBin: employee.object_bin,
+      iin: employee.iin
     });
   }).catch(err => {
     console.error('Login error:', err);
