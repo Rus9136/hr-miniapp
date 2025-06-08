@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Telegram авторизации</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .result { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        button { padding: 10px 20px; margin: 5px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input { padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; width: 300px; }
+    </style>
+</head>
+<body>
+    <h1>Тест Telegram авторизации HR Mini App</h1>
+    
+    <div class="section">
+        <h3>1. Тест привязки аккаунта</h3>
+        <input type="text" id="testIIN" placeholder="Введите ИИН (например: 951026301058)" value="951026301058">
+        <button onclick="testLinking()">Привязать аккаунт</button>
+        <div id="linkResult" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h3>2. Тест автоматической авторизации</h3>
+        <button onclick="testAuth()">Проверить авторизацию</button>
+        <div id="authResult" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h3>3. Тест с некорректным ИИН</h3>
+        <input type="text" id="wrongIIN" placeholder="Некорректный ИИН" value="999999999999">
+        <button onclick="testWrongIIN()">Попробовать привязать</button>
+        <div id="wrongResult" class="result"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3030/api';
+        
+        // Mock Telegram WebApp object
+        window.tgApp = {
+            getInitData: () => 'dev_mode',
+            showAlert: (message) => alert(`[Telegram Alert] ${message}`),
+            isInTelegram: true,
+            impactOccurred: (type) => console.log(`Haptic feedback: ${type}`)
+        };
+        
+        async function testLinking() {
+            const iin = document.getElementById('testIIN').value;
+            const resultDiv = document.getElementById('linkResult');
+            
+            if (!iin) {
+                resultDiv.innerHTML = '<div class="error">Введите ИИН!</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = 'Отправляю запрос на привязку...';
+                
+                const response = await fetch(`${API_BASE_URL}/telegram/link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        initData: 'dev_mode', 
+                        employeeIIN: iin 
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Link result:', result);
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>✅ Привязка успешна!</strong><br>
+                            Сотрудник: ${result.employee.fullName}<br>
+                            Табельный номер: ${result.employee.tableNumber}<br>
+                            ИИН: ${result.employee.iin}<br>
+                            Telegram ID: ${result.telegram_user.id}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${result.error}</div>`;
+                }
+            } catch (error) {
+                console.error('Linking error:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+        
+        async function testAuth() {
+            const resultDiv = document.getElementById('authResult');
+            
+            try {
+                resultDiv.innerHTML = 'Проверяю автоматическую авторизацию...';
+                
+                const response = await fetch(`${API_BASE_URL}/telegram/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData: 'dev_mode' })
+                });
+                
+                const result = await response.json();
+                console.log('Auth result:', result);
+                
+                if (result.success && result.isLinked) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>✅ Автоматическая авторизация успешна!</strong><br>
+                            Сотрудник: ${result.employee.fullName}<br>
+                            Табельный номер: ${result.employee.tableNumber}<br>
+                            Подразделение: ${result.employee.department || 'Не указано'}<br>
+                            Должность: ${result.employee.position || 'Не указано'}
+                        </div>
+                    `;
+                } else if (result.success === false && !result.isLinked) {
+                    resultDiv.innerHTML = '<div class="error">❌ Аккаунт не привязан. Сначала выполните привязку.</div>';
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка авторизации: ${result.error || 'Неизвестная ошибка'}</div>`;
+                }
+            } catch (error) {
+                console.error('Auth error:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+        
+        async function testWrongIIN() {
+            const iin = document.getElementById('wrongIIN').value;
+            const resultDiv = document.getElementById('wrongResult');
+            
+            try {
+                resultDiv.innerHTML = 'Отправляю запрос с некорректным ИИН...';
+                
+                const response = await fetch(`${API_BASE_URL}/telegram/link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        initData: 'dev_mode', 
+                        employeeIIN: iin 
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Wrong IIN result:', result);
+                
+                if (!result.success) {
+                    resultDiv.innerHTML = `<div class="success">✅ Правильно показана ошибка: ${result.error}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Неожиданно: запрос прошел успешно</div>`;
+                }
+            } catch (error) {
+                console.error('Wrong IIN error:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -447,6 +447,32 @@
     font-size: 14px;
 }
 
+/* Ensure month input fields have light background in admin panel */
+#adminScreen input[type="month"] {
+    background-color: #ffffff !important;
+    color: #495057 !important;
+    border: 1px solid #ced4da !important;
+}
+
+#adminScreen input[type="month"]:focus {
+    background-color: #ffffff !important;
+    border-color: #4785ff !important;
+    box-shadow: 0 0 0 3px rgba(71, 133, 255, 0.1) !important;
+}
+
+/* Ensure time input fields have light background in admin panel (schedule details) */
+#adminScreen input[type="time"] {
+    background-color: #ffffff !important;
+    color: #495057 !important;
+    border: 1px solid #ced4da !important;
+}
+
+#adminScreen input[type="time"]:focus {
+    background-color: #ffffff !important;
+    border-color: #4785ff !important;
+    box-shadow: 0 0 0 3px rgba(71, 133, 255, 0.1) !important;
+}
+
 .btn--success {
     background-color: #28a745;
     color: white;

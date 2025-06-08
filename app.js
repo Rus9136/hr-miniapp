@@ -1,4 +1,4 @@
-console.log('🚀 HR Mini App FINAL v4.0 - CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App ADMIN-UI-FIXES v7.3 - CACHE BUST: ' + new Date().getTime());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -48,8 +48,11 @@ function showScreen(screenName, screenElement) {
     screenElement.classList.add('active');
     screenElement.style.display = 'block';
     
-    // Update current screen state
-    currentScreen.previous = currentScreen.name;
+    // Update current screen state properly
+    // Only update previous if we're not going back
+    if (screenName !== currentScreen.previous) {
+        currentScreen.previous = currentScreen.name;
+    }
     currentScreen.name = screenName;
     
     // Handle Telegram navigation
@@ -57,7 +60,7 @@ function showScreen(screenName, screenElement) {
         handleTelegramNavigation(screenName);
     }
     
-    console.log(`Navigated to: ${screenName}`);
+    console.log(`Navigated to: ${screenName} (previous: ${currentScreen.previous})`);
 }
 
 function handleTelegramNavigation(screenName) {
@@ -110,6 +113,9 @@ function goBackToPreviousScreen() {
         case 'departmentStats':
             targetScreen = departmentStatsScreen;
             break;
+        case 'settings':
+            targetScreen = document.getElementById('settingsScreen');
+            break;
         default:
             targetScreen = menuScreen;
     }
@@ -143,12 +149,15 @@ async function tryTelegramAuth() {
     
     try {
         console.log('Attempting Telegram authentication...');
-        const initData = window.tgApp.getInitData();
+        let initData = window.tgApp.getInitData();
         
-        if (!initData) {
-            console.log('No Telegram initData available');
-            return false;
+        // Fallback to dev mode if no initData (for testing)
+        if (!initData || initData.trim() === '') {
+            console.log('No Telegram initData available, using dev mode for testing');
+            initData = 'dev_mode';
         }
+        
+        console.log('Using initData:', initData.substring(0, 50) + '...');
         
         const response = await fetch(`${API_BASE_URL}/telegram/auth`, {
             method: 'POST',
@@ -185,20 +194,20 @@ async function tryTelegramAuth() {
 function showTelegramLinkingForm(telegramUser) {
     const loginContent = document.querySelector('.login-content');
     loginContent.innerHTML = `
-        <h1>Привязка аккаунта</h1>
+        <h1>Учет рабочего времени</h1>
         <p class="login-subtitle">Привет, ${telegramUser.first_name}!</p>
-        <p class="login-subtitle">Введите ваш табельный номер для привязки аккаунта Telegram</p>
+        <p class="login-subtitle">Введите ваш ИИН для привязки аккаунта Telegram</p>
         
         <form id="linkingForm" class="login-form">
             <div class="form-group">
-                <label for="linkEmployeeId" class="form-label">Табельный номер</label>
-                <input type="text" id="linkEmployeeId" class="form-control" placeholder="Например: АП00-00358" required>
+                <label for="linkEmployeeId" class="form-label">ИИН</label>
+                <input type="text" id="linkEmployeeId" class="form-control" placeholder="Например: 951026301078" required>
             </div>
             <button type="submit" class="btn btn--primary btn--full-width">Привязать аккаунт</button>
         </form>
         
         <div style="text-align: center; margin-top: 20px;">
-            <button id="skipLinking" class="btn btn--outline">Ввести номер каждый раз</button>
+            <button id="skipLinking" class="btn btn--outline">Ввести ИИН каждый раз</button>
         </div>
     `;
     
@@ -214,16 +223,36 @@ function showTelegramLinkingForm(telegramUser) {
     });
 }
 
-// Link Telegram account with employee number
+// Link Telegram account with employee IIN
 async function linkTelegramAccount(telegramUser) {
-    const employeeNumber = document.getElementById('linkEmployeeId').value;
+    const employeeIIN = document.getElementById('linkEmployeeId').value;
+    
+    // Validate that IIN is not empty
+    if (!employeeIIN || employeeIIN.trim() === '') {
+        const errorMsg = 'Пожалуйста, введите ваш ИИН';
+        if (window.tgApp) {
+            window.tgApp.showAlert(errorMsg);
+        } else {
+            alert(errorMsg);
+        }
+        return;
+    }
     
     try {
-        const initData = window.tgApp.getInitData();
+        let initData = window.tgApp.getInitData();
+        
+        // Fallback to dev mode if no initData (for testing)
+        if (!initData || initData.trim() === '') {
+            console.log('No Telegram initData available, using dev mode for testing');
+            initData = 'dev_mode';
+        }
+        
+        console.log('Linking account with IIN:', employeeIIN);
+        
         const response = await fetch(`${API_BASE_URL}/telegram/link`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData, employeeNumber })
+            body: JSON.stringify({ initData, employeeIIN })
         });
         
         const result = await response.json();
@@ -242,18 +271,21 @@ async function linkTelegramAccount(telegramUser) {
             
             console.log('Account linked and logged in:', currentEmployee.fullName);
         } else {
+            const errorMsg = result.error || 'Ошибка привязки аккаунта';
+            console.error('Linking failed:', errorMsg);
             if (window.tgApp) {
-                window.tgApp.showAlert(result.error || 'Ошибка привязки аккаунта');
+                window.tgApp.showAlert(errorMsg);
             } else {
-                alert(result.error || 'Ошибка привязки аккаунта');
+                alert(errorMsg);
             }
         }
     } catch (error) {
         console.error('Account linking error:', error);
+        const errorMsg = `Ошибка подключения к серверу: ${error.message}`;
         if (window.tgApp) {
-            window.tgApp.showAlert('Ошибка подключения к серверу');
+            window.tgApp.showAlert(errorMsg);
         } else {
-            alert('Ошибка подключения к серверу');
+            alert(errorMsg);
         }
     }
 }
@@ -263,48 +295,68 @@ function showRegularLoginForm() {
     const loginContent = document.querySelector('.login-content');
     loginContent.innerHTML = `
         <h1>Учет рабочего времени</h1>
-        <p class="login-subtitle">Введите ваш табельный номер</p>
+        <p class="login-subtitle">Введите ваш ИИН</p>
         
         <form id="loginForm" class="login-form">
             <div class="form-group">
-                <label for="employeeId" class="form-label">Табельный номер</label>
-                <input type="text" id="employeeId" class="form-control" placeholder="Например: АП00-00358" required>
+                <label for="employeeId" class="form-label">ИИН</label>
+                <input type="text" id="employeeId" class="form-control" placeholder="Например: 951026301078" required>
             </div>
             <button type="submit" class="btn btn--primary btn--full-width">Войти</button>
         </form>
+        
+        <div id="loginError" class="login-error" style="display: none; color: #dc3545; text-align: center; margin-top: 15px; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;"></div>
     `;
     
     // Re-attach login handler
     document.getElementById('loginForm').addEventListener('submit', handleRegularLogin);
 }
 
+// Show login error message
+function showLoginError(message) {
+    const errorElement = document.getElementById('loginError');
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+}
+
+// Hide login error message
+function hideLoginError() {
+    const errorElement = document.getElementById('loginError');
+    if (errorElement) {
+        errorElement.style.display = 'none';
+    }
+}
+
 // Regular login functionality
 async function handleRegularLogin(e) {
     e.preventDefault();
     
-    const tableNumber = document.getElementById('employeeId').value;
-    console.log('Trying to login with:', tableNumber);
+    // Hide any previous error
+    hideLoginError();
     
-    try {
-        const response = await fetch(`${API_BASE_URL}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tableNumber })
-        });
-        
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-            const error = await response.json();
-            alert(error.error || 'Ошибка входа');
-            return;
-        }
-        
-        currentEmployee = await response.json();
-        console.log('Current employee:', currentEmployee);
-        
-        // Check if admin
-        if (tableNumber === 'admin12qw') {
+    const iinValue = document.getElementById('employeeId').value;
+    
+    // Check if it's admin password
+    if (iinValue === 'admin12qw') {
+        // Admin login - keep the original flow
+        console.log('Admin login detected');
+        try {
+            const response = await fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tableNumber: 'admin12qw' })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                alert(error.error || 'Ошибка входа');
+                return;
+            }
+            
+            currentEmployee = await response.json();
+            
             // Prevent admin access in Telegram
             if (isInTelegram) {
                 window.tgApp.showAlert('Админ-панель доступна только в веб-версии приложения');
@@ -319,17 +371,45 @@ async function handleRegularLogin(e) {
             if (window.initAdminPanel) {
                 window.initAdminPanel();
             }
-        } else {
-            // Regular employee - show menu screen
-            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-            document.getElementById('employeeName').textContent = currentEmployee.fullName;
-            
-            // Switch to menu screen
-            showScreen('menu', menuScreen);
+            return;
+        } catch (error) {
+            console.error('Admin login error:', error);
+            showLoginError('Ошибка подключения к серверу: ' + error.message);
+            return;
         }
+    }
+    
+    // Don't validate IIN format on client side - let server handle it
+    
+    console.log('Trying to login with IIN:', iinValue);
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ iin: iinValue })
+        });
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            const error = await response.json();
+            showLoginError(error.error || 'Ошибка входа');
+            return;
+        }
+        
+        currentEmployee = await response.json();
+        console.log('Current employee:', currentEmployee);
+        
+        // Regular employee - show menu screen
+        document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
+        document.getElementById('employeeName').textContent = currentEmployee.fullName;
+        
+        // Switch to menu screen
+        showScreen('menu', menuScreen);
     } catch (error) {
         console.error('Login error:', error);
-        alert('Ошибка подключения к серверу: ' + error.message);
+        showLoginError('Ошибка подключения к серверу: ' + error.message);
     }
 }
 
@@ -346,6 +426,13 @@ async function initApp() {
     
     if (isInTelegram) {
         console.log('Telegram mode detected, trying authentication...');
+        // Add class to body for Telegram-specific styling
+        document.body.classList.add('in-telegram');
+        // Show settings card only in Telegram
+        const settingsCard = document.querySelector('.menu-card[data-section="settings"]');
+        if (settingsCard) {
+            settingsCard.style.display = 'flex';
+        }
         // Try Telegram authentication first
         const authSuccess = await tryTelegramAuth();
         if (!authSuccess) {
@@ -408,6 +495,9 @@ document.getElementById('statsBtn').addEventListener('click', async () => {
     // Navigate to department stats screen
     const departmentStatsScreen = document.getElementById('departmentStatsScreen');
     showScreen('departmentStats', departmentStatsScreen);
+    
+    // Initialize back navigation for department stats screen
+    initializeBackNavigation();
     
     // Load department statistics
     await loadDepartmentStats();
@@ -994,6 +1084,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup news scroll handler
     setupNewsScroll();
     
+    // Setup Telegram back button handler
+    if (isInTelegram) {
+        window.addEventListener('telegram-back-button', () => {
+            console.log('Telegram back button pressed, current:', currentScreen.name, 'previous:', currentScreen.previous);
+            
+            // Special handling for specific screen transitions
+            if (currentScreen.name === 'departmentStats') {
+                showScreen('main', mainScreen);
+            } else if (currentScreen.name === 'main') {
+                showScreen('menu', menuScreen);
+            } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
+                       currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
+                       currentScreen.name === 'vacation') {
+                showScreen('menu', menuScreen);
+            } else {
+                goBackToPreviousScreen();
+            }
+        });
+    }
+    
     // Initialize the application (Telegram auth or regular login)
     await initApp();
 });
@@ -1287,6 +1397,7 @@ function initializeNavigation() {
                     break;
                 case 'attendance':
                     showScreen('main', mainScreen);
+                    initializeBackNavigation();
                     await loadCalendarData();
                     break;
                 case 'salary':
@@ -1301,6 +1412,11 @@ function initializeNavigation() {
                 case 'departmentStats':
                     showScreen('departmentStats', departmentStatsScreen);
                     break;
+                case 'settings':
+                    const settingsScreen = document.getElementById('settingsScreen');
+                    showScreen('settings', settingsScreen);
+                    await loadSettingsData();
+                    break;
             }
         });
     });
@@ -1311,29 +1427,115 @@ function initializeNavigation() {
 
 // Initialize back navigation handlers (safe for multiple calls)
 function initializeBackNavigation() {
-    if (!isInTelegram) {
-        console.log('🔙 Initializing back navigation');
-        const backElements = document.querySelectorAll('.btn-back, .breadcrumb-item');
-        console.log('🔙 Found', backElements.length, 'back navigation elements');
+    console.log('🔙 Initializing back navigation for', isInTelegram ? 'Telegram' : 'Web');
+    
+    // Remove existing click handlers by using a delegated approach
+    document.removeEventListener('click', handleBackNavigation);
+    document.addEventListener('click', handleBackNavigation);
+}
+
+// Delegated event handler for back navigation
+function handleBackNavigation(e) {
+    const btn = e.target.closest('.btn-back, .breadcrumb-item[data-back]');
+    if (!btn || !btn.dataset.back) return;
+    
+    e.preventDefault();
+    const target = btn.dataset.back;
+    console.log('🔙 Back button clicked, target:', target);
+    
+    if (target === 'menu') {
+        showScreen('menu', menuScreen);
+        // No need to reinitialize navigation here as it's already delegated
+    } else if (target === 'main') {
+        showScreen('main', mainScreen);
+        // Reinitialize for the main screen buttons
+        setTimeout(() => initializeBackNavigation(), 100);
+    }
+}
+
+// Load settings data
+async function loadSettingsData() {
+    if (!isInTelegram || !currentEmployee) {
+        return;
+    }
+    
+    // Update employee info in settings
+    document.getElementById('linkedEmployee').textContent = currentEmployee.fullName;
+    document.getElementById('linkedIIN').textContent = currentEmployee.iin || 'Не указан';
+    
+    // Setup unlink button
+    const unlinkBtn = document.getElementById('unlinkAccountBtn');
+    if (unlinkBtn) {
+        // Remove existing listeners
+        unlinkBtn.replaceWith(unlinkBtn.cloneNode(true));
+        const newUnlinkBtn = document.getElementById('unlinkAccountBtn');
         
-        backElements.forEach((btn, index) => {
-            if (btn.dataset.back) {
-                // Remove existing listeners by cloning and replacing element
-                btn.replaceWith(btn.cloneNode(true));
-                const newBtn = document.querySelectorAll('.btn-back, .breadcrumb-item')[index];
-                
-                newBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const target = newBtn.dataset.back;
-                    console.log('🔙 Back button clicked, target:', target);
-                    
-                    if (target === 'menu') {
-                        showScreen('menu', menuScreen);
-                    } else if (target === 'main') {
-                        showScreen('main', mainScreen);
-                    }
-                });
-            }
+        newUnlinkBtn.addEventListener('click', async () => {
+            await unlinkTelegramAccount();
         });
+    }
+}
+
+// Unlink Telegram account
+async function unlinkTelegramAccount() {
+    if (!isInTelegram || !window.tgApp) {
+        return;
+    }
+    
+    // Show confirmation
+    const confirmed = await new Promise((resolve) => {
+        if (window.tgApp.showConfirm) {
+            window.tgApp.showConfirm('Вы уверены, что хотите отвязать аккаунт?', resolve);
+        } else {
+            // Fallback for older Telegram versions
+            window.tgApp.showAlert('Подтвердите отвязку аккаунта в следующем диалоге');
+            resolve(confirm('Вы уверены, что хотите отвязать аккаунт?'));
+        }
+    });
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        let initData = window.tgApp.getInitData();
+        
+        // Fallback to dev mode if no initData
+        if (!initData || initData.trim() === '') {
+            initData = 'dev_mode';
+        }
+        
+        console.log('Unlinking Telegram account...');
+        
+        const response = await fetch(`${API_BASE_URL}/telegram/unlink`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show success message
+            window.tgApp.showAlert('Аккаунт успешно отвязан! Вы будете перенаправлены на экран входа.');
+            
+            // Clear current employee data
+            currentEmployee = null;
+            
+            // Redirect to login screen after a short delay
+            setTimeout(() => {
+                showRegularLoginForm();
+                showScreen('login', loginScreen);
+            }, 2000);
+            
+        } else {
+            const errorMsg = result.error || 'Ошибка отвязки аккаунта';
+            console.error('Unlink failed:', errorMsg);
+            window.tgApp.showAlert(errorMsg);
+        }
+    } catch (error) {
+        console.error('Account unlinking error:', error);
+        const errorMsg = `Ошибка подключения к серверу: ${error.message}`;
+        window.tgApp.showAlert(errorMsg);
     }
 }
