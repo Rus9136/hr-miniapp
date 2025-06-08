@@ -5,9 +5,34 @@ Database timezone set to Asia/Almaty
 Database initialized successfully
 Starting initial data sync...
 Starting data synchronization...
-Synced 535 departments
-Timezone set to Asia/Almaty for new connection
-Synced 6068 positions
-Synced 2946 employees
-Sync completed: 535 departments, 6068 positions, 2946 employees
+Synced 536 departments
+Synced 6070 positions
+Synced 2901 employees
+Sync completed: 536 departments, 6070 positions, 2901 employees
 Initial data sync completed
+Received IIN update request for 4 employees
+Processing employee: АП00-00358 with IIN: 951026301058
+Timezone set to Asia/Almaty for new connection
+Successfully updated IIN for employee: АП00-00358
+Processing employee: АП00-00467 with IIN: 870515401234
+Successfully updated IIN for employee: АП00-00467
+Processing employee: NONEXISTENT with IIN: 123456789012
+Employee not found: NONEXISTENT
+IIN update completed: {
+  totalReceived: 4,
+  totalProcessed: 2,
+  totalUpdated: 2,
+  totalSkipped: 2,
+  errorsCount: 1
+}
+Received IIN update request for 1 employees
+Processing employee: АП00-00358 with IIN: 999999999999
+Timezone set to Asia/Almaty for new connection
+Employee АП00-00358 already has IIN: 951026301058, skipping
+IIN update completed: {
+  totalReceived: 1,
+  totalProcessed: 0,
+  totalUpdated: 0,
+  totalSkipped: 1,
+  errorsCount: 0
+}

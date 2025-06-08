@@ -289,7 +289,7 @@ function displayEmployees(employees) {
             <td>${emp.department_name || '-'}</td>
             <td>${emp.position_name || '-'}</td>
             <td>${emp.current_schedule || '-'}</td>
-            <td><span class="status-badge ${emp.status === 1 ? 'active' : 'inactive'}">${emp.status === 1 ? 'Активен' : 'Неактивен'}</span></td>
+            <td>${emp.iin || ''}</td>
         </tr>
     `).join('');
 }
