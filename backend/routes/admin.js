@@ -11,6 +11,7 @@ router.get('/admin/employees', (req, res) => {
             d.object_name as department_name,
             p.staff_position_name as position_name,
             e.object_bin,
+            e.iin,
             ws.schedule_name as current_schedule
         FROM employees e
         LEFT JOIN departments d ON e.object_code = d.object_code
@@ -1840,6 +1841,116 @@ router.put('/admin/schedules/1c/update-times', async (req, res) => {
             success: false,
             message: 'Ошибка сервера при обновлении времени',
             error: error.message
+        });
+    }
+});
+
+// Update employees IIN numbers from 1C
+router.post('/admin/employees/update-iin', async (req, res) => {
+    try {
+        const employees = req.body;
+        
+        console.log('Received IIN update request for', employees?.length || 0, 'employees');
+        
+        // Validation
+        if (!Array.isArray(employees) || employees.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Нет данных для обновления. Ожидается массив сотрудников.'
+            });
+        }
+        
+        let totalProcessed = 0;
+        let totalUpdated = 0;
+        let totalSkipped = 0;
+        let errors = [];
+        
+        // Process each employee
+        for (const employee of employees) {
+            try {
+                const { iin, table_number } = employee;
+                
+                // Validate employee data
+                if (!iin || !table_number) {
+                    errors.push(`Неполные данные: ИИН=${iin}, табельный номер=${table_number}`);
+                    totalSkipped++;
+                    continue;
+                }
+                
+                // Validate IIN format (12 digits)
+                if (!/^\d{12}$/.test(iin)) {
+                    errors.push(`Неверный формат ИИН ${iin} для табельного номера ${table_number}. Ожидается 12 цифр.`);
+                    totalSkipped++;
+                    continue;
+                }
+                
+                console.log(`Processing employee: ${table_number} with IIN: ${iin}`);
+                
+                // Check if employee exists and has null IIN
+                const checkResult = await db.query(
+                    'SELECT id, iin FROM employees WHERE table_number = $1',
+                    [table_number]
+                );
+                
+                if (checkResult.rows.length === 0) {
+                    console.log(`Employee not found: ${table_number}`);
+                    totalSkipped++;
+                    continue;
+                }
+                
+                const existingEmployee = checkResult.rows[0];
+                
+                // Only update if IIN is null (not overwrite existing IIN)
+                if (existingEmployee.iin !== null && existingEmployee.iin !== '') {
+                    console.log(`Employee ${table_number} already has IIN: ${existingEmployee.iin}, skipping`);
+                    totalSkipped++;
+                    continue;
+                }
+                
+                // Update IIN
+                const updateResult = await db.query(
+                    'UPDATE employees SET iin = $1, updated_at = CURRENT_TIMESTAMP WHERE table_number = $2',
+                    [iin, table_number]
+                );
+                
+                if (updateResult.rowCount > 0) {
+                    console.log(`Successfully updated IIN for employee: ${table_number}`);
+                    totalUpdated++;
+                } else {
+                    totalSkipped++;
+                }
+                
+                totalProcessed++;
+                
+            } catch (employeeError) {
+                const errorMsg = `Ошибка обработки сотрудника ${employee.table_number || 'UNKNOWN'}: ${employeeError.message}`;
+                console.error(errorMsg, employeeError);
+                errors.push(errorMsg);
+                totalSkipped++;
+            }
+        }
+        
+        const response = {
+            success: true,
+            message: `Статус ОК, обновлено ${totalUpdated} записей`,
+            statistics: {
+                totalReceived: employees.length,
+                totalProcessed: totalProcessed,
+                totalUpdated: totalUpdated,
+                totalSkipped: totalSkipped,
+                errorsCount: errors.length
+            },
+            errors: errors.length > 0 ? errors.slice(0, 10) : undefined // Limit errors to first 10
+        };
+        
+        console.log('IIN update completed:', response.statistics);
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Error updating employees IIN:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка обновления ИИН сотрудников: ' + error.message
         });
     }
 });
