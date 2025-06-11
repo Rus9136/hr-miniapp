@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Detection Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #f5f5f5;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        
+        .info-grid {
+            display: grid;
+            gap: 10px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .info-value {
+            color: #333;
+            font-family: monospace;
+        }
+        
+        .platform-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        
+        .platform-web {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .platform-telegram {
+            background: #0088cc;
+            color: white;
+        }
+        
+        .platform-ios {
+            background: #007AFF;
+            color: white;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        
+        .feature-yes {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .feature-no {
+            background: #f44336;
+            color: white;
+        }
+        
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #0051D5;
+        }
+        
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔍 Platform Detection Test</h1>
+        <div id="platformInfo">
+            <p>Loading platform information...</p>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>📱 Device Information</h2>
+        <div id="deviceInfo" class="info-grid"></div>
+    </div>
+    
+    <div class="card">
+        <h2>✨ Platform Features</h2>
+        <div id="featuresInfo" class="features"></div>
+    </div>
+    
+    <div class="card">
+        <h2>🧪 Platform Tests</h2>
+        <button onclick="testAlert()">Test Alert</button>
+        <button onclick="testConfirm()">Test Confirm</button>
+        <button onclick="testHaptic()">Test Haptic</button>
+        <button onclick="testShare()">Test Share</button>
+        <button onclick="testAuth()">Test Auth</button>
+        <div id="testResults" class="test-results" style="display: none;"></div>
+    </div>
+
+    <!-- Load platform detector and adapters -->
+    <script src="platformDetector.js"></script>
+    <script src="adapters/BaseAdapter.js"></script>
+    <script src="adapters/WebAdapter.js"></script>
+    <script src="adapters/TelegramAdapter.js"></script>
+    <script src="adapters/IOSAdapter.js"></script>
+    
+    <!-- Telegram WebApp SDK (if in Telegram) -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script>
+        let adapter = null;
+        
+        async function initializePlatform() {
+            try {
+                // Detect platform
+                const platform = PlatformDetector.detect();
+                const info = PlatformDetector.getInfo();
+                
+                // Display platform info
+                displayPlatformInfo(platform, info);
+                
+                // Create appropriate adapter
+                switch (platform) {
+                    case PlatformDetector.PLATFORMS.TELEGRAM:
+                        adapter = new TelegramAdapter();
+                        break;
+                    case PlatformDetector.PLATFORMS.IOS:
+                        adapter = new IOSAdapter();
+                        break;
+                    default:
+                        adapter = new WebAdapter();
+                }
+                
+                // Initialize adapter
+                await adapter.init();
+                
+                // Display adapter info
+                displayAdapterInfo();
+                
+                console.log('Platform initialized:', adapter.getInfo());
+            } catch (error) {
+                console.error('Initialization error:', error);
+                document.getElementById('platformInfo').innerHTML = 
+                    `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        function displayPlatformInfo(platform, info) {
+            const platformInfo = document.getElementById('platformInfo');
+            platformInfo.innerHTML = `
+                <div class="platform-badge platform-${platform}">
+                    ${platform.toUpperCase()} Platform
+                </div>
+                <div class="info-grid">
+                    <div class="info-row">
+                        <span class="info-label">User Agent:</span>
+                        <span class="info-value">${navigator.userAgent.substring(0, 50)}...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Is iOS:</span>
+                        <span class="info-value">${info.isIOS}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Is Telegram:</span>
+                        <span class="info-value">${info.isTelegram}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Is WebView:</span>
+                        <span class="info-value">${info.isWebView}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Display device info
+            const deviceInfo = document.getElementById('deviceInfo');
+            deviceInfo.innerHTML = `
+                <div class="info-row">
+                    <span class="info-label">Screen Width:</span>
+                    <span class="info-value">${info.screen.width}px</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Screen Height:</span>
+                    <span class="info-value">${info.screen.height}px</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Pixel Ratio:</span>
+                    <span class="info-value">${info.screen.pixelRatio}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Viewport Width:</span>
+                    <span class="info-value">${window.innerWidth}px</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Viewport Height:</span>
+                    <span class="info-value">${window.innerHeight}px</span>
+                </div>
+            `;
+            
+            // Display features
+            displayFeatures(info.features);
+        }
+        
+        function displayFeatures(features) {
+            const featuresInfo = document.getElementById('featuresInfo');
+            featuresInfo.innerHTML = Object.entries(features).map(([key, value]) => {
+                const icon = value ? '✓' : '✗';
+                const className = value ? 'feature-yes' : 'feature-no';
+                const label = key.replace(/([A-Z])/g, ' $1').replace(/^has /, '');
+                
+                return `
+                    <div class="feature">
+                        <div class="feature-icon ${className}">${icon}</div>
+                        <span>${label}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function displayAdapterInfo() {
+            if (!adapter) return;
+            
+            const info = adapter.getInfo();
+            console.log('Adapter info:', info);
+        }
+        
+        // Test functions
+        function showTestResult(result) {
+            const testResults = document.getElementById('testResults');
+            testResults.style.display = 'block';
+            testResults.textContent = result + '\n' + testResults.textContent;
+        }
+        
+        async function testAlert() {
+            showTestResult('Testing alert...');
+            adapter.showAlert('This is a test alert!', () => {
+                showTestResult('Alert closed');
+            });
+        }
+        
+        async function testConfirm() {
+            showTestResult('Testing confirm...');
+            adapter.showConfirm('Do you confirm this test?', (result) => {
+                showTestResult(`Confirm result: ${result}`);
+            });
+        }
+        
+        async function testHaptic() {
+            showTestResult('Testing haptic feedback...');
+            const types = ['light', 'medium', 'heavy', 'success', 'warning', 'error'];
+            for (const type of types) {
+                adapter.hapticFeedback(type);
+                showTestResult(`Haptic: ${type}`);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        async function testShare() {
+            showTestResult('Testing share...');
+            const result = await adapter.share({
+                title: 'Platform Detection Test',
+                text: 'Testing platform detection and adapters',
+                url: window.location.href
+            });
+            showTestResult(`Share result: ${result}`);
+        }
+        
+        async function testAuth() {
+            showTestResult('Testing authentication...');
+            const userData = await adapter.getUserData();
+            const isAuth = await adapter.isAuthenticated();
+            showTestResult(`User data: ${JSON.stringify(userData, null, 2)}`);
+            showTestResult(`Is authenticated: ${isAuth}`);
+        }
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', initializePlatform);
+    </script>
+</body>
+</html>
