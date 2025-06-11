@@ -1,4 +1,4 @@
-console.log('🚀 HR Mini App v8.0 - iOS WebView Support - CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App v8.6 - CONFLICT RESOLVED - CRITICAL CACHE BUST: ' + new Date().getTime());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -10,8 +10,34 @@ window.API_BASE_URL = API_BASE_URL; // Export for admin.js
 let platformAdapter = null;
 let currentPlatform = null;
 
-// State management
-let currentEmployee = null;
+// State management with logging
+let _currentEmployee = null;
+Object.defineProperty(window, 'currentEmployee', {
+    get() {
+        return _currentEmployee;
+    },
+    set(value) {
+        console.log('🔄 currentEmployee changed:', {
+            from: _currentEmployee ? _currentEmployee.fullName : 'null',
+            to: value ? value.fullName : 'null',
+            stack: new Error().stack.split('\n')[2]
+        });
+        
+        // CRITICAL: Prevent unauthorized resets
+        if (_currentEmployee && !value) {
+            console.warn('🚨 WARNING: Attempting to reset authenticated user to null!');
+            console.warn('🚨 Stack trace:', new Error().stack);
+            
+            // For now, prevent the reset (can be removed after debugging)
+            // return;
+        }
+        
+        _currentEmployee = value;
+    }
+});
+
+// Initialize
+window.currentEmployee = null;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let calendarData = [];
@@ -77,6 +103,36 @@ async function initializePlatform() {
 
 // Navigation functions for Telegram
 function showScreen(screenName, screenElement) {
+    console.log(`🔄 showScreen called: ${screenName} (current: ${currentScreen})`);
+    
+    // КРИТИЧЕСКАЯ ОТЛАДКА: Логируем переходы на menu
+    if (screenName === 'menu' && currentScreen.name !== 'login') {
+        console.warn('🔄 WARNING: Unexpected return to menu from:', currentScreen.name);
+        console.warn('🔍 Stack trace:', new Error().stack);
+    }
+    
+    // КРИТИЧЕСКАЯ ОТЛАДКА: Блокируем нежелательные переходы из admin
+    if (currentScreen.name === 'admin' && screenName === 'login') {
+        console.error('🚨 CRITICAL: Attempted to redirect admin to login! BLOCKED!');
+        console.error('🚨 Stack trace:', new Error().stack);
+        return; // БЛОКИРУЕМ переход
+    }
+    
+    // CRITICAL: Prevent unauthorized access to protected screens (ИСКЛЮЧАЯ admin)
+    if ((screenName === 'menu' || screenName === 'main' || screenName === 'news' || 
+         screenName === 'salary' || screenName === 'vacation' || screenName === 'hr' || 
+         screenName === 'settings' || screenName === 'departmentStats') && !window.currentEmployee) {
+        console.log(`❌ BLOCKED: Attempted to access ${screenName} without authentication`);
+        console.log('🔒 Redirecting to login screen');
+        console.log('🔍 Debug info:', {
+            screenName,
+            currentEmployee: !!window.currentEmployee,
+            currentEmployeeData: window.currentEmployee ? window.currentEmployee.fullName : 'null'
+        });
+        screenName = 'login';
+        screenElement = loginScreen;
+    }
+    
     // Hide all screens
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
@@ -242,13 +298,17 @@ async function tryTelegramAuth() {
         
         if (result.success && result.isLinked) {
             // Auto-login successful
-            currentEmployee = result.employee;
-            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-            document.getElementById('employeeName').textContent = currentEmployee.fullName;
+            window.currentEmployee = result.employee;
+            console.log('✅ Telegram auto-login successful:', window.currentEmployee.fullName);
+            
+            // IMPORTANT: Initialize navigation AFTER successful authentication
+            initializeNavigation();
+            
+            document.getElementById('menuEmployeeName').textContent = window.currentEmployee.fullName;
+            document.getElementById('employeeName').textContent = window.currentEmployee.fullName;
             
             showScreen('menu', menuScreen);
             
-            console.log('Telegram auto-login successful:', currentEmployee.fullName);
             return true;
         } else if (result.success === false && !result.isLinked) {
             // Account not linked - show linking form
@@ -332,17 +392,22 @@ async function linkTelegramAccount(telegramUser) {
         
         if (result.success) {
             // Linking successful - auto login
-            currentEmployee = result.employee;
-            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-            document.getElementById('employeeName').textContent = currentEmployee.fullName;
+            window.currentEmployee = result.employee;
+            console.log('✅ Telegram account linked and logged in:', window.currentEmployee.fullName);
+            
+            // IMPORTANT: Initialize navigation AFTER successful authentication
+            initializeNavigation();
+            
+            document.getElementById('menuEmployeeName').textContent = window.currentEmployee.fullName;
+            document.getElementById('employeeName').textContent = window.currentEmployee.fullName;
             
             showScreen('menu', menuScreen);
             
             if (window.tgApp) {
-                window.tgApp.showAlert(`Аккаунт успешно привязан! Добро пожаловать, ${currentEmployee.fullName}`);
+                window.tgApp.showAlert(`Аккаунт успешно привязан! Добро пожаловать, ${window.currentEmployee.fullName}`);
             }
             
-            console.log('Account linked and logged in:', currentEmployee.fullName);
+            console.log('Account linked and logged in:', window.currentEmployee.fullName);
         } else {
             const errorMsg = result.error || 'Ошибка привязки аккаунта';
             console.error('Linking failed:', errorMsg);
@@ -416,10 +481,19 @@ function hideLoginError() {
 async function handleRegularLogin(e) {
     e.preventDefault();
     
+    console.log('🔐 handleRegularLogin called');
+    
     // Hide any previous error
     hideLoginError();
     
     const iinValue = document.getElementById('employeeId').value;
+    
+    // CRITICAL: Validate input before processing
+    if (!iinValue || iinValue.trim() === '') {
+        console.log('❌ Empty IIN value, blocking login');
+        showLoginError('Введите ИИН');
+        return;
+    }
     
     // Check if it's admin password
     if (iinValue === 'admin12qw') {
@@ -438,13 +512,16 @@ async function handleRegularLogin(e) {
                 return;
             }
             
-            currentEmployee = await response.json();
+            window.currentEmployee = await response.json();
             
             // Prevent admin access in Telegram
             if (isInTelegram) {
                 window.tgApp.showAlert('Админ-панель доступна только в веб-версии приложения');
                 return;
             }
+            
+            // Initialize navigation for admin
+            initializeNavigation();
             
             // Switch to admin panel
             const adminScreen = document.getElementById('adminScreen');
@@ -481,15 +558,20 @@ async function handleRegularLogin(e) {
             return;
         }
         
-        currentEmployee = await response.json();
-        console.log('Current employee:', currentEmployee);
+        window.currentEmployee = await response.json();
+        console.log('✅ Login successful! Current employee:', window.currentEmployee);
+        
+        // IMPORTANT: Initialize navigation AFTER successful authentication
+        initializeNavigation();
         
         // Regular employee - show menu screen
-        document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-        document.getElementById('employeeName').textContent = currentEmployee.fullName;
+        document.getElementById('menuEmployeeName').textContent = window.currentEmployee.fullName;
+        document.getElementById('employeeName').textContent = window.currentEmployee.fullName;
         
         // Switch to menu screen
         showScreen('menu', menuScreen);
+        
+        console.log('✅ Navigation to menu completed');
     } catch (error) {
         console.error('Login error:', error);
         showLoginError('Ошибка подключения к серверу: ' + error.message);
@@ -600,17 +682,20 @@ async function tryIOSAuth() {
         
         if (result.success) {
             console.log('✅ iOS authentication successful');
-            currentEmployee = result.employee;
+            window.currentEmployee = result.employee;
+            
+            // IMPORTANT: Initialize navigation AFTER successful authentication
+            initializeNavigation();
             
             // Update UI
-            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-            document.getElementById('employeeName').textContent = currentEmployee.fullName;
+            document.getElementById('menuEmployeeName').textContent = window.currentEmployee.fullName;
+            document.getElementById('employeeName').textContent = window.currentEmployee.fullName;
             
             // Navigate to menu
             showScreen('menu', menuScreen);
             
             // Show welcome message
-            platformAdapter.showAlert(`Добро пожаловать, ${currentEmployee.fullName}!`);
+            platformAdapter.showAlert(`Добро пожаловать, ${window.currentEmployee.fullName}!`);
             
             return true;
         } else {
@@ -631,9 +716,25 @@ async function tryIOSAuth() {
 
 // Logout functionality for all logout buttons
 function logout() {
-    currentEmployee = null;
-    document.getElementById('employeeId').value = '';
+    console.log('💪 Logout initiated');
+    
+    // Clear user data
+    window.currentEmployee = null;
+    
+    // Remove navigation handlers to prevent unauthorized access
+    document.removeEventListener('click', handleBackNavigation);
+    
+    // Clear form
+    const employeeIdField = document.getElementById('employeeId');
+    if (employeeIdField) {
+        employeeIdField.value = '';
+    }
+    
+    // Show login screen
+    console.log('🚪 LOGOUT: Redirecting to login after logout');
     showScreen('login', loginScreen);
+    
+    console.log('💪 Logout completed');
 }
 
 // Add logout listeners
@@ -717,7 +818,7 @@ async function loadCalendarData() {
     console.log('🔧 Loading calendar data...');
     console.log('🔧 Current employee:', currentEmployee);
     
-    if (!currentEmployee) {
+    if (!window.currentEmployee) {
         console.log('❌ No current employee set');
         showError('Ошибка: пользователь не авторизован');
         return;
@@ -985,7 +1086,7 @@ function showDayDetails(day) {
 
 // Load time events for the last 2 months
 async function loadTimeEvents() {
-    if (!currentEmployee) return;
+    if (!window.currentEmployee) return;
     
     try {
         // Use table_number instead of ID for API calls
@@ -1080,7 +1181,7 @@ function renderTimeEvents() {
 async function loadDepartmentStats() {
     console.log('Loading department statistics...');
     
-    if (!currentEmployee) {
+    if (!window.currentEmployee) {
         console.log('❌ No current employee set');
         showError('Ошибка: пользователь не авторизован');
         return;
@@ -1250,15 +1351,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Export functions to window for compatibility
     window.platformAdapter = platformAdapter;
     window.currentPlatform = currentPlatform;
-    window.handleBackNavigation = () => {
+    // ИСПРАВЛЕНО: Переименовали чтобы не конфликтовать с локальным handleBackNavigation
+    window.handleTelegramBackNavigation = () => {
+        // CRITICAL FIX: Same logic as platform handlers
         if (currentScreen.name === 'departmentStats') {
             showScreen('main', mainScreen);
-        } else if (currentScreen.name === 'main') {
-            showScreen('menu', menuScreen);
-        } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
-                   currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
-                   currentScreen.name === 'vacation') {
-            showScreen('menu', menuScreen);
         } else {
             goBackToPreviousScreen();
         }
@@ -1274,8 +1371,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
     
-    // Re-initialize navigation after DOM is loaded
-    initializeNavigation();
+    // DO NOT initialize navigation yet - wait for authentication
+    // Navigation will be initialized after successful login
     
     // Setup news scroll handler
     setupNewsScroll();
@@ -1285,16 +1382,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const handleBackButton = () => {
             console.log('Platform back button pressed, current:', currentScreen.name, 'previous:', currentScreen.previous);
             
-            // Special handling for specific screen transitions
+            // CRITICAL FIX: Only handle actual back button presses, not automatic navigation
+            // The previous logic was causing automatic returns to menu during normal navigation
+            
+            // For department stats, go to main
             if (currentScreen.name === 'departmentStats') {
                 showScreen('main', mainScreen);
-            } else if (currentScreen.name === 'main') {
-                showScreen('menu', menuScreen);
-            } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
-                       currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
-                       currentScreen.name === 'vacation') {
-                showScreen('menu', menuScreen);
-            } else {
+            } 
+            // For all other screens, go back to previous screen
+            else {
                 goBackToPreviousScreen();
             }
         };
@@ -1311,15 +1407,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.addEventListener('telegram-back-button', () => {
             console.log('Telegram back button pressed, current:', currentScreen.name, 'previous:', currentScreen.previous);
             
-            // Special handling for specific screen transitions
+            // CRITICAL FIX: Same fix as above - only handle actual back button presses
             if (currentScreen.name === 'departmentStats') {
                 showScreen('main', mainScreen);
-            } else if (currentScreen.name === 'main') {
-                showScreen('menu', menuScreen);
-            } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
-                       currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
-                       currentScreen.name === 'vacation') {
-                showScreen('menu', menuScreen);
             } else {
                 goBackToPreviousScreen();
             }
@@ -1329,8 +1419,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup initial login form if it exists
     setupRegularLoginForm();
     
+    // Setup global back navigation handler (once only)
+    document.addEventListener('click', handleBackNavigation);
+    console.log('🔙 Global back navigation handler installed');
+    
     // Initialize the application (Telegram auth or regular login)
     await initApp();
+    
+    // CRITICAL: Ensure we always start on login screen if not authenticated
+    if (!window.currentEmployee) {
+        console.log('🔒 No authenticated user - ensuring login screen is shown');
+        console.log('🚪 INIT: Redirecting to login - no user authenticated');
+        showScreen('login', loginScreen);
+    }
 });
 
 // News functions
@@ -1546,8 +1647,7 @@ async function showFullNews(newsId) {
         const backToNewsList = () => {
             currentNewsId = null;  // Reset currentNewsId when going back
             newsScreen.innerHTML = originalContent;
-            // Reinitialize back navigation for restored content
-            initializeBackNavigation();
+            // ИСПРАВЛЕНО: Убираем дублирующий вызов initializeBackNavigation
             // Reset news state and reload completely to ensure event listeners are reattached
             newsPage = 1;
             newsData = [];
@@ -1603,12 +1703,33 @@ function setupNewsScroll() {
     });
 }
 
-// Initialize navigation handlers
+// Initialize navigation handlers (only after authentication)
 function initializeNavigation() {
+    console.log('🔐 Initializing navigation handlers (user authenticated):', !!currentEmployee);
+    
+    // Only initialize if user is authenticated
+    if (!window.currentEmployee) {
+        console.log('❌ Cannot initialize navigation - user not authenticated');
+        return;
+    }
+    
     // Menu navigation
     document.querySelectorAll('.menu-card').forEach(card => {
-        card.addEventListener('click', async () => {
-            const section = card.dataset.section;
+        // Remove any existing listeners first
+        const newCard = card.cloneNode(true);
+        card.parentNode.replaceChild(newCard, card);
+        
+        newCard.addEventListener('click', async () => {
+            // Double-check authentication before any navigation
+            if (!window.currentEmployee) {
+                console.log('❌ Navigation blocked - user not authenticated');
+                console.log('🚪 MENU: Redirecting to login - user not authenticated');
+                showScreen('login', loginScreen);
+                return;
+            }
+            
+            const section = newCard.dataset.section;
+            console.log('🎯 Menu navigation to:', section);
             
             // Haptic feedback for Telegram
             if (isInTelegram) {
@@ -1622,7 +1743,7 @@ function initializeNavigation() {
                     break;
                 case 'attendance':
                     showScreen('main', mainScreen);
-                    initializeBackNavigation();
+                    // ИСПРАВЛЕНО: Убираем дублирующий вызов initializeBackNavigation
                     await loadCalendarData();
                     break;
                 case 'salary':
@@ -1654,15 +1775,36 @@ function initializeNavigation() {
 function initializeBackNavigation() {
     console.log('🔙 Initializing back navigation for', isInTelegram ? 'Telegram' : 'Web');
     
-    // Remove existing click handlers by using a delegated approach
-    document.removeEventListener('click', handleBackNavigation);
-    document.addEventListener('click', handleBackNavigation);
+    // Only initialize if user is authenticated  
+    if (!window.currentEmployee) {
+        console.log('🔙 Back navigation not initialized - user not authenticated');
+        return;
+    }
+    
+    // CRITICAL FIX: Don't re-attach global click handlers during navigation
+    // This was causing conflicts during async operations
+    console.log('🔙 Back navigation handlers already initialized globally');
 }
 
 // Delegated event handler for back navigation
 function handleBackNavigation(e) {
     const btn = e.target.closest('.btn-back, .breadcrumb-item[data-back]');
-    if (!btn || !btn.dataset.back) return;
+    if (!btn || !btn.dataset.back) return; // ВАЖНО: Возвращаемся если это не back кнопка
+    
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отключаем для админ-панели
+    if (currentScreen.name === 'admin') {
+        console.log('🛡️ Back navigation disabled for admin panel');
+        return;
+    }
+    
+    // Check authentication before allowing back navigation
+    if (!window.currentEmployee) {
+        console.log('❌ Back navigation blocked - user not authenticated');
+        console.log('🚪 BACK: Redirecting to login - user not authenticated');
+        e.preventDefault();
+        showScreen('login', loginScreen);
+        return;
+    }
     
     e.preventDefault();
     const target = btn.dataset.back;
@@ -1673,8 +1815,7 @@ function handleBackNavigation(e) {
         // No need to reinitialize navigation here as it's already delegated
     } else if (target === 'main') {
         showScreen('main', mainScreen);
-        // Reinitialize for the main screen buttons
-        setTimeout(() => initializeBackNavigation(), 100);
+        // ИСПРАВЛЕНО: Убираем дублирующий вызов initializeBackNavigation
     }
 }
 
@@ -1685,7 +1826,7 @@ async function loadSettingsData() {
     }
     
     // Update employee info in settings
-    document.getElementById('linkedEmployee').textContent = currentEmployee.fullName;
+    document.getElementById('linkedEmployee').textContent = window.currentEmployee.fullName;
     document.getElementById('linkedIIN').textContent = currentEmployee.iin || 'Не указан';
     
     // Setup unlink button
@@ -1745,11 +1886,12 @@ async function unlinkTelegramAccount() {
             window.tgApp.showAlert('Аккаунт успешно отвязан! Вы будете перенаправлены на экран входа.');
             
             // Clear current employee data
-            currentEmployee = null;
+            window.currentEmployee = null;
             
             // Redirect to login screen after a short delay
             setTimeout(() => {
                 showRegularLoginForm();
+                console.log('🚪 UNLINK: Redirecting to login after account unlink');
                 showScreen('login', loginScreen);
             }, 2000);
             
