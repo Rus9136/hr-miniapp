@@ -1,14 +1,10 @@
-console.log('🚀 HR Mini App v8.0 - iOS WebView Support - CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App ADMIN-UI-FIXES v7.3 - CACHE BUST: ' + new Date().getTime());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:3030/api' 
     : 'https://madlen.space/api';
 window.API_BASE_URL = API_BASE_URL; // Export for admin.js
-
-// Platform adapter instance
-let platformAdapter = null;
-let currentPlatform = null;
 
 // State management
 let currentEmployee = null;
@@ -22,7 +18,7 @@ let isLoadingNews = false;
 let hasMoreNews = true;
 let currentNewsId = null;
 
-// Legacy platform detection (for backward compatibility)
+// Platform detection
 const isInTelegram = window.tgApp ? window.tgApp.isInTelegram : false;
 const currentScreen = { name: 'login', previous: null };
 
@@ -39,41 +35,6 @@ const hrScreen = document.getElementById('hrScreen');
 const departmentStatsScreen = document.getElementById('departmentStatsScreen');
 const dayModal = document.getElementById('dayModal');
 const statsModal = document.getElementById('statsModal');
-
-// Platform initialization
-async function initializePlatform() {
-    try {
-        // Detect platform
-        if (typeof PlatformDetector !== 'undefined') {
-            currentPlatform = PlatformDetector.detect();
-            console.log(`🔍 Detected platform: ${currentPlatform}`);
-            
-            // Create appropriate adapter
-            switch (currentPlatform) {
-                case PlatformDetector.PLATFORMS.TELEGRAM:
-                    platformAdapter = new TelegramAdapter();
-                    break;
-                case PlatformDetector.PLATFORMS.IOS:
-                    platformAdapter = new IOSAdapter();
-                    break;
-                default:
-                    platformAdapter = new WebAdapter();
-            }
-            
-            // Initialize adapter
-            await platformAdapter.init();
-            console.log('✅ Platform adapter initialized');
-            
-            // Update legacy isInTelegram flag
-            window.isInTelegram = currentPlatform === PlatformDetector.PLATFORMS.TELEGRAM;
-        } else {
-            console.log('⚠️ Platform detector not available, using legacy mode');
-        }
-    } catch (error) {
-        console.error('❌ Platform initialization error:', error);
-        // Fall back to legacy mode
-    }
-}
 
 // Navigation functions for Telegram
 function showScreen(screenName, screenElement) {
@@ -94,42 +55,12 @@ function showScreen(screenName, screenElement) {
     }
     currentScreen.name = screenName;
     
-    // Handle platform-specific navigation
-    if (platformAdapter) {
-        handlePlatformNavigation(screenName);
-    } else if (isInTelegram) {
-        // Legacy Telegram navigation
+    // Handle Telegram navigation
+    if (isInTelegram) {
         handleTelegramNavigation(screenName);
     }
     
     console.log(`Navigated to: ${screenName} (previous: ${currentScreen.previous})`);
-}
-
-function handlePlatformNavigation(screenName) {
-    if (!platformAdapter) return;
-    
-    // Show/hide back button based on screen
-    if (screenName === 'login' || screenName === 'menu') {
-        platformAdapter.hideBackButton();
-    } else {
-        platformAdapter.showBackButton();
-    }
-    
-    // Platform-specific restrictions
-    if (currentPlatform === PlatformDetector.PLATFORMS.TELEGRAM && screenName === 'admin') {
-        platformAdapter.showAlert('Админ-панель доступна только в веб-версии');
-        goBackToPreviousScreen();
-        return;
-    }
-    
-    if (currentPlatform === PlatformDetector.PLATFORMS.IOS && screenName === 'admin') {
-        platformAdapter.showAlert('Админ-панель доступна только в веб-версии');
-        goBackToPreviousScreen();
-        return;
-    }
-    
-    // Haptic feedback on navigation
-    platformAdapter.hapticFeedback('light');
 }
 
 function handleTelegramNavigation(screenName) {
@@ -484,121 +415,35 @@ async function handleRegularLogin(e) {
 
 // Initialize the application
 async function initApp() {
-    // Debug info
+    // Debug info for Telegram
     console.log('App initialization:', {
-        platform: currentPlatform,
         isInTelegram,
-        hasAdapter: !!platformAdapter,
         hasWindow: !!window,
         hasTgApp: !!window.tgApp,
         userAgent: navigator.userAgent,
         location: window.location.href
     });
     
-    // Platform-specific initialization
-    if (platformAdapter && currentPlatform) {
-        console.log(`${currentPlatform} platform detected, trying authentication...`);
-        
-        // Add platform-specific class to body
-        document.body.classList.add(`platform-${currentPlatform}`);
-        
-        // Platform-specific UI adjustments
-        if (currentPlatform === PlatformDetector.PLATFORMS.TELEGRAM || 
-            currentPlatform === PlatformDetector.PLATFORMS.IOS) {
-            // Show settings card for mobile platforms
-            const settingsCard = document.querySelector('.menu-card[data-section="settings"]');
-            if (settingsCard) {
-                settingsCard.style.display = 'flex';
-            }
-        }
-        
-        // Try platform-specific authentication
-        let authSuccess = false;
-        
-        if (currentPlatform === PlatformDetector.PLATFORMS.TELEGRAM) {
-            authSuccess = await tryTelegramAuth();
-        } else if (currentPlatform === PlatformDetector.PLATFORMS.IOS) {
-            authSuccess = await tryIOSAuth();
-        }
-        
-        if (!authSuccess) {
-            console.log('Platform auth failed, showing regular login form');
-            showRegularLoginForm();
-        }
-    } else if (isInTelegram) {
-        // Legacy Telegram mode
-        console.log('Telegram mode detected (legacy), trying authentication...');
+    if (isInTelegram) {
+        console.log('Telegram mode detected, trying authentication...');
+        // Add class to body for Telegram-specific styling
         document.body.classList.add('in-telegram');
+        // Show settings card only in Telegram
         const settingsCard = document.querySelector('.menu-card[data-section="settings"]');
         if (settingsCard) {
             settingsCard.style.display = 'flex';
         }
+        // Try Telegram authentication first
         const authSuccess = await tryTelegramAuth();
         if (!authSuccess) {
             console.log('Telegram auth failed, showing regular login form');
+            // Fallback to regular login if auto-auth fails
             showRegularLoginForm();
         }
     } else {
         console.log('Web browser mode, setting up regular login');
         // Web browser - attach regular login handler
         document.getElementById('loginForm').addEventListener('submit', handleRegularLogin);
-    }
-}
-
-// Try iOS authentication
-async function tryIOSAuth() {
-    console.log('🍎 Attempting iOS authentication...');
-    
-    if (!platformAdapter) {
-        console.log('No iOS adapter available');
-        return false;
-    }
-    
-    try {
-        // Get user data from iOS app
-        const userData = await platformAdapter.getUserData();
-        console.log('iOS user data:', userData);
-        
-        if (!userData || !userData.iin) {
-            console.log('No iOS user data or IIN available');
-            return false;
-        }
-        
-        // Try to authenticate with IIN
-        const response = await fetch(`${API_BASE_URL}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                iin: userData.iin,
-                platform: 'ios',
-                iosToken: userData.token || null
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            console.log('✅ iOS authentication successful');
-            currentEmployee = result.employee;
-            
-            // Update UI
-            document.getElementById('menuEmployeeName').textContent = currentEmployee.fullName;
-            document.getElementById('employeeName').textContent = currentEmployee.fullName;
-            
-            // Navigate to menu
-            showScreen('menu', menuScreen);
-            
-            // Show welcome message
-            platformAdapter.showAlert(`Добро пожаловать, ${currentEmployee.fullName}!`);
-            
-            return true;
-        } else {
-            console.log('iOS authentication failed:', result.error);
-            return false;
-        }
-    } catch (error) {
-        console.error('iOS authentication error:', error);
-        return false;
     }
 }
 
@@ -1223,26 +1068,6 @@ function renderDepartmentStatsTable(data) {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize platform adapter first
-    await initializePlatform();
-    
-    // Export functions to window for compatibility
-    window.platformAdapter = platformAdapter;
-    window.currentPlatform = currentPlatform;
-    window.handleBackNavigation = () => {
-        if (currentScreen.name === 'departmentStats') {
-            showScreen('main', mainScreen);
-        } else if (currentScreen.name === 'main') {
-            showScreen('menu', menuScreen);
-        } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
-                   currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
-                   currentScreen.name === 'vacation') {
-            showScreen('menu', menuScreen);
-        } else {
-            goBackToPreviousScreen();
-        }
-    };
-    
     // Set up all modals to close on outside click
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
@@ -1259,34 +1084,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup news scroll handler
     setupNewsScroll();
     
-    // Setup platform back button handler
-    if (platformAdapter) {
-        const handleBackButton = () => {
-            console.log('Platform back button pressed, current:', currentScreen.name, 'previous:', currentScreen.previous);
-            
-            // Special handling for specific screen transitions
-            if (currentScreen.name === 'departmentStats') {
-                showScreen('main', mainScreen);
-            } else if (currentScreen.name === 'main') {
-                showScreen('menu', menuScreen);
-            } else if (currentScreen.name === 'news' || currentScreen.name === 'hr' || 
-                       currentScreen.name === 'settings' || currentScreen.name === 'salary' || 
-                       currentScreen.name === 'vacation') {
-                showScreen('menu', menuScreen);
-            } else {
-                goBackToPreviousScreen();
-            }
-        };
-        
-        // Set up back button handler for platform
-        platformAdapter.onBackButtonClick(handleBackButton);
-        
-        // Also listen for legacy Telegram event
-        if (isInTelegram) {
-            window.addEventListener('telegram-back-button', handleBackButton);
-        }
-    } else if (isInTelegram) {
-        // Legacy Telegram handler
+    // Setup Telegram back button handler
+    if (isInTelegram) {
         window.addEventListener('telegram-back-button', () => {
             console.log('Telegram back button pressed, current:', currentScreen.name, 'previous:', currentScreen.previous);
             
