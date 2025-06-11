@@ -214,16 +214,20 @@ if (isInTelegram) {
 
 // Telegram automatic authentication
 async function tryTelegramAuth() {
-    if (!isInTelegram || !window.tgApp) return false;
+    // Strict check - only for real Telegram environment
+    if (!isInTelegram || !window.tgApp) {
+        console.log('🔍 Not in Telegram environment, skipping Telegram auth');
+        return false;
+    }
     
     try {
-        console.log('Attempting Telegram authentication...');
+        console.log('🔵 Attempting Telegram authentication...');
         let initData = window.tgApp.getInitData();
         
-        // Fallback to dev mode if no initData (for testing)
+        // Don't use dev mode fallback in production-like environment
         if (!initData || initData.trim() === '') {
-            console.log('No Telegram initData available, using dev mode for testing');
-            initData = 'dev_mode';
+            console.log('❌ No Telegram initData available, cannot authenticate');
+            return false;
         }
         
         console.log('Using initData:', initData.substring(0, 50) + '...');
@@ -359,6 +363,16 @@ async function linkTelegramAccount(telegramUser) {
     }
 }
 
+// Setup regular login form handler (avoid duplicate listeners)
+function setupRegularLoginForm() {
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm && !loginForm.hasAttribute('data-handler-attached')) {
+        console.log('🔧 Setting up regular login form handler');
+        loginForm.addEventListener('submit', handleRegularLogin);
+        loginForm.setAttribute('data-handler-attached', 'true');
+    }
+}
+
 // Show regular login form
 function showRegularLoginForm() {
     const loginContent = document.querySelector('.login-content');
@@ -378,7 +392,7 @@ function showRegularLoginForm() {
     `;
     
     // Re-attach login handler
-    document.getElementById('loginForm').addEventListener('submit', handleRegularLogin);
+    setupRegularLoginForm();
 }
 
 // Show login error message
@@ -485,13 +499,13 @@ async function handleRegularLogin(e) {
 // Initialize the application
 async function initApp() {
     // Debug info
-    console.log('App initialization:', {
+    console.log('🚀 App initialization:', {
         platform: currentPlatform,
         isInTelegram,
         hasAdapter: !!platformAdapter,
         hasWindow: !!window,
         hasTgApp: !!window.tgApp,
-        userAgent: navigator.userAgent,
+        userAgent: navigator.userAgent.substring(0, 100),
         location: window.location.href
     });
     
@@ -512,16 +526,23 @@ async function initApp() {
             }
         }
         
-        // Try platform-specific authentication
+        // Try platform-specific authentication  
         let authSuccess = false;
         
         if (currentPlatform === PlatformDetector.PLATFORMS.TELEGRAM) {
+            console.log('🔵 Trying Telegram authentication...');
             authSuccess = await tryTelegramAuth();
         } else if (currentPlatform === PlatformDetector.PLATFORMS.IOS) {
+            console.log('🍎 Trying iOS authentication...');
             authSuccess = await tryIOSAuth();
+        } else {
+            console.log('🌐 Web platform - setting up manual login');
+            // For web platform, just setup the login form (if not already done)
+            setupRegularLoginForm();
+            authSuccess = false; // Don't auto-login for web
         }
         
-        if (!authSuccess) {
+        if (!authSuccess && currentPlatform !== PlatformDetector.PLATFORMS.WEB) {
             console.log('Platform auth failed, showing regular login form');
             showRegularLoginForm();
         }
@@ -541,7 +562,7 @@ async function initApp() {
     } else {
         console.log('Web browser mode, setting up regular login');
         // Web browser - attach regular login handler
-        document.getElementById('loginForm').addEventListener('submit', handleRegularLogin);
+        setupRegularLoginForm();
     }
 }
 
@@ -1304,6 +1325,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+    
+    // Setup initial login form if it exists
+    setupRegularLoginForm();
     
     // Initialize the application (Telegram auth or regular login)
     await initApp();
