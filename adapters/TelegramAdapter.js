@@ -59,8 +59,8 @@ class TelegramAdapter extends BaseAdapter {
     initBackButton() {
         this.tg.BackButton.onClick(() => {
             // Trigger custom back navigation
-            if (window.handleBackNavigation) {
-                window.handleBackNavigation();
+            if (window.handleTelegramBackNavigation) {
+                window.handleTelegramBackNavigation();
             }
         });
     }
