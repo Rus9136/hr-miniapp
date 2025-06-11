@@ -224,7 +224,7 @@ async function loadTimesheetWithProgress(loadingId, params) {
         });
         
         // Загрузка событий из внешнего API с прогрессом
-        const events = await apiSync.loadTimeEventsWithProgress(params, updateProgress);
+        const totalEvents = await apiSync.loadTimeEventsWithProgress(params, updateProgress);
 
         updateProgress({
             status: 'processing',
@@ -232,12 +232,12 @@ async function loadTimesheetWithProgress(loadingId, params) {
         });
 
         // Обработка и сохранение событий
-        const processed = await apiSync.processTimeRecords(events);
+        const processed = await apiSync.processTimeRecords();
         
         updateProgress({
             status: 'completed',
-            message: `Загрузка завершена! Загружено ${events.length} событий, обработано ${processed} записей`,
-            eventsLoaded: events.length,
+            message: `Загрузка завершена! Загружено ${totalEvents} событий, обработано ${processed} записей`,
+            eventsLoaded: totalEvents,
             recordsProcessed: processed,
             endTime: new Date()
         });

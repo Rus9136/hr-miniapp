@@ -188,7 +188,20 @@ async function createTestTimeEvents() {
   await processTimeRecords();
 }
 
-async function processTimeRecords() {
+async function processTimeRecords(employeeNumber = null) {
+  // Если указан конкретный сотрудник, обрабатываем только его
+  // Иначе обрабатываем всех сотрудников с недавними событиями
+  let whereClause = '';
+  const params = [];
+  
+  if (employeeNumber) {
+    whereClause = 'WHERE employee_number = $1';
+    params.push(employeeNumber);
+  } else {
+    // Обрабатываем события за последние 90 дней
+    whereClause = `WHERE event_datetime >= CURRENT_DATE - INTERVAL '90 days'`;
+  }
+  
   const events = await db.queryRows(`
     SELECT 
       employee_number,
@@ -196,9 +209,9 @@ async function processTimeRecords() {
       MIN(CASE WHEN event_type = '1' THEN event_datetime END) as check_in,
       MAX(CASE WHEN event_type = '2' THEN event_datetime END) as check_out
     FROM time_events
-    WHERE employee_number = 'АП00-00358'
+    ${whereClause}
     GROUP BY employee_number, DATE(event_datetime)
-  `);
+  `, params);
 
   for (const record of events) {
     let hours_worked = null;
@@ -245,6 +258,9 @@ async function processTimeRecords() {
       status
     ]);
   }
+  
+  console.log(`Обработано ${events.length} записей времени`);
+  return events.length;
 }
 
 async function syncEmployeeEvents(employeeNumber, dateFrom, dateTo, objectBin) {
@@ -344,7 +360,7 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       
       progressCallback({
         message: `Загружено ${events.length} событий для сотрудника ${tableNumber}`,
-        eventsLoaded: events.length,
+        eventsLoaded: totalEventsProcessed,
         processedEmployees: 1
       });
       
@@ -388,7 +404,6 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       });
       
       let processedCount = 0;
-      let totalEvents = 0;
       
       // Загружаем события для каждого подразделения
       for (const [deptName, deptEmployees] of Object.entries(employeesByDept)) {
@@ -396,7 +411,7 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
           message: `Загружается подразделение "${deptName}" - ${deptEmployees.length} сотрудников`,
           currentDepartment: deptName,
           processedEmployees: processedCount,
-          eventsLoaded: totalEvents
+          eventsLoaded: totalEventsProcessed
         });
         
         for (const emp of deptEmployees) {
@@ -424,7 +439,6 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
               // Save events in batches immediately
               await saveTimeEvents(eventsWithTableNumber);
               totalEventsProcessed += events.length;
-              totalEvents += events.length;
               
               // Clear the events from memory after saving
               eventsWithTableNumber.length = 0;
@@ -451,9 +465,9 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
       }
       
       progressCallback({
-        message: `Загрузка завершена. Всего ${totalEvents} событий от ${processedCount} сотрудников`,
+        message: `Загрузка завершена. Всего ${totalEventsProcessed} событий от ${processedCount} сотрудников`,
         processedEmployees: processedCount,
-        eventsLoaded: totalEvents
+        eventsLoaded: totalEventsProcessed
       });
     }
     

@@ -702,7 +702,7 @@ async function handleTimesheetUpload(e) {
 
 // Poll for loading progress
 async function pollLoadingProgress(loadingId, statusDiv) {
-    const maxPolls = 300; // 5 minutes max (300 * 1 second)
+    const maxPolls = 1800; // 30 minutes max (1800 * 1 second)
     let pollCount = 0;
     
     const poll = async () => {
