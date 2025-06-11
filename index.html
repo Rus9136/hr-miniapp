@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="style.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
     <link rel="stylesheet" href="admin.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
     <link rel="stylesheet" href="telegram.css?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915">
+    <link rel="stylesheet" href="styles/ios-styles.css?v=ios-webview-v8.0&ts=20250111&nocache=1749420915">
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -1040,8 +1041,16 @@
     </div>
 
 
+    <!-- Platform detection and adapters -->
+    <script src="platformDetector.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915"></script>
+    <script src="adapters/BaseAdapter.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915"></script>
+    <script src="adapters/WebAdapter.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915"></script>
+    <script src="adapters/TelegramAdapter.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915"></script>
+    <script src="adapters/IOSAdapter.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915"></script>
+    
+    <!-- Application scripts -->
     <script src="telegram.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915"></script>
-    <script src="app.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915&bust=true"></script>
+    <script src="app.js?v=ios-webview-v8.0&ts=20250111&nocache=1749420915&bust=true"></script>
     <script src="admin.js?v=admin-ui-fixes-v7.3&ts=20250608-2015&nocache=1749420915"></script>
 </body>
 </html>

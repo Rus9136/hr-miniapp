@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS WebView Integration Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .test-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .test-results {
+            background: #f1f3f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #0051D5;
+        }
+        
+        .log {
+            color: #666;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 iOS WebView Integration Test</h1>
+    
+    <div class="test-card">
+        <h3>📦 Scripts Loading</h3>
+        <div id="scriptsStatus" class="status pending">Checking...</div>
+        <div class="log" id="scriptsLog">Testing script loading...</div>
+    </div>
+    
+    <div class="test-card">
+        <h3>🔍 Platform Detection</h3>
+        <div id="platformStatus" class="status pending">Detecting...</div>
+        <div class="log" id="platformLog">Detecting current platform...</div>
+    </div>
+    
+    <div class="test-card">
+        <h3>🔧 Adapter Initialization</h3>
+        <div id="adapterStatus" class="status pending">Initializing...</div>
+        <div class="log" id="adapterLog">Creating and initializing adapter...</div>
+    </div>
+    
+    <div class="test-card">
+        <h3>⚡ Main App Integration</h3>
+        <div id="integrationStatus" class="status pending">Testing...</div>
+        <div class="log" id="integrationLog">Testing main app integration...</div>
+    </div>
+    
+    <div class="test-card">
+        <h3>🧪 Manual Tests</h3>
+        <button onclick="testPlatformFeatures()">Test Platform Features</button>
+        <button onclick="testNavigation()">Test Navigation</button>
+        <button onclick="testAuthentication()">Test Authentication</button>
+        <button onclick="loadMainApp()">Load Main App</button>
+        
+        <div class="test-results" id="manualResults">Manual test results will appear here...</div>
+    </div>
+    
+    <!-- Platform detection and adapters -->
+    <script src="platformDetector.js"></script>
+    <script src="adapters/BaseAdapter.js"></script>
+    <script src="adapters/WebAdapter.js"></script>
+    <script src="adapters/TelegramAdapter.js"></script>
+    <script src="adapters/IOSAdapter.js"></script>
+    
+    <!-- Telegram WebApp SDK (for compatibility) -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script>
+        let testAdapter = null;
+        let testResults = '';
+        
+        function updateStatus(elementId, status, message) {
+            const element = document.getElementById(elementId);
+            element.className = `status ${status}`;
+            element.textContent = status === 'success' ? '✅ Success' : 
+                                 status === 'error' ? '❌ Error' : '⏳ Pending';
+            
+            const logElement = document.getElementById(elementId.replace('Status', 'Log'));
+            if (logElement) {
+                logElement.textContent = message;
+            }
+        }
+        
+        function addTestResult(message) {
+            testResults = message + '\n' + testResults;
+            const resultsElement = document.getElementById('manualResults');
+            if (resultsElement) {
+                resultsElement.textContent = testResults;
+            }
+        }
+        
+        async function runTests() {
+            // Test 1: Script Loading
+            try {
+                const scriptsOk = !!(
+                    typeof PlatformDetector !== 'undefined' &&
+                    typeof BaseAdapter !== 'undefined' &&
+                    typeof WebAdapter !== 'undefined' &&
+                    typeof TelegramAdapter !== 'undefined' &&
+                    typeof IOSAdapter !== 'undefined'
+                );
+                
+                if (scriptsOk) {
+                    updateStatus('scriptsStatus', 'success', 'All platform scripts loaded successfully');
+                } else {
+                    updateStatus('scriptsStatus', 'error', 'Some platform scripts failed to load');
+                    return;
+                }
+            } catch (e) {
+                updateStatus('scriptsStatus', 'error', `Script loading error: ${e.message}`);
+                return;
+            }
+            
+            // Test 2: Platform Detection
+            try {
+                const platform = PlatformDetector.detect();
+                const info = PlatformDetector.getInfo();
+                updateStatus('platformStatus', 'success', `Detected: ${platform} | Features: ${Object.keys(info.features).length}`);
+            } catch (e) {
+                updateStatus('platformStatus', 'error', `Platform detection error: ${e.message}`);
+                return;
+            }
+            
+            // Test 3: Adapter Initialization
+            try {
+                const platform = PlatformDetector.detect();
+                
+                switch (platform) {
+                    case PlatformDetector.PLATFORMS.TELEGRAM:
+                        testAdapter = new TelegramAdapter();
+                        break;
+                    case PlatformDetector.PLATFORMS.IOS:
+                        testAdapter = new IOSAdapter();
+                        break;
+                    default:
+                        testAdapter = new WebAdapter();
+                }
+                
+                await testAdapter.init();
+                updateStatus('adapterStatus', 'success', `${platform} adapter initialized successfully`);
+            } catch (e) {
+                updateStatus('adapterStatus', 'error', `Adapter initialization error: ${e.message}`);
+                return;
+            }
+            
+            // Test 4: Integration
+            try {
+                const adapterInfo = testAdapter.getInfo();
+                const hasRequiredMethods = !!(
+                    testAdapter.showAlert &&
+                    testAdapter.hapticFeedback &&
+                    testAdapter.showBackButton &&
+                    testAdapter.hideBackButton
+                );
+                
+                if (hasRequiredMethods) {
+                    updateStatus('integrationStatus', 'success', 
+                        `Integration OK | Platform: ${adapterInfo.platform} | Features: ${Object.keys(adapterInfo.features).length}`);
+                } else {
+                    updateStatus('integrationStatus', 'error', 'Missing required adapter methods');
+                }
+            } catch (e) {
+                updateStatus('integrationStatus', 'error', `Integration test error: ${e.message}`);
+            }
+        }
+        
+        async function testPlatformFeatures() {
+            if (!testAdapter) {
+                addTestResult('❌ No adapter initialized');
+                return;
+            }
+            
+            addTestResult('🧪 Testing platform features...');
+            
+            // Test haptic feedback
+            try {
+                testAdapter.hapticFeedback('light');
+                addTestResult('✅ Haptic feedback test completed');
+            } catch (e) {
+                addTestResult(`❌ Haptic feedback error: ${e.message}`);
+            }
+            
+            // Test features
+            const features = testAdapter.getInfo().features;
+            addTestResult(`📊 Platform features: ${JSON.stringify(features, null, 2)}`);
+        }
+        
+        async function testNavigation() {
+            if (!testAdapter) {
+                addTestResult('❌ No adapter initialized');
+                return;
+            }
+            
+            addTestResult('🧪 Testing navigation...');
+            
+            try {
+                testAdapter.showBackButton();
+                addTestResult('✅ Show back button');
+                
+                setTimeout(() => {
+                    testAdapter.hideBackButton();
+                    addTestResult('✅ Hide back button');
+                }, 1000);
+            } catch (e) {
+                addTestResult(`❌ Navigation error: ${e.message}`);
+            }
+        }
+        
+        async function testAuthentication() {
+            if (!testAdapter) {
+                addTestResult('❌ No adapter initialized');
+                return;
+            }
+            
+            addTestResult('🧪 Testing authentication...');
+            
+            try {
+                const userData = await testAdapter.getUserData();
+                const isAuth = await testAdapter.isAuthenticated();
+                
+                addTestResult(`📱 User data: ${JSON.stringify(userData)}`);
+                addTestResult(`🔐 Is authenticated: ${isAuth}`);
+            } catch (e) {
+                addTestResult(`❌ Authentication error: ${e.message}`);
+            }
+        }
+        
+        function loadMainApp() {
+            addTestResult('🚀 Loading main application...');
+            window.location.href = 'index.html';
+        }
+        
+        // Run tests on page load
+        window.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>
