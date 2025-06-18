@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Debug Auth - HR App</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .debug-section {
+            background: #333;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border: 1px solid #555;
+        }
+        h1, h2 { color: #00ffff; }
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-family: monospace;
+        }
+        .button:hover { background: #45a049; }
+        .button.admin { background: #ff9800; }
+        .button.user { background: #2196F3; }
+        .log {
+            background: #000;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 12px;
+            border: 1px solid #444;
+        }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa44; }
+        .success { color: #44ff44; }
+        .info { color: #4444ff; }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Auth Issues - HR App</h1>
+    
+    <div class="debug-section">
+        <h2>🎯 Test Scenarios</h2>
+        <button class="button admin" onclick="testAdmin()">🔑 Test Admin (admin12qw)</button>
+        <button class="button user" onclick="testUser()">👤 Test User (951026301058)</button>
+        <button class="button" onclick="clearConsole()">🧹 Clear Console</button>
+        <button class="button" onclick="startLogging()">📋 Start Debug Logging</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>📊 Current Status</h2>
+        <div id="status" class="log">Checking...</div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>🔍 Expected Debug Output</h2>
+        <div class="log">
+<span class="success">✅ Normal Flow:</span>
+🔄 currentEmployee changed: { from: 'null', to: 'Admin User' }
+🔐 Initializing navigation handlers (user authenticated): true
+Navigated to: admin (previous: login)
+
+<span class="error">❌ Problem Flow:</span>
+🔄 currentEmployee changed: { from: 'Admin User', to: 'null' }
+🚨 WARNING: Attempting to reset authenticated user to null!
+❌ BLOCKED: Attempted to access admin without authentication
+🔒 Redirecting to login screen
+
+<span class="warning">⚠️ What to Look For:</span>
+- When exactly currentEmployee becomes null
+- What function/event causes the reset
+- Stack trace in the warning messages
+        </div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>🖼️ Live Test Environment</h2>
+        <iframe id="testFrame" src="https://localhost/" title="HR App Test"></iframe>
+    </div>
+    
+    <div class="debug-section">
+        <h2>📋 Console Output (Live)</h2>
+        <div id="consoleOutput" class="log">Waiting for console logs...</div>
+    </div>
+    
+    <script>
+        let originalConsole = {};
+        let isLogging = false;
+        
+        function startLogging() {
+            if (isLogging) return;
+            isLogging = true;
+            
+            const outputDiv = document.getElementById('consoleOutput');
+            
+            // Store original console methods
+            originalConsole.log = console.log;
+            originalConsole.warn = console.warn;
+            originalConsole.error = console.error;
+            
+            // Override console methods
+            console.log = function(...args) {
+                originalConsole.log.apply(console, args);
+                logToDiv('info', args.join(' '));
+            };
+            
+            console.warn = function(...args) {
+                originalConsole.warn.apply(console, args);
+                logToDiv('warning', args.join(' '));
+            };
+            
+            console.error = function(...args) {
+                originalConsole.error.apply(console, args);
+                logToDiv('error', args.join(' '));
+            };
+            
+            function logToDiv(type, message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const div = document.getElementById('consoleOutput');
+                div.innerHTML += `<span class="${type}">[${timestamp}] ${message}</span>\n`;
+                div.scrollTop = div.scrollHeight;
+            }
+            
+            outputDiv.innerHTML = '<span class="success">🎧 Console logging started...</span>\n';
+        }
+        
+        function clearConsole() {
+            document.getElementById('consoleOutput').innerHTML = 'Console cleared.\n';
+        }
+        
+        async function checkStatus() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                const health = await fetch('https://localhost/api/health');
+                const healthData = await health.json();
+                
+                statusDiv.innerHTML = `
+<span class="success">✅ Production Status: OK</span>
+API Health: ${healthData.status}
+Timestamp: ${healthData.timestamp}
+URL: https://localhost/
+
+<span class="info">🔍 Debug Features Active:</span>
+- Enhanced currentEmployee logging
+- Stack trace on unauthorized resets
+- Detailed showScreen protection logs
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `<span class="error">❌ Production Error: ${error.message}</span>`;
+            }
+        }
+        
+        function testAdmin() {
+            const frame = document.getElementById('testFrame');
+            frame.src = 'https://localhost/';
+            
+            setTimeout(() => {
+                alert(`
+🔑 ADMIN TEST INSTRUCTIONS:
+
+1. Wait for the app to load in the iframe below
+2. Enter: admin12qw
+3. Click "Войти"
+4. Try clicking different menu items in admin panel
+5. Watch console output above for debug messages
+
+EXPECTED: Should work without redirecting to login
+PROBLEM: Gets redirected after clicking menu items
+                `);
+            }, 1000);
+        }
+        
+        function testUser() {
+            const frame = document.getElementById('testFrame');
+            frame.src = 'https://localhost/';
+            
+            setTimeout(() => {
+                alert(`
+👤 USER TEST INSTRUCTIONS:
+
+1. Wait for the app to load in the iframe below
+2. Enter: 951026301058
+3. Click "Войти"
+4. Try clicking menu items (news, attendance, etc.)
+5. Watch console output above for debug messages
+
+EXPECTED: Menu items should be clickable
+PROBLEM: Menu items don't respond to clicks
+                `);
+            }, 1000);
+        }
+        
+        // Auto-check status on load
+        checkStatus();
+        
+        // Auto-start logging
+        setTimeout(startLogging, 1000);
+        
+        // Listen for messages from iframe
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'console') {
+                const outputDiv = document.getElementById('consoleOutput');
+                outputDiv.innerHTML += `<span class="info">[IFRAME] ${event.data.message}</span>\n`;
+                outputDiv.scrollTop = outputDiv.scrollHeight;
+            }
+        });
+    </script>
+</body>
+</html>

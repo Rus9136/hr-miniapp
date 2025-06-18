@@ -1,0 +1,116 @@
+# HR-Miniapp Cleanup List - 92 files to delete
+# Generated on 2025-06-18
+# SAFE TO DELETE - These files are not required for application functionality
+
+## SESSION LOGS (37 files)
+SESSION_LOG_2025-05-30_1430.md
+SESSION_LOG_2025-06-01_1345.md
+SESSION_LOG_2025-06-02_1044.md
+SESSION_LOG_2025-06-02_1502.md
+SESSION_LOG_2025-06-02_2048.md
+SESSION_LOG_2025-06-02_2120.md
+SESSION_LOG_2025-06-03_0515.md
+SESSION_LOG_2025-06-03_0612.md
+SESSION_LOG_2025-06-03_0628.md
+SESSION_LOG_2025-06-03_1432.md
+SESSION_LOG_2025-06-03_1500.md
+SESSION_LOG_2025-06-03_1600.md
+SESSION_LOG_2025-06-03_1744.md
+SESSION_LOG_2025-06-03_1800.md
+SESSION_LOG_2025-06-03_2240.md
+SESSION_LOG_2025-06-04_0830.md
+SESSION_LOG_2025-06-04_1021.md
+SESSION_LOG_2025-06-04_1040.md
+SESSION_LOG_2025-06-04_1615.md
+SESSION_LOG_2025-06-04_1700.md
+SESSION_LOG_2025-06-04_1830.md
+SESSION_LOG_2025-06-04_2121.md
+SESSION_LOG_2025-06-05_0639.md
+SESSION_LOG_2025-06-05_1045.md
+SESSION_LOG_2025-06-05_1245.md
+SESSION_LOG_2025-06-05_1320.md
+SESSION_LOG_2025-06-05_1350.md
+SESSION_LOG_2025-06-05_1715.md
+SESSION_LOG_2025-06-05_1950.md
+SESSION_LOG_2025-06-08_0830.md
+SESSION_LOG_2025-06-08_1321.md
+SESSION_LOG_2025-06-08_IIN_AUTH.md
+SESSION_LOG_2025-06-09_0910.md
+SESSION_LOG_2025-06-11_1416.md
+SESSION_LOG_2025-06-11_1620.md
+SESSION_LOG_2025-06-11_1740.md
+SESSION_LOG_20250530_221027.md
+
+## TEST HTML FILES (18 files)
+test.html
+test_5_field_modal.html
+test_calendar_issues_fixed.html
+test_dark_theme.html
+test_modal_dark.html
+test_modal_fixed.html
+test_stats_modal.html
+test_status_colors.html
+test_table_dark.html
+test_unified_table.html
+test_unified_modal.html
+test_new_calendar_logic.html
+test_clear_buttons.html
+test_auth_fix.html
+test_final_auth_fix.html
+test_navigation_fix.html
+test_production_auth.html
+quick_test.html
+
+## TEST JS FILES (11 files)
+test_simple.js
+test_simple_approach.js
+test_new_approach.js
+test_navigation.js
+test_1c_import.js
+test_api_request.js
+test_frontend.js
+test_telegram_link.js
+test_telegram_api.js
+test_external_api.js
+test_bulk_load.js
+
+## LOG FILES (14 files)
+frontend.log
+frontend_new.log
+frontend_test.log
+frontend_auth_fix.log
+server.log
+server_test.log
+server_debug.log
+server_final.log
+server_1c_test.log
+server_dev.log
+server_fixed.log
+server_new.log
+server_new_debug.log
+server_auth_fix.log
+
+## TEMPORARY MD DOCUMENTATION (7 files)
+ADMIN_TEST.md
+ADMIN_FIX_LOG.md
+STATUS_COLOR_FIX.md
+STATS_MODAL_FIX.md
+NIGHT_SHIFT_ANALYSIS_REPORT.md
+SCHEDULE_ASSIGNMENT_PLAN.md
+TELEGRAM_AUTH_ANALYSIS.md
+
+## BACKUP/TEMPORARY FILES (5 files)
+app.js.backup
+app-fixed-v3.js
+app-ultimate-fix.js
+app_v2.js
+=
+
+# IMPORTANT FILES TO KEEP:
+# - app.js, index.html, style.css (core application)
+# - admin.js, telegram.js (core functionality)
+# - All files in backend/, adapters/, migrations/, styles/
+# - README.md, CLAUDE.md, PROJECT_STATE.md, DEPLOYMENT.md
+# - package.json, docker-compose.yml, Dockerfile
+# - All database utility scripts (add_*.js, check_*.js, fix_*.js)
+# - Test utilities: test_debug.html, test_admin.html, test_telegram.html
