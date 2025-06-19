@@ -26,7 +26,7 @@ body.telegram-theme .calendar-day--planned,
 .telegram-theme .calendar-day--planned *,
 body.telegram-theme .calendar-day--planned *,
 .calendar-day.calendar-day--planned * {
-  color: #000000 !important;
+  color: #ffffff !important;
 }
 
 .telegram-theme .calendar-day--absent,
@@ -62,12 +62,13 @@ body.telegram-theme .calendar-day--weekend *,
   .calendar-day .day-status,
   .telegram-theme .calendar-day .day-status,
   body.telegram-theme .calendar-day .day-status {
-    font-size: 9px !important; /* УВЕЛИЧИЛИ шрифт для отладки */
+    font-size: 7px !important; /* Уменьшили для лучшего вида */
     line-height: 1.0 !important;
     display: block !important;
     margin-top: 1px !important;
-    background: rgba(255, 255, 255, 0.2) !important; /* Добавили фон для видимости */
-    padding: 1px !important;
+    background: transparent !important; /* Убираем белый фон */
+    padding: 0 !important;
+    font-weight: bold !important; /* Делаем текст жирным для лучшей видимости */
   }
   
   .calendar-day .day-schedule,
@@ -75,6 +76,9 @@ body.telegram-theme .calendar-day--weekend *,
   body.telegram-theme .calendar-day .day-schedule {
     font-size: 6px !important;
     line-height: 1.0 !important;
+    display: block !important; /* Показываем время графика */
+    margin-top: 1px !important;
+    color: rgba(255, 255, 255, 0.8) !important; /* Полупрозрачный текст для времени */
   }
   
   .calendar-day .day-number,
@@ -89,18 +93,21 @@ body.telegram-theme .calendar-day--weekend *,
   .calendar-day .day-status,
   .telegram-theme .calendar-day .day-status,
   body.telegram-theme .calendar-day .day-status {
-    font-size: 8px !important; /* УВЕЛИЧИЛИ шрифт для отладки */
+    font-size: 6px !important; /* Статус текст для маленьких экранов */
     line-height: 1.0 !important;
     display: block !important;
     margin-top: 1px !important;
-    background: rgba(255, 255, 255, 0.3) !important; /* Добавили фон для видимости */
-    padding: 1px !important;
+    background: transparent !important; /* Убираем белый фон */
+    padding: 0 !important;
+    font-weight: bold !important;
   }
   
   .calendar-day .day-schedule,
   .telegram-theme .calendar-day .day-schedule,
   body.telegram-theme .calendar-day .day-schedule {
     font-size: 5px !important;
+    display: block !important; /* Показываем время графика на маленьких экранах */
+    color: rgba(255, 255, 255, 0.7) !important;
   }
   
   .calendar-day .day-number,

@@ -280,41 +280,7 @@ body {
 }
 
 /* Calendar day states */
-.calendar-day--on-time {
-  background-color: #28a745;
-  border: 1px solid #218838;
-  color: white;
-}
 
-.calendar-day--on-time .day-number {
-  color: white;
-}
-
-.calendar-day--on-time .day-status {
-  color: #e8f5e9;
-}
-
-.calendar-day--on-time .day-schedule {
-  color: #c8e6c9;
-}
-
-.calendar-day--late {
-  background-color: #ffc107;
-  border: 1px solid #ffc107;
-  color: #000;
-}
-
-.calendar-day--late .day-number {
-  color: #000;
-}
-
-.calendar-day--late .day-status {
-  color: #333;
-}
-
-.calendar-day--late .day-schedule {
-  color: #444;
-}
 
 .calendar-day--absent {
   background-color: #dc3545;
@@ -352,40 +318,42 @@ body {
   color: #999;
 }
 
-.calendar-day--early-leave {
-  background-color: #ff9800;
-  border: 1px solid #ff9800;
-  color: #000;
+
+
+.calendar-day--planned {
+  background-color: #ffc107;
+  border: 1px solid #ffc107;
+  color: #ffffff;
 }
 
-.calendar-day--early-leave .day-number {
-  color: #000;
+.calendar-day--planned .day-number {
+  color: #ffffff;
 }
 
-.calendar-day--early-leave .day-status {
-  color: #333;
+.calendar-day--planned .day-status {
+  color: #ffffff;
 }
 
-.calendar-day--early-leave .day-schedule {
-  color: #444;
+.calendar-day--planned .day-schedule {
+  color: #ffffff;
 }
 
-.calendar-day--no-exit {
-  background-color: #e91e63;
-  border: 1px solid #e91e63;
+.calendar-day--present {
+  background-color: #28a745;
+  border: 1px solid #28a745;
   color: white;
 }
 
-.calendar-day--no-exit .day-number {
+.calendar-day--present .day-number {
   color: white;
 }
 
-.calendar-day--no-exit .day-status {
-  color: #fce4ec;
+.calendar-day--present .day-status {
+  color: #ffffff;
 }
 
-.calendar-day--no-exit .day-schedule {
-  color: #f8bbd0;
+.calendar-day--present .day-schedule {
+  color: #ffffff;
 }
 
 /* Legend */
@@ -413,16 +381,6 @@ body {
   border-radius: 4px;
 }
 
-.legend-color--on-time {
-  background-color: #28a745;
-  border: 1px solid #218838;
-}
-
-.legend-color--late {
-  background-color: #ffc107;
-  border: 1px solid #ffc107;
-}
-
 .legend-color--absent {
   background-color: #dc3545;
   border: 1px solid #dc3545;
@@ -433,14 +391,14 @@ body {
   border: 1px solid #495057;
 }
 
-.legend-color--early-leave {
-  background-color: #ff9800;
-  border: 1px solid #ff9800;
+.legend-color--planned {
+  background-color: #ffc107;
+  border: 1px solid #ffc107;
 }
 
-.legend-color--no-exit {
-  background-color: #e91e63;
-  border: 1px solid #e91e63;
+.legend-color--present {
+  background-color: #28a745;
+  border: 1px solid #28a745;
 }
 
 /* Statistics */
@@ -547,39 +505,21 @@ body {
   font-weight: 500;
 }
 
-.status--on-time {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.status--late {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.status--early-leave {
-  background-color: #ffe0b2;
-  color: #e65100;
-}
-
-.status--no-exit {
-  background-color: #ffcdd2;
-  color: #c62828;
-}
 
 .status--weekend {
   background-color: #e9ecef;
   color: #6c757d;
 }
 
-.status--weekend-worked {
-  background-color: #d1ecf1;
-  color: #0c5460;
+
+.status--planned {
+  background-color: #ffc107;
+  color: #000000;
 }
 
-.status--no-schedule {
-  background-color: #fff3cd;
-  color: #856404;
+.status--present {
+  background-color: #28a745;
+  color: #ffffff;
 }
 
 /* Modal */
@@ -1377,4 +1317,72 @@ body.in-telegram .telegram-only {
 body.in-telegram .menu-card.telegram-only {
   display: flex \!important;
 }
+
+/* КРИТИЧЕСКИЕ ИСПРАВЛЕНИЯ ДЛЯ МОБИЛЬНОГО TELEGRAM - НАЧАЛО */
+/* Принудительные цвета для всех платформ */
+.calendar-day--present,
+.calendar-day.calendar-day--present {
+  background-color: #28a745 !important;
+  background: #28a745 !important;
+  border-color: #28a745 !important;
+}
+
+.calendar-day--present *,
+.calendar-day.calendar-day--present * {
+  color: #ffffff !important;
+}
+
+.calendar-day--planned,
+.calendar-day.calendar-day--planned {
+  background-color: #ffc107 !important;
+  background: #ffc107 !important;
+  border-color: #ffc107 !important;
+}
+
+.calendar-day--planned *,
+.calendar-day.calendar-day--planned * {
+  color: #ffffff !important;
+}
+
+.calendar-day--absent,
+.calendar-day.calendar-day--absent {
+  background-color: #dc3545 !important;
+  background: #dc3545 !important;
+  border-color: #dc3545 !important;
+}
+
+.calendar-day--absent *,
+.calendar-day.calendar-day--absent * {
+  color: #ffffff !important;
+}
+
+.calendar-day--weekend,
+.calendar-day.calendar-day--weekend {
+  background-color: #495057 !important;
+  background: #495057 !important;
+  border-color: #495057 !important;
+}
+
+.calendar-day--weekend *,
+.calendar-day.calendar-day--weekend * {
+  color: #e1e1e1 !important;
+}
+
+/* Уменьшение текста статусов на мобильных */
+@media screen and (max-width: 600px) {
+  .calendar-day .day-status {
+    font-size: 8px !important;
+    line-height: 1.0 !important;
+  }
+  
+  .calendar-day .day-schedule {
+    font-size: 6px !important;
+    line-height: 1.0 !important;
+  }
+  
+  .calendar-day .day-number {
+    font-size: 11px !important;
+  }
+}
+/* КРИТИЧЕСКИЕ ИСПРАВЛЕНИЯ ДЛЯ МОБИЛЬНОГО TELEGRAM - КОНЕЦ */
 
