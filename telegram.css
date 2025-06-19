@@ -117,20 +117,129 @@ body.telegram-theme {
   min-height: 55px;
 }
 
+/* Preserve calendar day colors for planned and present states */
+.telegram-theme .calendar-day--planned {
+  background-color: #ffc107 !important;
+  border: 1px solid #ffc107 !important;
+  color: #ffffff !important;
+}
+
+.telegram-theme .calendar-day--planned .day-number,
+.telegram-theme .calendar-day--planned .day-status,
+.telegram-theme .calendar-day--planned .day-schedule {
+  color: #ffffff !important;
+}
+
+.telegram-theme .calendar-day--present {
+  background-color: #28a745 !important;
+  border: 1px solid #28a745 !important;
+  color: white !important;
+}
+
+.telegram-theme .calendar-day--present .day-number,
+.telegram-theme .calendar-day--present .day-status,
+.telegram-theme .calendar-day--present .day-schedule {
+  color: white !important;
+}
+
+.telegram-theme .calendar-day--absent {
+  background-color: #ff3b30 !important;
+  border: 1px solid #ff3b30 !important;
+  color: white !important;
+}
+
+.telegram-theme .calendar-day--absent .day-number,
+.telegram-theme .calendar-day--absent .day-status,
+.telegram-theme .calendar-day--absent .day-schedule {
+  color: white !important;
+}
+
+.telegram-theme .calendar-day--weekend {
+  background-color: #495057 !important;
+  border: 1px solid #495057 !important;
+  color: #e1e1e1 !important;
+}
+
+.telegram-theme .calendar-day--weekend .day-number {
+  color: #e1e1e1 !important;
+}
+
+.telegram-theme .calendar-day--weekend .day-status {
+  color: #b0b0b0 !important;
+}
+
+.telegram-theme .calendar-day--weekend .day-schedule {
+  color: #b0b0b0 !important;
+}
+
+/* Дополнительные переопределения для мобильного Telegram */
+body.telegram-theme .calendar-day--present,
+.telegram-theme .calendar-day--present {
+  background-color: #28a745 !important;
+  border-color: #28a745 !important;
+}
+
+body.telegram-theme .calendar-day--present .day-number,
+body.telegram-theme .calendar-day--present .day-status,
+body.telegram-theme .calendar-day--present .day-schedule,
+.telegram-theme .calendar-day--present .day-number,
+.telegram-theme .calendar-day--present .day-status,
+.telegram-theme .calendar-day--present .day-schedule {
+  color: #ffffff !important;
+}
+
+body.telegram-theme .calendar-day--planned,
+.telegram-theme .calendar-day--planned {
+  background-color: #ffc107 !important;
+  border-color: #ffc107 !important;
+}
+
+body.telegram-theme .calendar-day--planned .day-number,
+body.telegram-theme .calendar-day--planned .day-status,
+body.telegram-theme .calendar-day--planned .day-schedule,
+.telegram-theme .calendar-day--planned .day-number,
+.telegram-theme .calendar-day--planned .day-status,
+.telegram-theme .calendar-day--planned .day-schedule {
+  color: #ffffff !important;
+}
+
+body.telegram-theme .calendar-day--absent,
+.telegram-theme .calendar-day--absent {
+  background-color: #ff3b30 !important;
+  border-color: #ff3b30 !important;
+}
+
+body.telegram-theme .calendar-day--absent .day-number,
+body.telegram-theme .calendar-day--absent .day-status,
+body.telegram-theme .calendar-day--absent .day-schedule,
+.telegram-theme .calendar-day--absent .day-number,
+.telegram-theme .calendar-day--absent .day-status,
+.telegram-theme .calendar-day--absent .day-schedule {
+  color: #ffffff !important;
+}
+
+.telegram-theme .calendar-day--weekend .day-schedule {
+  color: #999 !important;
+}
+
 .telegram-theme .day-number {
   font-size: 14px;
   margin-bottom: 2px;
 }
 
 .telegram-theme .day-status {
-  font-size: 9px;
-  line-height: 1.1;
+  font-size: 7px;
+  line-height: 1.0;
+  word-wrap: break-word;
+  overflow: hidden;
 }
 
 .telegram-theme .day-schedule {
   font-size: 8px;
   line-height: 1.1;
-  display: none; /* Hide on mobile to save space */
+  display: block; /* Show schedule time in Telegram */
+  margin-top: 1px;
+  opacity: 0.9;
 }
 
 /* Status colors remain the same but with better contrast */
@@ -151,6 +260,16 @@ body.telegram-theme {
 
 .telegram-theme .status--early-leave {
   background-color: #ff9500;
+  color: white;
+}
+
+.telegram-theme .status--planned {
+  background-color: #ffc107;
+  color: #000000;
+}
+
+.telegram-theme .status--present {
+  background-color: #28a745;
   color: white;
 }
 
@@ -302,50 +421,30 @@ body.telegram-theme {
   font-weight: 500;
 }
 
-/* Переопределяем все цветные статусы для Telegram */
-.telegram-theme .status--on-time {
+/* Переопределяем статусы только в модальных окнах для Telegram */
+.telegram-theme .modal-content .status--absent,
+.telegram-theme .detail-section .status--absent {
   background-color: transparent !important;
   color: #e1e1e1 !important;
   border: 1px solid #3a4553 !important;
 }
 
-.telegram-theme .status--late {
+.telegram-theme .modal-content .status--weekend,
+.telegram-theme .detail-section .status--weekend {
   background-color: transparent !important;
   color: #e1e1e1 !important;
   border: 1px solid #3a4553 !important;
 }
 
-.telegram-theme .status--absent {
+.telegram-theme .modal-content .status--planned,
+.telegram-theme .detail-section .status--planned {
   background-color: transparent !important;
   color: #e1e1e1 !important;
   border: 1px solid #3a4553 !important;
 }
 
-.telegram-theme .status--early-leave {
-  background-color: transparent !important;
-  color: #e1e1e1 !important;
-  border: 1px solid #3a4553 !important;
-}
-
-.telegram-theme .status--weekend {
-  background-color: transparent !important;
-  color: #e1e1e1 !important;
-  border: 1px solid #3a4553 !important;
-}
-
-.telegram-theme .status--weekend-worked {
-  background-color: transparent !important;
-  color: #e1e1e1 !important;
-  border: 1px solid #3a4553 !important;
-}
-
-.telegram-theme .status--no-schedule {
-  background-color: transparent !important;
-  color: #e1e1e1 !important;
-  border: 1px solid #3a4553 !important;
-}
-
-.telegram-theme .status--no-exit {
+.telegram-theme .modal-content .status--present,
+.telegram-theme .detail-section .status--present {
   background-color: transparent !important;
   color: #e1e1e1 !important;
   border: 1px solid #3a4553 !important;
@@ -428,7 +527,12 @@ body.telegram-theme {
   }
   
   .telegram-theme .day-status {
-    font-size: 8px;
+    font-size: 6px;
+  }
+  
+  .telegram-theme .day-schedule {
+    font-size: 7px;
+    display: block;
   }
   
   .telegram-theme .month-navigation {
@@ -493,7 +597,12 @@ body.telegram-theme {
   }
   
   .telegram-theme .day-status {
-    font-size: 7px;
+    font-size: 5px;
+  }
+  
+  .telegram-theme .day-schedule {
+    font-size: 6px;
+    display: block;
   }
 }
 

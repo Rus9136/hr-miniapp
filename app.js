@@ -963,26 +963,49 @@ function renderCalendar() {
         // Build day content with schedule info if available
         let dayContent = `<div class="day-number">${day.day}</div>`;
         
-        // Show schedule time if available (for work days with schedule, not weekends)
-        if (day.scheduleStartTime && day.scheduleEndTime && day.status !== 'weekend') {
-            // Format schedule time
+        // Show time based on status
+        if (day.status !== 'weekend') {
             const formatTime = (time) => time ? time.substring(0, 5) : '';
-            dayContent += `
-                <div class="day-schedule" style="font-size: 0.7em; color: #666; margin-top: 2px;">
-                    ${formatTime(day.scheduleStartTime)}-${formatTime(day.scheduleEndTime)}
-                </div>
-            `;
+            let timeToShow = '';
+            
+            // For present status, show actual entry/exit time
+            if (day.status === 'present' && (day.checkIn || day.checkOut)) {
+                // Format ISO timestamp to HH:MM
+                const formatTimestamp = (timestamp) => {
+                    if (!timestamp) return '';
+                    try {
+                        return new Date(timestamp).toLocaleTimeString('ru-RU', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'Asia/Almaty'
+                        });
+                    } catch (error) {
+                        return '';
+                    }
+                };
+                
+                const entryTime = formatTimestamp(day.checkIn) || '';
+                const exitTime = formatTimestamp(day.checkOut) || '—';
+                timeToShow = `${entryTime}-${exitTime}`;
+            }
+            // For planned status or when no actual times, show schedule
+            else if (day.scheduleStartTime && day.scheduleEndTime) {
+                timeToShow = `${formatTime(day.scheduleStartTime)}-${formatTime(day.scheduleEndTime)}`;
+            }
+            
+            if (timeToShow) {
+                dayContent += `
+                    <div class="day-schedule" style="font-size: 0.7em; color: #666; margin-top: 2px;">
+                        ${timeToShow}
+                    </div>
+                `;
+            }
         }
         
         const statusText = getStatusText(day.status);
         dayContent += `<div class="day-status">${statusText}</div>`;
         
-        // Debug logging for green and yellow days
-        if (day.status === 'present' || day.status === 'planned') {
-            console.log(`🔍 DEBUG: Day ${day.day}, Status: ${day.status}, Text: "${statusText}"`);
-            // Add visible debug indicator
-            dayContent += `<div style="background: red; color: white; font-size: 8px; font-weight: bold;">DEBUG: ${statusText}</div>`;
-        }
+        // Removed debug logging and indicators - status display is now working correctly
         
         dayElement.innerHTML = dayContent;
         
@@ -994,19 +1017,36 @@ function renderCalendar() {
 // Get status text
 function getStatusText(status) {
     const statusMap = {
+        // Основные статусы
         'present': 'Присутствие',
-        'absent': 'Отсутствие',
-        'planned': 'Запланировано',
+        'absent': 'Отсутствие', 
+        'planned': 'График',
         'weekend': 'Выходной',
-        'on_time': 'Вовремя',
+        
+        // Детальные статусы
+        'on_time': 'Присутствие',
         'late': 'Опоздание',
         'early_leave': 'Ранний уход',
         'no_exit': 'Нет выхода',
+        
+        // Ночные смены
         'night_shift_on_time': 'Ночная смена',
-        'night_shift_late': 'Ночная смена (опоздание)',
-        'night_shift_auto': 'Ночная смена (авто)',
-        'weekend_worked': 'Работа в выходной'
+        'night_shift_late': 'Ночная опоздание',
+        'night_shift_auto': 'Ночная авто',
+        'night_shift_early_leave': 'Ночная рано',
+        
+        // Дополнительные
+        'weekend_worked': 'Работа в выходной',
+        'no_schedule_worked': 'Без графика',
+        
+        // Возможные варианты, которые могут приходить
+        'attendance': 'Присутствие',
+        'work': 'Присутствие',  
+        'working': 'Присутствие',
+        'schedule': 'График',
+        'scheduled': 'График'
     };
+    
     return statusMap[status] || status;
 }
 
