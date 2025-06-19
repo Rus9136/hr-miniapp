@@ -1,0 +1,111 @@
+/* Критические исправления для мобильного Telegram */
+
+/* Принудительное применение цветов для календаря */
+.telegram-theme .calendar-day--present,
+body.telegram-theme .calendar-day--present,
+.calendar-day.calendar-day--present {
+  background-color: #28a745 !important;
+  background: #28a745 !important;
+  border-color: #28a745 !important;
+}
+
+.telegram-theme .calendar-day--present *,
+body.telegram-theme .calendar-day--present *,
+.calendar-day.calendar-day--present * {
+  color: #ffffff !important;
+}
+
+.telegram-theme .calendar-day--planned,
+body.telegram-theme .calendar-day--planned,
+.calendar-day.calendar-day--planned {
+  background-color: #ffc107 !important;
+  background: #ffc107 !important;
+  border-color: #ffc107 !important;
+}
+
+.telegram-theme .calendar-day--planned *,
+body.telegram-theme .calendar-day--planned *,
+.calendar-day.calendar-day--planned * {
+  color: #000000 !important;
+}
+
+.telegram-theme .calendar-day--absent,
+body.telegram-theme .calendar-day--absent,
+.calendar-day.calendar-day--absent {
+  background-color: #dc3545 !important;
+  background: #dc3545 !important;
+  border-color: #dc3545 !important;
+}
+
+.telegram-theme .calendar-day--absent *,
+body.telegram-theme .calendar-day--absent *,
+.calendar-day.calendar-day--absent * {
+  color: #ffffff !important;
+}
+
+.telegram-theme .calendar-day--weekend,
+body.telegram-theme .calendar-day--weekend,
+.calendar-day.calendar-day--weekend {
+  background-color: #495057 !important;
+  background: #495057 !important;
+  border-color: #495057 !important;
+}
+
+.telegram-theme .calendar-day--weekend *,
+body.telegram-theme .calendar-day--weekend *,
+.calendar-day.calendar-day--weekend * {
+  color: #e1e1e1 !important;
+}
+
+/* Принудительное уменьшение шрифтов для мобильных устройств */
+@media screen and (max-width: 600px) {
+  .calendar-day .day-status,
+  .telegram-theme .calendar-day .day-status,
+  body.telegram-theme .calendar-day .day-status {
+    font-size: 9px !important; /* УВЕЛИЧИЛИ шрифт для отладки */
+    line-height: 1.0 !important;
+    display: block !important;
+    margin-top: 1px !important;
+    background: rgba(255, 255, 255, 0.2) !important; /* Добавили фон для видимости */
+    padding: 1px !important;
+  }
+  
+  .calendar-day .day-schedule,
+  .telegram-theme .calendar-day .day-schedule,
+  body.telegram-theme .calendar-day .day-schedule {
+    font-size: 6px !important;
+    line-height: 1.0 !important;
+  }
+  
+  .calendar-day .day-number,
+  .telegram-theme .calendar-day .day-number,
+  body.telegram-theme .calendar-day .day-number {
+    font-size: 11px !important;
+  }
+}
+
+/* Еще меньше для очень маленьких экранов */
+@media screen and (max-width: 380px) {
+  .calendar-day .day-status,
+  .telegram-theme .calendar-day .day-status,
+  body.telegram-theme .calendar-day .day-status {
+    font-size: 8px !important; /* УВЕЛИЧИЛИ шрифт для отладки */
+    line-height: 1.0 !important;
+    display: block !important;
+    margin-top: 1px !important;
+    background: rgba(255, 255, 255, 0.3) !important; /* Добавили фон для видимости */
+    padding: 1px !important;
+  }
+  
+  .calendar-day .day-schedule,
+  .telegram-theme .calendar-day .day-schedule,
+  body.telegram-theme .calendar-day .day-schedule {
+    font-size: 5px !important;
+  }
+  
+  .calendar-day .day-number,
+  .telegram-theme .calendar-day .day-number,
+  body.telegram-theme .calendar-day .day-number {
+    font-size: 10px !important;
+  }
+}
