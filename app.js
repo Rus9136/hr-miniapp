@@ -1,4 +1,4 @@
-console.log('🚀 HR Mini App v8.6 - CONFLICT RESOLVED - CRITICAL CACHE BUST: ' + new Date().getTime());
+console.log('🚀 HR Mini App v9.0 - MOBILE COLORS FIXED - CACHE BUST: ' + new Date().getTime());
 
 // API configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -974,7 +974,15 @@ function renderCalendar() {
             `;
         }
         
-        dayContent += `<div class="day-status">${getStatusText(day.status)}</div>`;
+        const statusText = getStatusText(day.status);
+        dayContent += `<div class="day-status">${statusText}</div>`;
+        
+        // Debug logging for green and yellow days
+        if (day.status === 'present' || day.status === 'planned') {
+            console.log(`🔍 DEBUG: Day ${day.day}, Status: ${day.status}, Text: "${statusText}"`);
+            // Add visible debug indicator
+            dayContent += `<div style="background: red; color: white; font-size: 8px; font-weight: bold;">DEBUG: ${statusText}</div>`;
+        }
         
         dayElement.innerHTML = dayContent;
         
@@ -986,14 +994,20 @@ function renderCalendar() {
 // Get status text
 function getStatusText(status) {
     const statusMap = {
+        'present': 'Присутствие',
+        'absent': 'Отсутствие',
+        'planned': 'Запланировано',
+        'weekend': 'Выходной',
         'on_time': 'Вовремя',
         'late': 'Опоздание',
-        'absent': 'Отсутствие',
-        'weekend': 'Выходной',
         'early_leave': 'Ранний уход',
-        'no_exit': 'Нет выхода'
+        'no_exit': 'Нет выхода',
+        'night_shift_on_time': 'Ночная смена',
+        'night_shift_late': 'Ночная смена (опоздание)',
+        'night_shift_auto': 'Ночная смена (авто)',
+        'weekend_worked': 'Работа в выходной'
     };
-    return statusMap[status] || '';
+    return statusMap[status] || status;
 }
 
 // Show day details in modal
@@ -1293,6 +1307,7 @@ function renderDepartmentStatsTable(data) {
     // Get status text and CSS class
     const getStatusInfo = (status) => {
         const statusMap = {
+            'present': { text: 'Присутствие', class: 'present' },
             'on_time': { text: 'Вовремя', class: 'on-time' },
             'late': { text: 'Опоздание', class: 'late' },
             'absent': { text: 'Отсутствие', class: 'absent' },
@@ -1300,7 +1315,11 @@ function renderDepartmentStatsTable(data) {
             'weekend_worked': { text: 'Работа в выходной', class: 'weekend-worked' },
             'no_schedule_worked': { text: 'Без графика', class: 'no-schedule' },
             'early_leave': { text: 'Ранний уход', class: 'early-leave' },
-            'no_exit': { text: 'Нет выхода', class: 'no-exit' }
+            'no_exit': { text: 'Нет выхода', class: 'no-exit' },
+            'planned': { text: 'Запланировано', class: 'planned' },
+            'night_shift_on_time': { text: 'Ночная смена', class: 'night-shift' },
+            'night_shift_late': { text: 'Ночная смена (опоздание)', class: 'night-shift-late' },
+            'night_shift_auto': { text: 'Ночная смена (авто)', class: 'night-shift-auto' }
         };
         return statusMap[status] || { text: status, class: 'unknown' };
     };
