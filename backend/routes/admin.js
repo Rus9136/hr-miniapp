@@ -41,7 +41,7 @@ router.get('/admin/departments', async (req, res) => {
     try {
         const { organization } = req.query;
         
-        let query = 'SELECT * FROM departments';
+        let query = 'SELECT *, id_iiko::text as id_iiko FROM departments';
         let params = [];
         
         if (organization) {
@@ -390,6 +390,57 @@ router.get('/admin/time-records', (req, res) => {
 });
 
 // Recalculate time records from time_events
+// Proxy endpoint for AI webhook to bypass CSP
+router.post('/admin/ai-webhook-proxy', async (req, res) => {
+    try {
+        const { branch_id, date } = req.body;
+        
+        console.log('AI webhook proxy request:', { branch_id, date });
+        
+        // Validate required fields
+        if (!branch_id || !date) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: branch_id and date' 
+            });
+        }
+        
+        // Make request to external webhook
+        const webhookUrl = 'https://n8n.sandyq.space/webhook/optimize-branch';
+        const webhookData = { branch_id, date };
+        
+        console.log('Sending request to webhook:', webhookUrl, webhookData);
+        
+        const fetch = require('node-fetch');
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(webhookData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Webhook responded with status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('Webhook response:', result);
+        
+        res.json({
+            success: true,
+            message: 'AI recommendation sent successfully',
+            data: result
+        });
+        
+    } catch (error) {
+        console.error('AI webhook proxy error:', error);
+        res.status(500).json({ 
+            error: 'Failed to send AI recommendation',
+            message: error.message 
+        });
+    }
+});
+
 router.post('/admin/recalculate-time-records', async (req, res) => {
     try {
         const { organization, department, month } = req.body;

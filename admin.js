@@ -25,6 +25,36 @@ let logoutHandler = null;
 // Section initialization flags
 let reportsInitialized = false;
 
+// Show notification function
+function showNotification(message, type = 'info') {
+    // Remove existing notifications
+    const existingNotification = document.querySelector('.notification-toast');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification-toast notification-${type}`;
+    notification.textContent = message;
+    
+    // Add to body
+    document.body.appendChild(notification);
+    
+    // Show notification
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    // Hide and remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+    }, 3000);
+}
+
 // Initialize admin panel (for internal use)
 function initAdminPanel() {
     // Get DOM elements after admin screen is shown
@@ -3397,6 +3427,9 @@ async function loadAIDepartments(organizationBin = null) {
         const departments = await response.json();
         console.log('Departments loaded:', departments.length);
         
+        // Store departments data globally for access in processAIRecommendation
+        window.aiDepartmentsData = departments;
+        
         const select = document.getElementById('ai-department-filter');
         console.log('AI department filter element:', select);
         
@@ -3406,6 +3439,8 @@ async function loadAIDepartments(organizationBin = null) {
                 const option = document.createElement('option');
                 option.value = dept.object_code;
                 option.textContent = dept.object_name;
+                // Store id_iiko in data attribute
+                option.setAttribute('data-id-iiko', dept.id_iiko || '');
                 select.appendChild(option);
             });
             console.log('AI departments filter populated with', departments.length, 'options');
@@ -3417,7 +3452,7 @@ async function loadAIDepartments(organizationBin = null) {
     }
 }
 
-// Process AI recommendation (заглушка)
+// Process AI recommendation
 async function processAIRecommendation() {
     const orgFilter = document.getElementById('ai-organization-filter');
     const deptFilter = document.getElementById('ai-department-filter');
@@ -3427,14 +3462,31 @@ async function processAIRecommendation() {
     
     // Validation
     if (!orgFilter?.value) {
-        alert('Пожалуйста, выберите организацию');
+        showNotification('Выберите организацию', 'error');
         return;
     }
     
     if (!deptFilter?.value) {
-        alert('Пожалуйста, выберите подразделение');
+        showNotification('Выберите подразделение', 'error');
         return;
     }
+    
+    // Get selected department data
+    const selectedDeptCode = deptFilter.value;
+    const selectedOption = deptFilter.querySelector(`option[value="${selectedDeptCode}"]`);
+    const idIiko = selectedOption?.getAttribute('data-id-iiko');
+    
+    // Additional way to get id_iiko from stored data
+    const department = window.aiDepartmentsData?.find(dept => dept.object_code === selectedDeptCode);
+    const departmentIdIiko = idIiko || department?.id_iiko;
+    
+    if (!departmentIdIiko) {
+        showNotification('У выбранного подразделения не задан id_iiko', 'error');
+        return;
+    }
+    
+    // Get current date in YYYY-MM-DD format
+    const currentDate = new Date().toISOString().split('T')[0];
     
     // Show loading state
     if (processBtn) processBtn.disabled = true;
@@ -3442,15 +3494,39 @@ async function processAIRecommendation() {
     if (btnText) btnText.style.display = 'none';
     
     try {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Prepare request data
+        const requestData = {
+            branch_id: departmentIdIiko,
+            date: currentDate
+        };
+        
+        console.log('Sending AI recommendation request:', requestData);
+        
+        // Send request through our proxy to bypass CSP
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-webhook-proxy`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('AI recommendation response:', result);
         
         // Show success message
-        alert(`AI-рекомендация для организации "${orgFilter.options[orgFilter.selectedIndex].textContent}" и подразделения "${deptFilter.options[deptFilter.selectedIndex].textContent}" отправлена для обработки.\n\nЭто демо-версия. В полной версии здесь будет вызов API для анализа данных и получения рекомендаций.`);
+        showNotification(
+            `AI-рекомендация успешно отправлена для подразделения "${deptFilter.options[deptFilter.selectedIndex].textContent}"`, 
+            'success'
+        );
         
     } catch (error) {
         console.error('Error processing AI recommendation:', error);
-        alert('Произошла ошибка при отправке данных для обработки');
+        showNotification('Произошла ошибка при отправке данных для обработки: ' + error.message, 'error');
     } finally {
         // Hide loading state
         if (processBtn) processBtn.disabled = false;
