@@ -18,9 +18,9 @@ body.telegram-theme .calendar-day--present *,
 .telegram-theme .calendar-day--planned,
 body.telegram-theme .calendar-day--planned,
 .calendar-day.calendar-day--planned {
-  background-color: #ffc107 !important;
-  background: #ffc107 !important;
-  border-color: #ffc107 !important;
+  background-color: #e0a800 !important;
+  background: #e0a800 !important;
+  border-color: #e0a800 !important;
 }
 
 .telegram-theme .calendar-day--planned *,

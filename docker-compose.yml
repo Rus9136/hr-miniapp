@@ -67,6 +67,7 @@ services:
       - hr-app
     networks:
       - hr-network
+      - sales_forecast_default  # Добавлено для доступа к aqniet.site
     restart: unless-stopped
 
 volumes:
@@ -78,3 +79,5 @@ volumes:
 networks:
   hr-network:
     driver: bridge
+  sales_forecast_default:
+    external: true  # Подключение к внешней сети Sales Forecast

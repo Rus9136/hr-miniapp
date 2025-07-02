@@ -22,6 +22,9 @@ let organizationsData = [];
 let menuClickHandler = null;
 let logoutHandler = null;
 
+// Section initialization flags
+let reportsInitialized = false;
+
 // Initialize admin panel (for internal use)
 function initAdminPanel() {
     // Get DOM elements after admin screen is shown
@@ -33,6 +36,9 @@ function initAdminPanel() {
     
     // Setup event handlers
     setupAdminEventHandlers();
+    
+    // Initialize employee modal
+    initEmployeeModal();
 }
 
 // Load organizations for filters
@@ -189,8 +195,11 @@ function switchSection(sectionName) {
         case 'time-events':
             initTimeEventsSection();
             break;
-        case 'time-records':
-            initTimeRecordsSection();
+        case 'reports':
+            initReportsSection();
+            break;
+        case 'payroll-report':
+            initPayrollReportSection();
             break;
         case 'upload':
             initUploadSection();
@@ -256,7 +265,7 @@ async function loadEmployees() {
         console.error('employees-tbody not found!');
         return;
     }
-    tbody.innerHTML = '<tr><td colspan="5" class="loading">Загрузка данных...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка данных...</td></tr>';
 
     try {
         console.log('Fetching employees from:', `${ADMIN_API_BASE_URL}/admin/employees`);
@@ -269,7 +278,7 @@ async function loadEmployees() {
         document.getElementById('employees-total').textContent = employeesData.length;
     } catch (error) {
         console.error('Error loading employees:', error);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
@@ -278,7 +287,7 @@ function displayEmployees(employees) {
     const tbody = document.getElementById('employees-tbody');
     
     if (employees.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
 
@@ -290,8 +299,34 @@ function displayEmployees(employees) {
             <td>${emp.position_name || '-'}</td>
             <td>${emp.current_schedule || '-'}</td>
             <td>${emp.iin || ''}</td>
+            <td>
+                <button class="btn btn--sm btn--outline edit-employee-btn" 
+                        data-table-number="${emp.table_number}" 
+                        title="Редактировать сотрудника">
+                    ✏️
+                </button>
+            </td>
         </tr>
     `).join('');
+    
+    // Add event listeners to edit buttons
+    document.querySelectorAll('.edit-employee-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Edit button clicked');
+            const tableNumber = e.target.dataset.tableNumber;
+            console.log('Table number from button:', tableNumber);
+            
+            if (tableNumber) {
+                openEmployeeModal(tableNumber);
+            } else {
+                console.error('No table number found on button');
+                alert('Ошибка: не удалось определить табельный номер сотрудника');
+            }
+        });
+    });
 }
 
 // Filter employees
@@ -1025,19 +1060,20 @@ async function clearAllTimeEvents() {
 // Track if time records section has been initialized
 let timeRecordsInitialized = false;
 
-// Load organizations for time records filter
-async function loadOrganizationsForTimeRecords() {
-    console.log('=== loadOrganizationsForTimeRecords called ===');
+// Load organizations for reports filter
+async function loadOrganizationsForReports() {
+    console.log('=== loadOrganizationsForReports called ===');
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/organizations`);
         if (!response.ok) throw new Error(`Failed to load organizations: ${response.status}`);
         
-        const organizations = await response.json();
-        console.log('Time records organizations loaded:', organizations.length);
+        const result = await response.json();
+        const organizations = result.data || [];
+        console.log('Reports organizations loaded:', organizations.length);
         
-        const select = document.getElementById('records-organization-filter');
+        const select = document.getElementById('report-organization-filter');
         if (!select) {
-            console.error('Records organization filter element not found!');
+            console.error('Report organization filter element not found!');
             return;
         }
         
@@ -1049,38 +1085,41 @@ async function loadOrganizationsForTimeRecords() {
         // Add organizations
         organizations.forEach(org => {
             const option = document.createElement('option');
-            option.value = org.object_bin;
-            option.textContent = `${org.object_company} (${org.object_bin})`;
+            option.value = org.organization;
+            option.textContent = `${org.company_name || org.organization} (${org.organization})`;
             select.appendChild(option);
         });
         
-        console.log('Time records organizations filter populated');
+        console.log('Reports organizations filter populated');
         
     } catch (error) {
-        console.error('Error loading organizations for time records:', error);
+        console.error('Error loading organizations for reports:', error);
     }
 }
 
-// Load departments for time records filter
-async function loadDepartmentsForTimeRecords(organizationBin = null) {
-    console.log('=== loadDepartmentsForTimeRecords called ===', 'organizationBin:', organizationBin);
+// Load departments for reports filter
+async function loadDepartmentsForReports(organization = null) {
+    console.log('=== loadDepartmentsForReports called ===', 'organization:', organization);
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
+        const params = new URLSearchParams();
+        if (organization && organization.trim() !== '') {
+            params.append('organization', organization);
+            console.log('Adding organization filter:', organization);
+        }
+        
+        const url = `${ADMIN_API_BASE_URL}/admin/reports/departments?${params}`;
+        console.log('Fetching departments from:', url);
+        
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to load departments: ${response.status}`);
         
-        const allDepartments = await response.json();
-        console.log('All departments loaded:', allDepartments.length);
+        const result = await response.json();
+        const departments = result.data || [];
+        console.log('Reports departments loaded:', departments.length, 'departments:', departments);
         
-        // Filter departments by organization if specified
-        const departments = organizationBin 
-            ? allDepartments.filter(dept => dept.object_bin === organizationBin)
-            : allDepartments;
-            
-        console.log('Filtered departments:', departments.length);
-        
-        const select = document.getElementById('records-department-filter');
+        const select = document.getElementById('report-department-filter');
         if (!select) {
-            console.error('Records department filter element not found!');
+            console.error('Report department filter element not found!');
             return;
         }
         
@@ -1092,206 +1131,151 @@ async function loadDepartmentsForTimeRecords(organizationBin = null) {
         // Add departments
         departments.forEach(dept => {
             const option = document.createElement('option');
-            option.value = dept.object_code;
-            option.textContent = dept.object_name;
+            option.value = dept.id;
+            option.textContent = dept.name;
             select.appendChild(option);
         });
         
-        console.log('Time records departments filter populated with', departments.length, 'items');
+        console.log('Reports departments filter populated with', departments.length, 'items');
         
     } catch (error) {
-        console.error('Error loading departments for time records:', error);
+        console.error('Error loading departments for reports:', error);
     }
 }
 
-// Handle organization change for cascading department filter
-function onTimeRecordsOrganizationChange() {
-    const organizationBin = document.getElementById('records-organization-filter').value;
-    console.log('Organization changed to:', organizationBin);
+// Handle organization change for cascading department filter in reports
+function onReportOrganizationChange() {
+    const organization = document.getElementById('report-organization-filter').value;
+    console.log('Report organization changed to:', organization);
     
     // Clear department selection
-    document.getElementById('records-department-filter').value = '';
+    const departmentSelect = document.getElementById('report-department-filter');
+    departmentSelect.value = '';
     
     // Reload departments filtered by organization
-    loadDepartmentsForTimeRecords(organizationBin || null);
+    loadDepartmentsForReports(organization);
 }
 
 // Initialize time records section
-function initTimeRecordsSection() {
-    if (timeRecordsInitialized) {
+function initReportsSection() {
+    if (reportsInitialized) {
         // Just load data if already initialized
-        loadTimeRecords();
         return;
     }
     
-    // Set default month to May 2025 (where we have data)
-    document.getElementById('records-month-filter').value = '2025-05';
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('report-date-filter').value = today;
     
     // Load organizations and departments for filters
-    loadOrganizationsForTimeRecords();
-    loadDepartmentsForTimeRecords();
+    loadOrganizationsForReports();
+    loadDepartmentsForReports();
     
     // Event listeners
-    document.getElementById('records-filter-btn').addEventListener('click', loadTimeRecords);
-    document.getElementById('records-clear-btn').addEventListener('click', clearRecordsFilter);
-    document.getElementById('records-recalculate-btn').addEventListener('click', recalculateTimeRecords);
-    document.getElementById('records-delete-all-btn').addEventListener('click', clearAllTimeRecords);
+    document.getElementById('generate-report-btn').addEventListener('click', generateLateEmployeesReport);
+    document.getElementById('clear-report-btn').addEventListener('click', clearReportFilters);
     
     // Organization filter change event for cascading departments
-    document.getElementById('records-organization-filter').addEventListener('change', onTimeRecordsOrganizationChange);
+    document.getElementById('report-organization-filter').addEventListener('change', onReportOrganizationChange);
     
-    timeRecordsInitialized = true;
+    reportsInitialized = true;
     
-    // Load initial data
-    loadTimeRecords();
+    // Don't load initial data - wait for user to click generate
+    clearReportTable();
 }
 
-// Load time records
-async function loadTimeRecords() {
-    const tbody = document.getElementById('time-records-tbody');
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">Загрузка данных...</td></tr>';
+// Generate late employees report
+async function generateLateEmployeesReport() {
+    const generateBtn = document.getElementById('generate-report-btn');
+    const spinner = generateBtn.querySelector('.spinner');
+    const btnText = generateBtn.querySelector('.btn-text');
+    
+    // Show loading state
+    spinner.style.display = 'inline';
+    btnText.textContent = 'Формирование отчета...';
+    generateBtn.disabled = true;
+    
+    const tbody = document.getElementById('reports-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Формирование отчета...</td></tr>';
     
     const params = new URLSearchParams();
-    const organization = document.getElementById('records-organization-filter').value;
-    const department = document.getElementById('records-department-filter').value;
-    const month = document.getElementById('records-month-filter').value;
-    const status = document.getElementById('records-status-filter').value;
+    const date = document.getElementById('report-date-filter').value;
+    const organization = document.getElementById('report-organization-filter').value;
+    const department = document.getElementById('report-department-filter').value;
     
+    if (date) params.append('date', date);
     if (organization) params.append('organization', organization);
     if (department) params.append('department', department);
-    if (month) params.append('month', month);
-    if (status) params.append('status', status);
     
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-records?${params}`);
-        if (!response.ok) throw new Error('Failed to load time records');
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/late-employees?${params}`);
+        if (!response.ok) throw new Error('Failed to generate late employees report');
         
-        adminTimeRecordsData = await response.json();
-        displayTimeRecords(adminTimeRecordsData);
-        document.getElementById('records-total').textContent = adminTimeRecordsData.length;
+        const result = await response.json();
+        displayLateEmployeesReport(result.data);
+        document.getElementById('report-total').textContent = result.total_count;
+        
+        console.log(`Late employees report generated: ${result.total_count} employees found`);
     } catch (error) {
-        console.error('Error loading time records:', error);
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        console.error('Error generating late employees report:', error);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка формирования отчета: ' + error.message + '</td></tr>';
+        document.getElementById('report-total').textContent = '0';
+    } finally {
+        // Hide loading state
+        spinner.style.display = 'none';
+        btnText.textContent = 'Сформировать отчет';
+        generateBtn.disabled = false;
     }
 }
 
-// Display time records
-function displayTimeRecords(records) {
-    const tbody = document.getElementById('time-records-tbody');
+// Display late employees report
+function displayLateEmployeesReport(employees) {
+    const tbody = document.getElementById('reports-tbody');
     
-    if (records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Нет данных</td></tr>';
+    if (employees.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #28a745;">Опоздавших сотрудников не найдено</td></tr>';
         return;
     }
     
-    tbody.innerHTML = records.map(record => {
-        const statusText = {
-            'on_time': 'Вовремя',
-            'late': 'Опоздание',
-            'early_leave': 'Ранний уход',
-            'absent': 'Отсутствие',
-            'night_shift_on_time': 'Ночная смена вовремя',
-            'night_shift_late': 'Ночная смена опоздание',
-            'night_shift_early_leave': 'Ночная смена ранний уход',
-            'night_shift_auto': 'Ночная смена авто'
-        }[record.status] || record.status;
-        
-        const checkInTime = record.check_in ? formatTime(record.check_in) : '-';
-        const checkOutTime = record.check_out ? formatTime(record.check_out) : '-';
-        
-        // Enhanced hours display with new fields
-        const plannedHours = record.planned_hours ? parseFloat(record.planned_hours).toFixed(1) : '-';
-        const actualHours = record.actual_hours ? parseFloat(record.actual_hours).toFixed(1) : '-';
-        const overtimeHours = record.overtime_hours ? parseFloat(record.overtime_hours).toFixed(1) : '0';
-        const hasLunch = record.has_lunch_break ? 'Да' : 'Нет';
-        
-        // Color coding for overtime
-        const overtimeClass = overtimeHours > 0 ? 'overtime-yes' : 'overtime-no';
+    tbody.innerHTML = employees.map(employee => {
+        const statusClass = employee.status === 'late' ? 'status-late' : 'status-absent';
+        const statusText = employee.status === 'late' ? 'Опоздание' : 'Отсутствие';
         
         return `
             <tr>
-                <td>${formatDate(record.date)}</td>
-                <td>${record.full_name || `ID: ${record.employee_id}`}</td>
-                <td>${record.table_number || '-'}</td>
-                <td>${checkInTime}</td>
-                <td>${checkOutTime}</td>
-                <td><span class="planned-hours">${plannedHours}ч</span></td>
-                <td><span class="actual-hours">${actualHours}ч</span></td>
-                <td><span class="overtime-hours ${overtimeClass}">${overtimeHours}ч</span></td>
-                <td><span class="lunch-break-${record.has_lunch_break ? 'yes' : 'no'}">${hasLunch}</span></td>
-                <td><span class="status-${record.status}">${statusText}</span></td>
+                <td>${employee.employee_name}</td>
+                <td>${employee.table_number}</td>
+                <td>${employee.department_name}</td>
+                <td>${employee.schedule_name || '-'}</td>
+                <td>${employee.schedule_start_time || '-'}</td>
+                <td>${employee.actual_entry_time}</td>
+                <td><span class="${statusClass}">${employee.late_time_formatted}</span></td>
             </tr>
         `;
     }).join('');
 }
 
-// Clear records filter
-function clearRecordsFilter() {
-    document.getElementById('records-organization-filter').value = '';
-    document.getElementById('records-department-filter').value = '';
-    document.getElementById('records-status-filter').value = '';
-    
-    // Reset to May 2025 (where we have data)
-    document.getElementById('records-month-filter').value = '2025-05';
-    
-    // Reset departments to show all when organization is cleared
-    loadDepartmentsForTimeRecords();
-    
-    loadTimeRecords();
+// Clear report table
+function clearReportTable() {
+    const tbody = document.getElementById('reports-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #6c757d;">Выберите дату и нажмите "Сформировать отчет"</td></tr>';
+    document.getElementById('report-total').textContent = '0';
 }
 
-// Clear all time records from database
-async function clearAllTimeRecords() {
-    // Confirm before deleting
-    const confirmMessage = 'ВНИМАНИЕ! Вы действительно хотите удалить ВСЕ записи из таблицы табеля рабочего времени?\n\n' + 
-                          'Это действие невозможно отменить!';
+// Clear report filters
+function clearReportFilters() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('report-date-filter').value = today;
+    document.getElementById('report-organization-filter').value = '';
+    document.getElementById('report-department-filter').value = '';
     
-    if (!confirm(confirmMessage)) {
-        return;
-    }
+    // Reset departments to show all when organization is cleared
+    loadDepartmentsForReports();
     
-    // Double confirmation for safety
-    const secondConfirm = confirm('Это последнее предупреждение!\n\nУдалить все записи табеля?');
-    if (!secondConfirm) {
-        return;
-    }
-    
-    const btn = document.getElementById('records-delete-all-btn');
-    const btnText = btn.querySelector('.btn-text');
-    const spinner = btn.querySelector('.spinner');
-    
-    // Show loading state
-    btn.disabled = true;
-    btnText.style.display = 'none';
-    spinner.style.display = 'inline';
-    
-    try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/time-records/clear-all`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert(`Успешно! ${data.message}`);
-            // Reload the table
-            loadTimeRecords();
-        } else {
-            alert(`Ошибка: ${data.error}`);
-        }
-    } catch (error) {
-        console.error('Error clearing time records:', error);
-        alert('Ошибка при очистке таблицы: ' + error.message);
-    } finally {
-        // Reset button state
-        btn.disabled = false;
-        btnText.style.display = 'inline';
-        spinner.style.display = 'none';
-    }
+    // Clear report table
+    clearReportTable();
 }
+
 
 // Helper functions
 function formatDateTime(datetime) {
@@ -1322,77 +1306,6 @@ function formatTime(datetime) {
     });
 }
 
-// Recalculate time records from time_events
-async function recalculateTimeRecords() {
-    const button = document.getElementById('records-recalculate-btn');
-    const btnText = button.querySelector('.btn-text');
-    const spinner = button.querySelector('.spinner');
-    
-    // Show loading state
-    button.disabled = true;
-    btnText.style.display = 'none';
-    spinner.style.display = 'inline-block';
-    
-    // Get filter values
-    const organization = document.getElementById('records-organization-filter').value;
-    const department = document.getElementById('records-department-filter').value;
-    const month = document.getElementById('records-month-filter').value;
-    
-    // Month is required for recalculation
-    if (!month) {
-        alert('Выберите месяц для пересчета табеля. Пересчет без указания месяца не выполняется.');
-        // Reset button state
-        button.disabled = false;
-        btnText.style.display = 'inline-block';
-        spinner.style.display = 'none';
-        return;
-    }
-    
-    // Prepare request body with filters
-    const requestBody = { month }; // Month is always required
-    if (organization) requestBody.organization = organization;
-    if (department) requestBody.department = department;
-    
-    try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/recalculate-time-records`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Show success message
-            const statusDiv = document.createElement('div');
-            statusDiv.className = 'status-message success';
-            statusDiv.textContent = `Пересчет завершен! Обработано ${result.processedRecords} записей`;
-            statusDiv.style.position = 'fixed';
-            statusDiv.style.top = '20px';
-            statusDiv.style.right = '20px';
-            statusDiv.style.zIndex = '9999';
-            document.body.appendChild(statusDiv);
-            
-            // Hide message after 3 seconds
-            setTimeout(() => {
-                statusDiv.remove();
-            }, 3000);
-            
-            // Reload the table to show updated data
-            loadTimeRecords();
-        } else {
-            alert('Ошибка пересчета: ' + (result.error || 'Неизвестная ошибка'));
-        }
-    } catch (error) {
-        console.error('Recalculation error:', error);
-        alert('Ошибка соединения с сервером');
-    } finally {
-        // Hide loading state
-        button.disabled = false;
-        btnText.style.display = 'inline';
-        spinner.style.display = 'none';
-    }
-}
 
 // ==================== WORK SCHEDULES SECTION ====================
 
@@ -2522,13 +2435,24 @@ async function handleNewsSubmit(e) {
             : `${ADMIN_API_BASE_URL}/news`;
         const method = newsId ? 'PUT' : 'POST';
         
+        console.log('Sending news data:', formData);
+        console.log('URL:', url);
+        console.log('Method:', method);
+        
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
         });
         
-        if (!response.ok) throw new Error('Failed to save news');
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server response:', errorText);
+            throw new Error(`Server error: ${response.status} - ${errorText}`);
+        }
         
         document.getElementById('newsModal').classList.remove('active');
         loadAdminNews();
@@ -2540,6 +2464,562 @@ async function handleNewsSubmit(e) {
         btnText.style.display = 'inline';
         spinner.style.display = 'none';
     }
+}
+
+// Employee modal functions
+function openEmployeeModal(tableNumber) {
+    try {
+        console.log('Opening employee modal for:', tableNumber);
+        console.log('Current employeesData length:', employeesData ? employeesData.length : 0);
+        
+        if (!employeesData || employeesData.length === 0) {
+            console.error('No employees data available');
+            alert('Ошибка: данные сотрудников не загружены. Попробуйте обновить страницу.');
+            return;
+        }
+        
+        const employee = employeesData.find(emp => emp.table_number === tableNumber);
+        if (!employee) {
+            console.error('Employee not found:', tableNumber);
+            console.log('Available employees:', employeesData.map(emp => emp.table_number));
+            alert(`Ошибка: сотрудник с табельным номером ${tableNumber} не найден.`);
+            return;
+        }
+        
+        console.log('Found employee:', employee);
+    
+    // Fill form fields
+    document.getElementById('employeeTableNumber').value = employee.table_number;
+    document.getElementById('employeeTableNumberDisplay').value = employee.table_number;
+    document.getElementById('employeeFullName').value = employee.full_name || '';
+    document.getElementById('employeeIIN').value = employee.iin || '';
+    document.getElementById('employeePayroll').value = employee.payroll || '';
+    document.getElementById('employeeDepartment').value = employee.department_name || '-';
+    document.getElementById('employeePosition').value = employee.position_name || '-';
+    document.getElementById('employeeSchedule').value = employee.current_schedule || '-';
+    document.getElementById('employeeStatus').value = employee.status || '-';
+    document.getElementById('employeeBIN').value = employee.object_bin || '-';
+    document.getElementById('employeeCode').value = employee.object_code || '-';
+    
+    // Clear status message
+    const statusDiv = document.getElementById('employeeFormStatus');
+    statusDiv.style.display = 'none';
+    statusDiv.className = 'status-message';
+    
+        // Show modal
+        const modal = document.getElementById('employeeModal');
+        if (!modal) {
+            console.error('Employee modal not found in DOM');
+            alert('Ошибка: модальное окно не найдено. Попробуйте обновить страницу.');
+            return;
+        }
+        
+        console.log('Showing modal...');
+        // Не используем style.display напрямую из-за !important в CSS
+        modal.classList.add('active');
+        
+        // Повторно инициализируем обработчики событий
+        console.log('Re-initializing modal event handlers...');
+        initEmployeeModal();
+        
+    } catch (error) {
+        console.error('Error opening employee modal:', error);
+        alert('Ошибка при открытии модального окна: ' + error.message);
+    }
+}
+
+function closeEmployeeModal() {
+    try {
+        console.log('Closing employee modal...');
+        const modal = document.getElementById('employeeModal');
+        if (modal) {
+            // Не используем style.display напрямую из-за !important в CSS
+            modal.classList.remove('active');
+        }
+        
+        const form = document.getElementById('employeeForm');
+        if (form) {
+            form.reset();
+        }
+        
+        // Hide status message
+        const statusDiv = document.getElementById('employeeFormStatus');
+        if (statusDiv) {
+            statusDiv.style.display = 'none';
+        }
+        
+        console.log('Employee modal closed successfully');
+    } catch (error) {
+        console.error('Error closing employee modal:', error);
+    }
+}
+
+async function saveEmployee(formData) {
+    const tableNumber = formData.get('table_number');
+    const fullName = formData.get('full_name');
+    const iin = formData.get('iin');
+    const payroll = formData.get('payroll');
+    
+    // Validate required fields
+    if (!tableNumber || !fullName) {
+        throw new Error('Табельный номер и ФИО обязательны для заполнения');
+    }
+    
+    // Validate IIN format if provided
+    if (iin && !/^\d{12}$/.test(iin)) {
+        throw new Error('ИИН должен состоять из 12 цифр');
+    }
+    
+    // Validate payroll if provided
+    if (payroll && (isNaN(payroll) || parseFloat(payroll) < 0)) {
+        throw new Error('ФОТ должен быть положительным числом');
+    }
+    
+    // Prepare data for API call
+    const updateData = [{
+        table_number: tableNumber
+    }];
+    
+    // Add fields that can be updated
+    if (iin) updateData[0].iin = iin;
+    if (payroll) updateData[0].payroll = parseFloat(payroll);
+    if (fullName) updateData[0].full_name = fullName;
+    
+    console.log('Sending API request with data:', updateData);
+    
+    // Call API to update employee
+    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/employees/update-iin`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+    });
+    
+    console.log('API response status:', response.status);
+    
+    if (!response.ok) {
+        let errorMessage = 'Ошибка при сохранении данных';
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+            errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
+        }
+        console.error('API error:', errorMessage);
+        throw new Error(errorMessage);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.error || 'Ошибка при сохранении данных');
+    }
+    
+    if (result.errors && result.errors.length > 0) {
+        throw new Error(result.errors.join('; '));
+    }
+    
+    return result;
+}
+
+function showEmployeeFormStatus(message, isError = false) {
+    const statusDiv = document.getElementById('employeeFormStatus');
+    statusDiv.textContent = message;
+    statusDiv.className = `status-message ${isError ? 'error' : 'success'}`;
+    statusDiv.style.display = 'block';
+    
+    // Auto-hide success messages after 3 seconds
+    if (!isError) {
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// Initialize employee modal event handlers
+function initEmployeeModal() {
+    const modal = document.getElementById('employeeModal');
+    const closeBtn = document.getElementById('closeEmployeeModal');
+    const cancelBtn = document.getElementById('cancelEmployeeBtn');
+    const form = document.getElementById('employeeForm');
+    
+    console.log('Initializing employee modal...');
+    console.log('Modal found:', !!modal);
+    console.log('Close button found:', !!closeBtn);
+    console.log('Cancel button found:', !!cancelBtn);
+    console.log('Form found:', !!form);
+    
+    // Remove existing event listeners to prevent duplicates
+    if (closeBtn) {
+        closeBtn.removeEventListener('click', closeEmployeeModal);
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Close button clicked');
+            closeEmployeeModal();
+        });
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.removeEventListener('click', closeEmployeeModal);
+        cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Cancel button clicked');
+            closeEmployeeModal();
+        });
+    }
+    
+    // Close on background click
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                console.log('Background clicked');
+                closeEmployeeModal();
+            }
+        });
+    }
+    
+    // Save button handler
+    const saveBtn = document.getElementById('saveEmployeeBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Save button clicked');
+            
+            const submitBtn = saveBtn;
+            const btnText = submitBtn.querySelector('.btn-text');
+            const spinner = submitBtn.querySelector('.spinner');
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            if (btnText) btnText.style.display = 'none';
+            if (spinner) spinner.style.display = 'inline';
+            
+            try {
+                // Get form data manually
+                const tableNumber = document.getElementById('employeeTableNumber').value;
+                const fullName = document.getElementById('employeeFullName').value;
+                const iin = document.getElementById('employeeIIN').value;
+                const payroll = document.getElementById('employeePayroll').value;
+                
+                console.log('Form data:', { tableNumber, fullName, iin, payroll });
+                
+                // Create FormData manually
+                const formData = new FormData();
+                formData.set('table_number', tableNumber);
+                formData.set('full_name', fullName);
+                formData.set('iin', iin);
+                formData.set('payroll', payroll);
+                
+                const result = await saveEmployee(formData);
+                console.log('Save result:', result);
+                
+                showEmployeeFormStatus('Данные сотрудника успешно сохранены', false);
+                
+                // Reload employees data
+                console.log('Reloading employees...');
+                await loadEmployees();
+                
+                // Close modal after delay
+                setTimeout(() => {
+                    closeEmployeeModal();
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error saving employee:', error);
+                showEmployeeFormStatus(error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                if (btnText) btnText.style.display = 'inline';
+                if (spinner) spinner.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Payroll report functionality
+let payrollReportInitialized = false;
+
+async function initPayrollReportSection() {
+    if (payrollReportInitialized) {
+        return;
+    }
+    
+    console.log('Initializing payroll report section...');
+    
+    // Load organizations and departments for filter
+    await loadPayrollOrganizations();
+    await loadPayrollDepartments();
+    
+    // Set up event handlers
+    const orgFilter = document.getElementById('payroll-organization-filter');
+    const deptFilter = document.getElementById('payroll-department-filter');
+    const generateBtn = document.getElementById('generate-payroll-report-btn');
+    const clearBtn = document.getElementById('clear-payroll-report-btn');
+    
+    // Organization filter change - update departments
+    if (orgFilter) {
+        orgFilter.addEventListener('change', async (e) => {
+            const selectedOrg = e.target.value;
+            console.log('Payroll organization changed to:', selectedOrg);
+            
+            // Clear department selection
+            const deptFilter = document.getElementById('payroll-department-filter');
+            if (deptFilter) {
+                deptFilter.value = '';
+            }
+            
+            // Reload departments filtered by organization
+            await loadPayrollDepartments(selectedOrg || null);
+        });
+    }
+    
+    // Generate report button
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generatePayrollReport);
+    }
+    
+    // Clear report button
+    if (clearBtn) {
+        clearBtn.addEventListener('click', clearPayrollReport);
+    }
+    
+    // Set default dates (current month)
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    const dateFrom = document.getElementById('payroll-date-from');
+    const dateTo = document.getElementById('payroll-date-to');
+    
+    if (dateFrom) dateFrom.value = firstDay.toISOString().split('T')[0];
+    if (dateTo) dateTo.value = lastDay.toISOString().split('T')[0];
+    
+    payrollReportInitialized = true;
+}
+
+async function loadPayrollOrganizations() {
+    console.log('=== loadPayrollOrganizations called ===');
+    try {
+        console.log('Loading organizations for payroll...');
+        console.log('API URL:', `${ADMIN_API_BASE_URL}/admin/organizations`);
+        
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const organizations = await response.json();
+        console.log('Organizations loaded:', organizations.length);
+        
+        const select = document.getElementById('payroll-organization-filter');
+        console.log('Payroll organization filter element:', select);
+        
+        if (select) {
+            select.innerHTML = '<option value="">Все организации</option>';
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.object_bin;
+                option.textContent = `${org.object_company} (${org.object_bin})`;
+                select.appendChild(option);
+            });
+            console.log('Payroll organizations filter populated with', organizations.length, 'options');
+        } else {
+            console.error('Payroll organization filter element not found!');
+        }
+    } catch (error) {
+        console.error('Error loading organizations for payroll:', error);
+    }
+}
+
+async function loadPayrollDepartments(organizationBin = null) {
+    console.log('=== loadPayrollDepartments called ===', 'organizationBin:', organizationBin);
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
+        if (!response.ok) throw new Error('Failed to load departments');
+        
+        const allDepartments = await response.json();
+        console.log('All departments loaded for payroll:', allDepartments.length);
+        
+        // Filter departments by organization if specified
+        const departments = organizationBin 
+            ? allDepartments.filter(dept => dept.object_bin === organizationBin)
+            : allDepartments;
+            
+        console.log('Filtered departments for payroll:', departments.length);
+        
+        // Debug: show first few departments when filtering
+        if (organizationBin && departments.length > 0) {
+            console.log('Sample filtered departments:');
+            departments.slice(0, 5).forEach(dept => {
+                console.log(`  ${dept.object_name} (${dept.object_code})`);
+            });
+            
+            // Check for Kitchen room specifically
+            const kitchenRooms = departments.filter(d => d.object_name && d.object_name.toLowerCase().includes('kitchen'));
+            console.log(`Kitchen rooms found: ${kitchenRooms.length}`);
+            if (kitchenRooms.length > 0) {
+                kitchenRooms.forEach(kr => {
+                    console.log(`  Kitchen: ${kr.object_name} (${kr.object_code})`);
+                });
+            }
+        }
+        
+        const deptFilter = document.getElementById('payroll-department-filter');
+        console.log('Payroll department filter element:', deptFilter);
+        
+        if (deptFilter) {
+            // Clear departments
+            deptFilter.innerHTML = '<option value="">Все подразделения</option>';
+            
+            // Add departments
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.object_code;
+                option.textContent = dept.object_name;
+                deptFilter.appendChild(option);
+            });
+            
+            console.log('Payroll departments filter populated with', departments.length, 'items');
+        } else {
+            console.error('Payroll department filter element not found!');
+        }
+    } catch (error) {
+        console.error('Error loading departments for payroll:', error);
+    }
+}
+
+async function generatePayrollReport() {
+    const orgFilter = document.getElementById('payroll-organization-filter');
+    const deptFilter = document.getElementById('payroll-department-filter');
+    const dateFrom = document.getElementById('payroll-date-from');
+    const dateTo = document.getElementById('payroll-date-to');
+    const generateBtn = document.getElementById('generate-payroll-report-btn');
+    const spinner = generateBtn?.querySelector('.spinner');
+    const btnText = generateBtn?.querySelector('.btn-text');
+    
+    if (!dateFrom?.value || !dateTo?.value) {
+        alert('Пожалуйста, выберите даты для отчета');
+        return;
+    }
+    
+    // Show loading state
+    if (generateBtn) generateBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    if (btnText) btnText.style.display = 'none';
+    
+    try {
+        const params = new URLSearchParams({
+            dateFrom: dateFrom.value,
+            dateTo: dateTo.value
+        });
+        
+        if (orgFilter?.value) params.append('organization', orgFilter.value);
+        if (deptFilter?.value) params.append('department', deptFilter.value);
+        
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/payroll?${params}`);
+        if (!response.ok) throw new Error('Failed to generate report');
+        
+        const result = await response.json();
+        displayPayrollReport(result);
+        
+    } catch (error) {
+        console.error('Error generating report:', error);
+        alert('Ошибка при формировании отчета: ' + error.message);
+    } finally {
+        if (generateBtn) generateBtn.disabled = false;
+        if (spinner) spinner.style.display = 'none';
+        if (btnText) btnText.style.display = 'inline';
+    }
+}
+
+function displayPayrollReport(result) {
+    const tbody = document.getElementById('payroll-report-body');
+    const footer = document.getElementById('payroll-report-footer');
+    const totalSpan = document.getElementById('payroll-total');
+    const totalAmount = document.getElementById('payroll-total-amount');
+    
+    if (!tbody) return;
+    
+    // Clear existing data
+    tbody.innerHTML = '';
+    
+    if (!result.data || result.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Нет данных за выбранный период</td></tr>';
+        footer.style.display = 'none';
+        totalSpan.textContent = '0.00';
+        return;
+    }
+    
+    // Group data by date for better display
+    const groupedData = {};
+    result.data.forEach(row => {
+        const date = new Date(row.work_date).toLocaleDateString('ru-RU');
+        if (!groupedData[date]) {
+            groupedData[date] = [];
+        }
+        groupedData[date].push(row);
+    });
+    
+    // Display data
+    Object.entries(groupedData).forEach(([date, employees]) => {
+        employees.forEach((emp, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${index === 0 ? date : ''}</td>
+                <td>${emp.full_name}</td>
+                <td>${emp.table_number}</td>
+                <td>${emp.department_name || '-'}</td>
+                <td>${parseFloat(emp.payroll).toLocaleString('ru-RU', { minimumFractionDigits: 2 })}</td>
+                <td>${emp.shifts_count}</td>
+                <td>${parseFloat(emp.daily_payroll).toLocaleString('ru-RU', { minimumFractionDigits: 2 })}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    });
+    
+    // Update totals
+    totalSpan.textContent = parseFloat(result.summary.total).toLocaleString('ru-RU', { minimumFractionDigits: 2 });
+    totalAmount.textContent = parseFloat(result.summary.total).toLocaleString('ru-RU', { minimumFractionDigits: 2 });
+    footer.style.display = 'table-footer-group';
+}
+
+function clearPayrollReport() {
+    // Clear filters
+    document.getElementById('payroll-organization-filter').value = '';
+    document.getElementById('payroll-department-filter').value = '';
+    
+    // Reset dates to current month
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    document.getElementById('payroll-date-from').value = firstDay.toISOString().split('T')[0];
+    document.getElementById('payroll-date-to').value = lastDay.toISOString().split('T')[0];
+    
+    // Clear report
+    const tbody = document.getElementById('payroll-report-body');
+    const footer = document.getElementById('payroll-report-footer');
+    const totalSpan = document.getElementById('payroll-total');
+    
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">Выберите параметры и нажмите "Сформировать отчет"</td></tr>';
+    }
+    if (footer) {
+        footer.style.display = 'none';
+    }
+    if (totalSpan) {
+        totalSpan.textContent = '0.00';
+    }
+    
+    // Reload departments
+    loadPayrollDepartments('');
 }
 
 // Export functions for debugging
@@ -2554,3 +3034,5 @@ window.cancelAddDate = cancelAddDate;
 window.loadNews = loadNews;
 window.removeWorkDate = removeWorkDate;
 window.handleEmployeeSelection = handleEmployeeSelection;
+window.openEmployeeModal = openEmployeeModal;
+window.closeEmployeeModal = closeEmployeeModal;

@@ -10,11 +10,11 @@
     <meta name="cache-control" content="no-cache">
     <meta name="last-modified" content="2025-06-11T16:00:00Z">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css?v=planned-white-text-v9.1&ts=20250619-white-text">
-    <link rel="stylesheet" href="admin.css?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true">
-    <link rel="stylesheet" href="telegram.css?v=planned-white-text-v8.7&ts=20250619-white-text">
+    <link rel="stylesheet" href="style.css?v=planned-darker-v9.2&ts=20250619-darker-yellow">
+    <link rel="stylesheet" href="admin.css?v=modal-active-fix-v9.2&ts=20250701-2000&active-class=true">
+    <link rel="stylesheet" href="telegram.css?v=planned-darker-v8.8&ts=20250619-darker-yellow">
     <link rel="stylesheet" href="styles/ios-styles.css?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true">
-    <link rel="stylesheet" href="telegram-mobile-fix.css?v=6.0&ts=20250619-white-text">
+    <link rel="stylesheet" href="telegram-mobile-fix.css?v=6.1&ts=20250619-darker-yellow">
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -467,7 +467,8 @@
                     <h3 class="section-title">Данные по табелю</h3>
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
-                        <li><a href="#" data-section="time-records" class="menu-item">Табель</a></li>
+                        <li><a href="#" data-section="reports" class="menu-item">Отчеты</a></li>
+                        <li><a href="#" data-section="payroll-report" class="menu-item">Отчет по ФОТ</a></li>
                     </ul>
                 </div>
                 
@@ -512,6 +513,7 @@
                                     <th>Должность</th>
                                     <th>График работы</th>
                                     <th>ИИН</th>
+                                    <th style="width: 80px;">Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="employees-tbody">
@@ -617,59 +619,95 @@
                     </div>
                 </section>
                 
-                <!-- Секция: Табель (time_records) -->
-                <section id="time-records-section" class="content-section">
+                <!-- Секция: Отчеты -->
+                <section id="reports-section" class="content-section">
                     <div class="section-header">
-                        <h2>Табель рабочего времени</h2>
+                        <h2>Отчеты по опоздавшим сотрудникам</h2>
                         <div class="section-controls">
                             <div class="filter-controls">
-                                <select id="records-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                <input type="date" id="report-date-filter" class="form-control" style="margin-right: 10px;">
+                                <select id="report-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
                                     <option value="">Все организации</option>
                                 </select>
-                                <select id="records-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                <select id="report-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
                                     <option value="">Все подразделения</option>
                                 </select>
-                                <input type="month" id="records-month-filter" class="form-control">
-                                <select id="records-status-filter" class="form-control">
-                                    <option value="">Все статусы</option>
-                                    <option value="on_time">Вовремя</option>
-                                    <option value="late">Опоздание</option>
-                                    <option value="early_leave">Ранний уход</option>
-                                    <option value="absent">Отсутствие</option>
-                                </select>
-                                <button id="records-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
-                                <button id="records-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
-                                <button id="records-recalculate-btn" class="btn btn--success btn--sm">
-                                    <span class="btn-text">Пересчет рабочего времени</span>
+                                <button id="generate-report-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Сформировать отчет</span>
                                     <span class="spinner" style="display: none;">⏳</span>
                                 </button>
-                                <button id="records-delete-all-btn" class="btn btn--danger btn--sm" title="Удалить все записи из таблицы">
-                                    <span class="btn-text">🗑️ Очистить таблицу</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
+                                <button id="clear-report-btn" class="btn btn--outline btn--sm">Очистить</button>
                             </div>
-                            <span class="total-count">Всего: <span id="records-total">0</span></span>
+                            <span class="total-count">Найдено: <span id="report-total">0</span> сотрудников</span>
                         </div>
                     </div>
                     <div class="table-container">
                         <table class="admin-table">
                             <thead>
                                 <tr>
-                                    <th>Дата</th>
                                     <th>Сотрудник</th>
                                     <th>Табельный номер</th>
-                                    <th>Приход</th>
-                                    <th>Уход</th>
-                                    <th>Плановые часы</th>
-                                    <th>Фактические</th>
-                                    <th>Сверхурочные</th>
-                                    <th>Обед</th>
-                                    <th>Статус</th>
+                                    <th>Подразделение</th>
+                                    <th>График</th>
+                                    <th>Время входа по графику</th>
+                                    <th>Время фактического входа</th>
+                                    <th>Время опоздания</th>
                                 </tr>
                             </thead>
-                            <tbody id="time-records-tbody">
+                            <tbody id="reports-tbody">
                                 <!-- Данные будут загружены динамически -->
                             </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: Отчет по ФОТ -->
+                <section id="payroll-report-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Отчет по ФОТ</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <select id="payroll-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
+                                <select id="payroll-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все подразделения</option>
+                                </select>
+                                <input type="date" id="payroll-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
+                                <input type="date" id="payroll-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
+                                <button id="generate-payroll-report-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Сформировать отчет</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                                <button id="clear-payroll-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            </div>
+                            <span class="total-count">Итого: <span id="payroll-total">0.00</span> тенге</span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table" id="payroll-report-table">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>ФИО</th>
+                                    <th>Табельный номер</th>
+                                    <th>Подразделение</th>
+                                    <th>ФОТ за месяц</th>
+                                    <th>Смен в месяце</th>
+                                    <th>ФОТ на день</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payroll-report-body">
+                                <tr>
+                                    <td colspan="7" class="text-center">Выберите параметры и нажмите "Сформировать отчет"</td>
+                                </tr>
+                            </tbody>
+                            <tfoot id="payroll-report-footer" style="display: none;">
+                                <tr class="payroll-total-row">
+                                    <td colspan="6" class="text-right"><strong>Итого:</strong></td>
+                                    <td><strong id="payroll-total-amount">0.00</strong></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </section>
@@ -992,6 +1030,86 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования сотрудника -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Редактирование сотрудника</h3>
+                <button id="closeEmployeeModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="employeeForm">
+                    <input type="hidden" id="employeeTableNumber">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employeeFullName">ФИО <span style="color: red;">*</span></label>
+                            <input type="text" id="employeeFullName" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="employeeTableNumberDisplay">Табельный номер</label>
+                            <input type="text" id="employeeTableNumberDisplay" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employeeIIN">ИИН</label>
+                            <input type="text" id="employeeIIN" class="form-control" placeholder="Например: 951026301078" maxlength="12" pattern="[0-9]{12}">
+                        </div>
+                        <div class="form-group">
+                            <label for="employeePayroll">ФОТ (Зарплата)</label>
+                            <input type="number" id="employeePayroll" class="form-control" placeholder="Например: 500000" min="0" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employeeDepartment">Подразделение</label>
+                            <input type="text" id="employeeDepartment" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="employeePosition">Должность</label>
+                            <input type="text" id="employeePosition" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employeeSchedule">График работы</label>
+                            <input type="text" id="employeeSchedule" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="employeeStatus">Статус</label>
+                            <input type="text" id="employeeStatus" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="employeeBIN">БИН организации</label>
+                            <input type="text" id="employeeBIN" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="employeeCode">Код сотрудника</label>
+                            <input type="text" id="employeeCode" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="saveEmployeeBtn" class="btn btn--primary">
+                            <span class="btn-text">Сохранить</span>
+                            <span class="spinner" style="display: none;">⏳</span>
+                        </button>
+                        <button type="button" id="cancelEmployeeBtn" class="btn btn--outline">Отмена</button>
+                    </div>
+                </form>
+                
+                <div id="employeeFormStatus" class="status-message" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно деталей дня -->
     <div id="dayModal" class="modal">
         <div class="modal-content">
@@ -1055,7 +1173,7 @@
     
     <!-- Application scripts -->
     <script src="telegram.js?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true"></script>
-    <script src="app.js?v=final-v10.2&ts=20250619-actual-times"></script>
-    <script src="admin.js?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true"></script>
+    <script src="app.js?v=admin-auth-fix-v10.4&ts=20250701-1955&admin-fix=true"></script>
+    <script src="admin.js?v=payroll-filter-fix-v10.0&ts=20250702-1400&payroll-departments=fixed"></script>
 </body>
 </html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Status Display</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Calendar Status Display Test</h1>
+        
+        <div id="calendar" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin: 20px 0;">
+            <!-- Test calendar days with different statuses -->
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <h3>Status Mapping Test:</h3>
+            <div id="statusTest"></div>
+        </div>
+    </div>
+
+    <script>
+        // Updated getStatusText function
+        function getStatusText(status) {
+            const statusMap = {
+                'present': 'Присутствие',
+                'absent': 'Отсутствие',
+                'planned': 'Запланировано',
+                'weekend': 'Выходной',
+                'on_time': 'Вовремя',
+                'late': 'Опоздание',
+                'early_leave': 'Ранний уход',
+                'no_exit': 'Нет выхода',
+                'night_shift_on_time': 'Ночная смена',
+                'night_shift_late': 'Ночная смена (опоздание)',
+                'night_shift_auto': 'Ночная смена (авто)',
+                'weekend_worked': 'Работа в выходной'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Test calendar rendering
+        const calendar = document.getElementById('calendar');
+        const testDays = [
+            { day: 1, status: 'present' },
+            { day: 2, status: 'absent' },
+            { day: 3, status: 'weekend' },
+            { day: 4, status: 'planned' },
+            { day: 5, status: 'late' },
+            { day: 6, status: 'on_time' },
+            { day: 7, status: 'unknown_status' }
+        ];
+
+        testDays.forEach(day => {
+            const dayElement = document.createElement('div');
+            const cssStatus = day.status.replace(/_/g, '-');
+            dayElement.className = `calendar-day calendar-day--${cssStatus}`;
+            
+            let dayContent = `<div class="day-number">${day.day}</div>`;
+            dayContent += `<div class="day-status">${getStatusText(day.status)}</div>`;
+            
+            dayElement.innerHTML = dayContent;
+            calendar.appendChild(dayElement);
+        });
+
+        // Test status mapping
+        const statusTest = document.getElementById('statusTest');
+        const statusesToTest = ['present', 'absent', 'weekend', 'planned', 'late', 'on_time', 'unknown'];
+        
+        statusesToTest.forEach(status => {
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>${status}:</strong> ${getStatusText(status)}`;
+            statusTest.appendChild(div);
+        });
+    </script>
+</body>
+</html>

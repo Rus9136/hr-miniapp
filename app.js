@@ -105,6 +105,12 @@ async function initializePlatform() {
 function showScreen(screenName, screenElement) {
     console.log(`🔄 showScreen called: ${screenName} (current: ${currentScreen})`);
     
+    // ОТЛАДКА: Логируем все вызовы showScreen с stack trace
+    if (screenName === 'login' || screenName === 'menu') {
+        console.warn(`🔄 SCREEN CHANGE: ${currentScreen.name} → ${screenName}`);
+        console.warn('🔍 Stack trace:', new Error().stack);
+    }
+    
     // КРИТИЧЕСКАЯ ОТЛАДКА: Логируем переходы на menu
     if (screenName === 'menu' && currentScreen.name !== 'login') {
         console.warn('🔄 WARNING: Unexpected return to menu from:', currentScreen.name);
@@ -112,22 +118,32 @@ function showScreen(screenName, screenElement) {
     }
     
     // КРИТИЧЕСКАЯ ОТЛАДКА: Блокируем нежелательные переходы из admin
-    if (currentScreen.name === 'admin' && screenName === 'login') {
-        console.error('🚨 CRITICAL: Attempted to redirect admin to login! BLOCKED!');
+    if (currentScreen.name === 'admin' && (screenName === 'login' || screenName === 'menu')) {
+        console.error('🚨 CRITICAL: Attempted to redirect admin to login/menu! BLOCKED!');
         console.error('🚨 Stack trace:', new Error().stack);
+        
+        // Проверяем, открыто ли модальное окно
+        const employeeModal = document.getElementById('employeeModal');
+        if (employeeModal && employeeModal.style.display === 'flex') {
+            console.error('🚨 MODAL IS OPEN: This redirect was triggered while employee modal is open!');
+        }
+        
         return; // БЛОКИРУЕМ переход
     }
     
     // CRITICAL: Prevent unauthorized access to protected screens (ИСКЛЮЧАЯ admin)
+    // ВАЖНО: НЕ переводим на логин, если мы уже в админ-панели
     if ((screenName === 'menu' || screenName === 'main' || screenName === 'news' || 
          screenName === 'salary' || screenName === 'vacation' || screenName === 'hr' || 
-         screenName === 'settings' || screenName === 'departmentStats') && !window.currentEmployee) {
+         screenName === 'settings' || screenName === 'departmentStats') && 
+         !window.currentEmployee && currentScreen.name !== 'admin') {
         console.log(`❌ BLOCKED: Attempted to access ${screenName} without authentication`);
         console.log('🔒 Redirecting to login screen');
         console.log('🔍 Debug info:', {
             screenName,
             currentEmployee: !!window.currentEmployee,
-            currentEmployeeData: window.currentEmployee ? window.currentEmployee.fullName : 'null'
+            currentEmployeeData: window.currentEmployee ? window.currentEmployee.fullName : 'null',
+            currentScreenName: currentScreen.name
         });
         screenName = 'login';
         screenElement = loginScreen;
@@ -1486,7 +1502,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
     
     // CRITICAL: Ensure we always start on login screen if not authenticated
-    if (!window.currentEmployee) {
+    // BUT: Skip this check if we're already on admin screen
+    if (!window.currentEmployee && currentScreen.name !== 'admin') {
         console.log('🔒 No authenticated user - ensuring login screen is shown');
         console.log('🚪 INIT: Redirecting to login - no user authenticated');
         showScreen('login', loginScreen);
@@ -1847,6 +1864,11 @@ function initializeBackNavigation() {
 
 // Delegated event handler for back navigation
 function handleBackNavigation(e) {
+    // КРИТИЧНО: Игнорируем кнопки редактирования сотрудников
+    if (e.target.closest('.edit-employee-btn, #employeeModal, .modal')) {
+        return; // Не обрабатываем клики на модальном окне
+    }
+    
     const btn = e.target.closest('.btn-back, .breadcrumb-item[data-back]');
     if (!btn || !btn.dataset.back) return; // ВАЖНО: Возвращаемся если это не back кнопка
     
@@ -1857,7 +1879,8 @@ function handleBackNavigation(e) {
     }
     
     // Check authentication before allowing back navigation
-    if (!window.currentEmployee) {
+    // BUT: Skip check for admin panel
+    if (!window.currentEmployee && currentScreen.name !== 'admin') {
         console.log('❌ Back navigation blocked - user not authenticated');
         console.log('🚪 BACK: Redirecting to login - user not authenticated');
         e.preventDefault();

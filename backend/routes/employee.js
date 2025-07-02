@@ -303,22 +303,10 @@ router.get('/employee/:id/time-events', async (req, res) => {
         const outTime = new Date(day.last_exit);
         hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
         
-        // Determine status
-        const inHour = inTime.getHours();
-        const inMinute = inTime.getMinutes();
-        const outHour = outTime.getHours();
-        
-        if (inHour < 9 || (inHour === 9 && inMinute === 0)) {
-          status = 'on_time';
-        } else {
-          status = 'late';
-        }
-        
-        if (outHour < 18) {
-          status = 'early_leave';
-        }
+        // Simplified logic - any entry means present
+        status = 'present';
       } else if (day.first_entry) {
-        status = 'no_exit';
+        status = 'present';
       }
       
       return {
@@ -463,16 +451,41 @@ router.get('/employee/by-number/:tableNumber/timesheet/:year/:month', async (req
       
       const record = recordsMap[date];
       
+      // Check if date is in the future (compare dates only, not time)
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const isFutureDate = date > today;
+      
+      // Function to normalize status to simplified logic
+      const normalizeStatus = (status) => {
+        switch (status) {
+          case 'on_time':
+          case 'late':
+          case 'early_leave':
+          case 'no_exit':
+            return 'present';
+          case 'absent':
+            return 'absent';
+          case 'weekend':
+            return 'weekend';
+          case 'planned':
+            return 'planned';
+          default:
+            return status;
+        }
+      };
+
       // Determine status based on schedule or fallback to weekend logic
       let status;
       if (record) {
-        status = record.status;
+        status = normalizeStatus(record.status);
+      } else if (isFutureDate && isScheduledWorkDay) {
+        status = 'planned'; // Future work day with schedule
       } else if (isScheduledWorkDay) {
-        status = 'absent'; // Should be working but no record
+        status = 'absent'; // Past work day with no record
       } else if (scheduleAssignment && !isScheduledWorkDay) {
         status = 'weekend'; // Not a work day according to schedule
       } else {
-        status = isWeekend ? 'weekend' : 'absent'; // Fallback to old logic
+        status = isWeekend ? 'weekend' : (isFutureDate ? 'planned' : 'absent'); // Fallback logic
       }
       
       calendar.push({
@@ -565,22 +578,10 @@ router.get('/employee/by-number/:tableNumber/time-events', async (req, res) => {
         const outTime = new Date(day.last_exit);
         hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
         
-        // Determine status
-        const inHour = inTime.getHours();
-        const inMinute = inTime.getMinutes();
-        const outHour = outTime.getHours();
-        
-        if (inHour < 9 || (inHour === 9 && inMinute === 0)) {
-          status = 'on_time';
-        } else {
-          status = 'late';
-        }
-        
-        if (outHour < 18) {
-          status = 'early_leave';
-        }
+        // Simplified logic - any entry means present
+        status = 'present';
       } else if (day.first_entry) {
-        status = 'no_exit';
+        status = 'present';
       }
       
       return {
@@ -960,9 +961,14 @@ router.get('/employee/by-number/:tableNumber/department-stats/:year/:month', asy
         }
         
         // Determine status
-        let status = 'absent';
         const dayOfWeek = new Date(date).getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        
+        // Check if date is in the future (compare dates only, not time)
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        const isFutureDate = date > today;
+        
+        let status = 'absent';
         
         if (scheduleData) {
           if (scheduleData.timeType === 'Выходной') {
@@ -972,26 +978,18 @@ router.get('/employee/by-number/:tableNumber/department-stats/:year/:month', asy
               status = 'weekend_worked';
             }
           } else if (dayEvents) {
-            // Has schedule and worked
-            const scheduleStart = new Date(`2000-01-01T${scheduleData.scheduleStartTime}`);
-            const actualStart = new Date(dayEvents.first_entry);
-            const actualStartTime = new Date(`2000-01-01T${actualStart.toTimeString().split(' ')[0]}`);
-            
-            if (actualStartTime <= scheduleStart) {
-              status = 'on_time';
-            } else {
-              status = 'late';
-            }
+            // Has schedule and worked - simplified to just "present"
+            status = 'present';
           } else {
             // Has schedule but didn't work
-            status = 'absent';
+            status = isFutureDate ? 'planned' : 'absent';
           }
         } else {
           // No schedule
           if (isWeekend) {
             status = dayEvents ? 'weekend_worked' : 'weekend';
           } else {
-            status = dayEvents ? 'no_schedule_worked' : 'absent';
+            status = dayEvents ? 'present' : (isFutureDate ? 'planned' : 'absent');
           }
         }
         
