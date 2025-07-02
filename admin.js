@@ -3307,20 +3307,9 @@ async function initAIRecommendationSection() {
     
     // Organization filter change - update departments
     if (orgFilter) {
-        orgFilter.addEventListener('change', async (e) => {
-            const selectedOrg = e.target.value;
-            console.log('AI organization changed to:', selectedOrg);
-            
-            // Clear department selection
-            const deptFilter = document.getElementById('ai-department-filter');
-            if (deptFilter) {
-                deptFilter.value = '';
-                deptFilter.innerHTML = '<option value="">Выберите подразделение</option>';
-            }
-            
-            // Reload departments filtered by organization
-            await loadAIDepartments(selectedOrg || null);
-        });
+        // Remove existing event listeners to prevent duplicates
+        orgFilter.removeEventListener('change', handleAIOrganizationChange);
+        orgFilter.addEventListener('change', handleAIOrganizationChange);
     }
     
     // Process button click
@@ -3329,6 +3318,24 @@ async function initAIRecommendationSection() {
     }
     
     console.log('✅ AI Recommendation section initialized');
+}
+
+// Handle organization change for AI section
+async function handleAIOrganizationChange(e) {
+    const selectedOrg = e.target.value;
+    console.log('🏢 AI organization changed to:', selectedOrg);
+    
+    // Clear department selection
+    const deptFilter = document.getElementById('ai-department-filter');
+    if (deptFilter) {
+        deptFilter.value = '';
+        deptFilter.innerHTML = '<option value="">Выберите подразделение</option>';
+        console.log('🔄 Department filter cleared');
+    }
+    
+    // Reload departments filtered by organization
+    console.log('📥 Loading departments for organization:', selectedOrg);
+    await loadAIDepartments(selectedOrg || null);
 }
 
 // Load organizations for AI recommendation filter

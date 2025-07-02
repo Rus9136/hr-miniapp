@@ -36,10 +36,25 @@ router.get('/admin/employees', (req, res) => {
     });
 });
 
-// Get all departments
+// Get all departments (with optional organization filter)
 router.get('/admin/departments', async (req, res) => {
     try {
-        const rows = await db.queryRows('SELECT * FROM departments ORDER BY object_name');
+        const { organization } = req.query;
+        
+        let query = 'SELECT * FROM departments';
+        let params = [];
+        
+        if (organization) {
+            query += ' WHERE object_bin = $1';
+            params.push(organization);
+        }
+        
+        query += ' ORDER BY object_name';
+        
+        console.log('Departments query:', query, 'params:', params);
+        const rows = await db.queryRows(query, params);
+        console.log(`Found ${rows.length} departments for organization: ${organization || 'all'}`);
+        
         res.json(rows);
     } catch (err) {
         console.error('Error fetching departments:', err);
@@ -2326,6 +2341,83 @@ router.get('/admin/reports/payroll', async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Ошибка при формировании отчета: ' + error.message
+        });
+    }
+});
+
+// Update department
+router.put('/admin/departments/:id', async (req, res) => {
+    try {
+        const departmentId = req.params.id;
+        const { id_iiko } = req.body;
+        
+        console.log(`Updating department ${departmentId} with id_iiko: ${id_iiko}`);
+        
+        // Validate input
+        if (!departmentId || isNaN(departmentId)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Некорректный ID подразделения'
+            });
+        }
+        
+        // Check if department exists
+        const existingDept = await db.queryRow(
+            'SELECT * FROM departments WHERE id = $1',
+            [departmentId]
+        );
+        
+        if (!existingDept) {
+            return res.status(404).json({
+                success: false,
+                error: 'Подразделение не найдено'
+            });
+        }
+        
+        // Validate UUID format if id_iiko is provided
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (id_iiko && id_iiko.trim() !== '' && !uuidRegex.test(id_iiko)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Некорректный формат UUID для ID IIKO. Ожидается формат: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+            });
+        }
+        
+        // Prepare update data
+        const updateData = id_iiko && id_iiko.trim() !== '' ? id_iiko.trim() : null;
+        
+        // Update department
+        const updateResult = await db.query(
+            'UPDATE departments SET id_iiko = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [updateData, departmentId]
+        );
+        
+        if (updateResult.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Не удалось обновить подразделение'
+            });
+        }
+        
+        // Get updated department data
+        const updatedDept = await db.queryRow(
+            'SELECT * FROM departments WHERE id = $1',
+            [departmentId]
+        );
+        
+        console.log(`✅ Successfully updated department ${departmentId}`);
+        
+        res.json({
+            success: true,
+            message: 'Подразделение успешно обновлено',
+            data: updatedDept
+        });
+        
+    } catch (error) {
+        console.error('Error updating department:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Внутренняя ошибка сервера при обновлении подразделения'
         });
     }
 });
