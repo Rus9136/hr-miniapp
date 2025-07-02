@@ -468,6 +468,7 @@
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
                         <li><a href="#" data-section="reports" class="menu-item">Отчеты</a></li>
+                        <li><a href="#" data-section="ai-recommendation" class="menu-item">AI-рекомендация</a></li>
                         <li><a href="#" data-section="payroll-report" class="menu-item">Отчет по ФОТ</a></li>
                     </ul>
                 </div>
@@ -543,6 +544,7 @@
                                     <th>Название</th>
                                     <th>Компания</th>
                                     <th>БИН</th>
+                                    <th>Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="departments-tbody">
@@ -709,6 +711,48 @@
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+                </section>
+                
+                <!-- Секция: AI-рекомендация -->
+                <section id="ai-recommendation-section" class="content-section">
+                    <div class="section-header">
+                        <h2>AI-рекомендация</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <select id="ai-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Выберите организацию</option>
+                                </select>
+                                <select id="ai-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Выберите подразделение</option>
+                                </select>
+                                <button id="ai-process-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Отправить для обработки</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-content-container">
+                        <div class="ai-placeholder">
+                            <div class="ai-icon">🤖</div>
+                            <h3>AI-рекомендации по персоналу</h3>
+                            <p>Выберите организацию и подразделение, затем нажмите "Отправить для обработки" для получения AI-рекомендаций по оптимизации работы персонала.</p>
+                            <div class="ai-features">
+                                <div class="ai-feature-item">
+                                    <span class="feature-icon">📊</span>
+                                    <span>Анализ посещаемости</span>
+                                </div>
+                                <div class="ai-feature-item">
+                                    <span class="feature-icon">⏰</span>
+                                    <span>Оптимизация графиков</span>
+                                </div>
+                                <div class="ai-feature-item">
+                                    <span class="feature-icon">👥</span>
+                                    <span>Управление персоналом</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </section>
                 
@@ -1106,6 +1150,65 @@
                 </form>
                 
                 <div id="employeeFormStatus" class="status-message" style="margin-top: 15px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования подразделения -->
+    <div id="departmentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Редактирование подразделения</h3>
+                <button id="closeDepartmentModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="departmentForm">
+                    <input type="hidden" id="departmentId">
+                    
+                    <!-- Поля только для чтения (контекст) -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="departmentCode">Код подразделения</label>
+                            <input type="text" id="departmentCode" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="departmentName">Название</label>
+                            <input type="text" id="departmentName" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="departmentCompany">Компания</label>
+                            <input type="text" id="departmentCompany" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="departmentBin">БИН</label>
+                            <input type="text" id="departmentBin" class="form-control" readonly>
+                        </div>
+                    </div>
+                    
+                    <!-- Редактируемое поле -->
+                    <div class="form-row">
+                        <div class="form-group" style="width: 100%;">
+                            <label for="departmentIikoId">ID IIKO</label>
+                            <input type="text" id="departmentIikoId" class="form-control" 
+                                   placeholder="Например: 0d30c200-87b5-45a5-89f0-eb76e2892b4a">
+                            <small class="form-text text-muted">UUID идентификатор в системе IIKO</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопки действий -->
+                    <div class="form-actions">
+                        <button type="button" id="saveDepartmentBtn" class="btn btn--primary">
+                            <span class="btn-text">Сохранить</span>
+                            <span class="spinner" style="display: none;">⏳</span>
+                        </button>
+                        <button type="button" id="cancelDepartmentBtn" class="btn btn--outline">Отмена</button>
+                    </div>
+                </form>
+                
+                <div id="departmentFormStatus" class="status-message" style="margin-top: 15px; display: none;"></div>
             </div>
         </div>
     </div>
