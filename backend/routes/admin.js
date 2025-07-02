@@ -1050,6 +1050,195 @@ router.delete('/admin/time-records/clear-all', async (req, res) => {
     }
 });
 
+// ==================== REPORTS ENDPOINTS ====================
+
+// Late employees report
+router.get('/admin/reports/late-employees', async (req, res) => {
+    try {
+        const { date, organization, department } = req.query;
+        
+        // Если дата не указана, используем сегодняшнюю
+        const reportDate = date || new Date().toISOString().split('T')[0];
+        
+        console.log('Getting late employees report for:', reportDate, 'org:', organization, 'dept:', department);
+
+        // Строим SQL запрос с фильтрами
+        let query = `
+            SELECT DISTINCT
+                e.full_name as employee_name,
+                e.table_number,
+                e.object_code,
+                d.object_name as department_name,
+                d.object_bin as organization,
+                ws.schedule_name,
+                ws.work_start_time as schedule_start_time,
+                ws.work_end_time as schedule_end_time,
+                te.event_datetime as actual_entry_time,
+                esa.start_date,
+                esa.end_date
+            FROM employees e
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            JOIN employee_schedule_assignments esa ON e.table_number = esa.employee_number
+            JOIN work_schedules_1c ws ON esa.schedule_code = ws.schedule_code AND ws.work_date = $1
+            LEFT JOIN (
+                SELECT DISTINCT ON (employee_number, DATE(event_datetime))
+                    employee_number,
+                    event_datetime,
+                    DATE(event_datetime) as event_date
+                FROM time_events 
+                WHERE event_type = 'вход' 
+                    AND DATE(event_datetime) = $1
+                ORDER BY employee_number, DATE(event_datetime), event_datetime ASC
+            ) te ON e.table_number = te.employee_number
+            WHERE (esa.start_date <= $1)
+                AND (esa.end_date IS NULL OR esa.end_date >= $1)
+                AND ws.work_start_time IS NOT NULL
+                AND ws.work_hours > 0
+        `;
+
+        const queryParams = [reportDate];
+        let paramIndex = 2;
+
+        // Добавляем фильтр по организации
+        if (organization && organization.trim() !== '') {
+            query += ` AND d.object_bin = $${paramIndex}`;
+            queryParams.push(organization);
+            paramIndex++;
+        }
+
+        // Добавляем фильтр по подразделению
+        if (department && department.trim() !== '') {
+            query += ` AND e.object_code = $${paramIndex}`;
+            queryParams.push(department);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY e.full_name`;
+
+        const result = await db.query(query, queryParams);
+        
+        // Обрабатываем результат для определения опозданий
+        const lateEmployees = result.rows.map(row => {
+            let status = 'on_time';
+            let lateMinutes = 0;
+            let actualEntryFormatted = 'Отсутствие';
+
+            if (row.actual_entry_time) {
+                const actualTime = new Date(row.actual_entry_time);
+                const actualTimeStr = actualTime.toTimeString().substring(0, 5); // HH:MM
+                actualEntryFormatted = actualTimeStr;
+
+                // Сравниваем с графиком
+                if (row.schedule_start_time) {
+                    const scheduleTime = new Date(`1970-01-01T${row.schedule_start_time}`);
+                    const actualTimeForComparison = new Date(`1970-01-01T${actualTimeStr}:00`);
+                    
+                    const diffMs = actualTimeForComparison.getTime() - scheduleTime.getTime();
+                    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+                    if (diffMinutes > 0) {
+                        status = 'late';
+                        lateMinutes = diffMinutes;
+                    }
+                }
+            } else {
+                status = 'absent';
+            }
+
+            return {
+                employee_name: row.employee_name,
+                table_number: row.table_number,
+                department_name: row.department_name,
+                organization: row.organization,
+                schedule_name: row.schedule_name,
+                schedule_start_time: row.schedule_start_time,
+                actual_entry_time: actualEntryFormatted,
+                status: status,
+                late_minutes: lateMinutes,
+                late_time_formatted: lateMinutes > 0 ? `${lateMinutes} мин` : '-'
+            };
+        });
+
+        // Фильтруем только опоздавших и отсутствующих
+        const filteredEmployees = lateEmployees.filter(emp => emp.status === 'late' || emp.status === 'absent');
+
+        console.log(`Found ${filteredEmployees.length} late/absent employees`);
+
+        res.json({
+            success: true,
+            data: filteredEmployees,
+            report_date: reportDate,
+            total_count: filteredEmployees.length
+        });
+
+    } catch (error) {
+        console.error('Error getting late employees report:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении отчета по опоздавшим: ' + error.message
+        });
+    }
+});
+
+// Get organizations for reports filter
+router.get('/admin/reports/organizations', async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT DISTINCT 
+                object_bin as organization,
+                object_company as company_name
+            FROM departments 
+            WHERE object_bin IS NOT NULL AND object_bin != ''
+            ORDER BY object_company
+        `);
+        
+        res.json({
+            success: true,
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Error getting organizations for reports:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении списка организаций: ' + error.message
+        });
+    }
+});
+
+// Get departments for reports filter (by organization)
+router.get('/admin/reports/departments', async (req, res) => {
+    try {
+        const { organization } = req.query;
+        
+        let query = `
+            SELECT object_code as id, object_name as name, object_bin as organization
+            FROM departments 
+            WHERE 1=1
+        `;
+        const queryParams = [];
+        
+        if (organization && organization.trim() !== '') {
+            query += ` AND object_bin = $1`;
+            queryParams.push(organization);
+        }
+        
+        query += ` ORDER BY object_name`;
+        
+        const result = await db.query(query, queryParams);
+        
+        res.json({
+            success: true,
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Error getting departments for reports:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении списка подразделений: ' + error.message
+        });
+    }
+});
+
 // ==================== 1C WORK SCHEDULES IMPORT ENDPOINT ====================
 
 // ADVANCED HOURS CALCULATOR WITH SCHEDULE-BASED LOGIC
@@ -1845,12 +2034,12 @@ router.put('/admin/schedules/1c/update-times', async (req, res) => {
     }
 });
 
-// Update employees IIN numbers from 1C
+// Update employees IIN and payroll data from 1C
 router.post('/admin/employees/update-iin', async (req, res) => {
     try {
         const employees = req.body;
         
-        console.log('Received IIN update request for', employees?.length || 0, 'employees');
+        console.log('Received employee data update request for', employees?.length || 0, 'employees');
         
         // Validation
         if (!Array.isArray(employees) || employees.length === 0) {
@@ -1868,27 +2057,59 @@ router.post('/admin/employees/update-iin', async (req, res) => {
         // Process each employee
         for (const employee of employees) {
             try {
-                const { iin, table_number } = employee;
+                const { iin, table_number, payroll, full_name } = employee;
                 
-                // Validate employee data
-                if (!iin || !table_number) {
-                    errors.push(`Неполные данные: ИИН=${iin}, табельный номер=${table_number}`);
+                // Validate employee data - require at least table_number and one of iin/payroll/full_name
+                if (!table_number || (!iin && payroll === undefined && !full_name)) {
+                    errors.push(`Неполные данные: табельный номер=${table_number}, ИИН=${iin}, ФОТ=${payroll}, ФИО=${full_name}`);
                     totalSkipped++;
                     continue;
                 }
                 
-                // Validate IIN format (12 digits)
-                if (!/^\d{12}$/.test(iin)) {
+                // Validate IIN format if provided (12 digits)
+                if (iin && !/^\d{12}$/.test(iin)) {
                     errors.push(`Неверный формат ИИН ${iin} для табельного номера ${table_number}. Ожидается 12 цифр.`);
                     totalSkipped++;
                     continue;
                 }
                 
-                console.log(`Processing employee: ${table_number} with IIN: ${iin}`);
+                // Process and validate payroll format if provided
+                let processedPayroll = payroll;
+                if (payroll !== undefined) {
+                    try {
+                        // Handle payroll as string with spaces (from 1C)
+                        if (typeof payroll === 'string') {
+                            // Remove all types of spaces: regular space, non-breaking space, etc.
+                            processedPayroll = payroll.replace(/\s/g, '').replace(/\u00A0/g, '');
+                            
+                            // If empty string after cleaning, treat as undefined
+                            if (processedPayroll === '') {
+                                processedPayroll = undefined;
+                            }
+                        }
+                        
+                        // Convert to number and validate
+                        if (processedPayroll !== undefined) {
+                            processedPayroll = parseFloat(processedPayroll);
+                            
+                            if (isNaN(processedPayroll) || processedPayroll < 0) {
+                                errors.push(`Неверный формат ФОТ "${payroll}" для табельного номера ${table_number}. Ожидается положительное число.`);
+                                totalSkipped++;
+                                continue;
+                            }
+                        }
+                    } catch (error) {
+                        errors.push(`Ошибка обработки ФОТ "${payroll}" для табельного номера ${table_number}: ${error.message}`);
+                        totalSkipped++;
+                        continue;
+                    }
+                }
                 
-                // Check if employee exists and has null IIN
+                console.log(`Processing employee: ${table_number}${iin ? ` with IIN: ${iin}` : ''}${processedPayroll !== undefined ? ` with payroll: ${processedPayroll} (original: "${payroll}")` : ''}${full_name ? ` with full_name: ${full_name}` : ''}`);
+                
+                // Check if employee exists
                 const checkResult = await db.query(
-                    'SELECT id, iin FROM employees WHERE table_number = $1',
+                    'SELECT id, iin, payroll, full_name FROM employees WHERE table_number = $1',
                     [table_number]
                 );
                 
@@ -1900,23 +2121,65 @@ router.post('/admin/employees/update-iin', async (req, res) => {
                 
                 const existingEmployee = checkResult.rows[0];
                 
-                // Only update if IIN is null (not overwrite existing IIN)
-                if (existingEmployee.iin !== null && existingEmployee.iin !== '') {
-                    console.log(`Employee ${table_number} already has IIN: ${existingEmployee.iin}, skipping`);
+                // Prepare update fields and values
+                let updateFields = [];
+                let updateValues = [];
+                let paramIndex = 1;
+                let hasUpdates = false;
+                
+                // Handle IIN update
+                if (iin) {
+                    if (existingEmployee.iin === null || existingEmployee.iin === '') {
+                        updateFields.push(`iin = $${paramIndex++}`);
+                        updateValues.push(iin);
+                        hasUpdates = true;
+                        console.log(`  - Will update IIN: ${iin}`);
+                    } else {
+                        console.log(`  - Employee ${table_number} already has IIN: ${existingEmployee.iin}, skipping IIN update`);
+                    }
+                }
+                
+                // Handle payroll update (always update if provided)
+                if (processedPayroll !== undefined) {
+                    updateFields.push(`payroll = $${paramIndex++}`);
+                    updateValues.push(processedPayroll);
+                    hasUpdates = true;
+                    console.log(`  - Will update payroll: ${processedPayroll} (original: "${payroll}", previous: ${existingEmployee.payroll})`);
+                }
+                
+                // Handle full_name update (always update if provided)
+                if (full_name) {
+                    updateFields.push(`full_name = $${paramIndex++}`);
+                    updateValues.push(full_name);
+                    hasUpdates = true;
+                    console.log(`  - Will update full_name: ${full_name} (previous: ${existingEmployee.full_name})`);
+                }
+                
+                // Skip if no updates needed
+                if (!hasUpdates) {
+                    console.log(`  - No updates needed for employee ${table_number}`);
                     totalSkipped++;
                     continue;
                 }
                 
-                // Update IIN
-                const updateResult = await db.query(
-                    'UPDATE employees SET iin = $1, updated_at = CURRENT_TIMESTAMP WHERE table_number = $2',
-                    [iin, table_number]
-                );
+                // Add updated_at field
+                updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+                updateValues.push(table_number); // WHERE clause parameter
+                
+                // Build and execute update query
+                const updateQuery = `
+                    UPDATE employees 
+                    SET ${updateFields.join(', ')}
+                    WHERE table_number = $${paramIndex}
+                `;
+                
+                const updateResult = await db.query(updateQuery, updateValues);
                 
                 if (updateResult.rowCount > 0) {
-                    console.log(`Successfully updated IIN for employee: ${table_number}`);
+                    console.log(`  ✅ Successfully updated employee: ${table_number}`);
                     totalUpdated++;
                 } else {
+                    console.log(`  ❌ No rows updated for employee: ${table_number}`);
                     totalSkipped++;
                 }
                 
@@ -1943,14 +2206,126 @@ router.post('/admin/employees/update-iin', async (req, res) => {
             errors: errors.length > 0 ? errors.slice(0, 10) : undefined // Limit errors to first 10
         };
         
-        console.log('IIN update completed:', response.statistics);
+        console.log('Employee data update completed:', response.statistics);
         res.json(response);
         
     } catch (error) {
-        console.error('Error updating employees IIN:', error);
+        console.error('Error updating employee data:', error);
         res.status(500).json({
             success: false,
-            error: 'Ошибка обновления ИИН сотрудников: ' + error.message
+            error: 'Ошибка обновления данных сотрудников: ' + error.message
+        });
+    }
+});
+
+// Get payroll report
+router.get('/admin/reports/payroll', async (req, res) => {
+    try {
+        const { organization, department, dateFrom, dateTo } = req.query;
+        
+        if (!dateFrom || !dateTo) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо указать даты начала и конца периода'
+            });
+        }
+        
+        console.log('Payroll report request:', { organization, department, dateFrom, dateTo });
+        
+        // Правильный запрос: получаем сотрудников с количеством смен в выбранном периоде
+        let query = `
+            WITH employee_shifts AS (
+                SELECT 
+                    e.table_number,
+                    e.full_name,
+                    e.payroll,
+                    d.object_name as department_name,
+                    d.object_company as organization_name,
+                    ws1c.work_date,
+                    ws1c.work_hours,
+                    ws1c.schedule_name,
+                    COUNT(*) OVER (PARTITION BY e.table_number) as shifts_count_in_period
+                FROM employees e
+                INNER JOIN employee_schedule_assignments esa ON e.table_number = esa.employee_number
+                INNER JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+                LEFT JOIN departments d ON e.object_code = d.object_code
+                WHERE e.status = 1 
+                AND e.payroll IS NOT NULL
+                AND ws1c.work_date >= $1::date
+                AND ws1c.work_date <= $2::date
+                AND esa.start_date <= ws1c.work_date
+                AND (esa.end_date IS NULL OR esa.end_date >= ws1c.work_date)
+        `;
+        
+        const params = [dateFrom, dateTo];
+        
+        // Add organization filter
+        if (organization) {
+            query += ` AND e.object_bin = $${params.length + 1}`;
+            params.push(organization);
+        }
+        
+        // Add department filter
+        if (department) {
+            query += ` AND e.object_code = $${params.length + 1}`;
+            params.push(department);
+        }
+        
+        query += `
+            )
+            SELECT 
+                work_date,
+                table_number,
+                full_name,
+                department_name,
+                organization_name,
+                payroll,
+                shifts_count_in_period,
+                schedule_name,
+                work_hours,
+                ROUND(payroll::decimal / shifts_count_in_period, 2) as daily_payroll
+            FROM employee_shifts
+            ORDER BY full_name, work_date
+            LIMIT 10000
+        `;
+        
+        const result = await db.query(query, params);
+        console.log(`Payroll report: found ${result.rows.length} records`);
+        
+        // Calculate total
+        const total = result.rows.reduce((sum, row) => sum + parseFloat(row.daily_payroll), 0);
+        
+        res.json({
+            success: true,
+            data: result.rows.map(row => ({
+                work_date: row.work_date.toISOString().split('T')[0],
+                full_name: row.full_name,
+                table_number: row.table_number,
+                department_name: row.department_name,
+                organization_name: row.organization_name,
+                payroll: parseFloat(row.payroll),
+                shifts_count: parseInt(row.shifts_count_in_period),
+                daily_payroll: parseFloat(row.daily_payroll),
+                schedule_name: row.schedule_name,
+                work_hours: parseInt(row.work_hours)
+            })),
+            summary: {
+                total: total.toFixed(2),
+                recordsCount: result.rows.length,
+                dateFrom,
+                dateTo,
+                filters: {
+                    organization: organization || 'Все',
+                    department: department || 'Все'
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error generating payroll report:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при формировании отчета: ' + error.message
         });
     }
 });

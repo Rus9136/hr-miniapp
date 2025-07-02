@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отладка модального окна</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-panel { background: #f8f9fa; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+        .btn { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .log { background: #000; color: #00ff00; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Отладка модального окна сотрудника</h1>
+    
+    <div class="debug-panel">
+        <h3>Шаги для отладки:</h3>
+        <ol>
+            <li>Сначала авторизуйтесь в админ-панели как <strong>admin12qw</strong></li>
+            <li>Перейдите в раздел "Сотрудники"</li>
+            <li>Нажмите кнопку ✏️ рядом с любым сотрудником</li>
+            <li>Проверьте консоль браузера (F12) на наличие ошибок</li>
+        </ol>
+    </div>
+    
+    <div class="debug-panel">
+        <h3>Тестовые действия:</h3>
+        <button class="btn" onclick="checkAdminPanel()">Проверить админ-панель</button>
+        <button class="btn" onclick="testModal()">Тест модального окна</button>
+        <button class="btn" onclick="checkGlobalHandlers()">Проверить обработчики</button>
+        <button class="btn" onclick="clearDebugLog()">Очистить лог</button>
+    </div>
+    
+    <div class="log" id="debugLog">Лог отладки...\n</div>
+
+    <script>
+        function log(message) {
+            const logElement = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function clearDebugLog() {
+            document.getElementById('debugLog').textContent = 'Лог очищен...\n';
+        }
+        
+        function checkAdminPanel() {
+            log('🔍 Проверяем состояние админ-панели...');
+            
+            // Проверяем, загружены ли функции админ-панели
+            const functions = [
+                'switchSection', 'loadEmployees', 'openEmployeeModal', 
+                'closeEmployeeModal', 'initEmployeeModal'
+            ];
+            
+            functions.forEach(funcName => {
+                if (typeof window[funcName] === 'function') {
+                    log(`✅ Функция ${funcName} доступна`);
+                } else {
+                    log(`❌ Функция ${funcName} не найдена`);
+                }
+            });
+            
+            // Проверяем переменные
+            if (typeof window.employeesData !== 'undefined') {
+                log(`✅ employeesData доступна (${window.employeesData.length} записей)`);
+            } else {
+                log('❌ employeesData не найдена');
+            }
+            
+            // Проверяем DOM элементы
+            const elements = ['adminScreen', 'employeeModal', 'employees-tbody'];
+            elements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    log(`✅ Элемент ${id} найден (display: ${element.style.display || 'default'})`);
+                } else {
+                    log(`❌ Элемент ${id} не найден`);
+                }
+            });
+        }
+        
+        function testModal() {
+            log('🧪 Тестируем модальное окно...');
+            
+            if (typeof window.openEmployeeModal === 'function') {
+                log('✅ Функция openEmployeeModal найдена');
+                
+                // Проверяем данные сотрудников
+                if (window.employeesData && window.employeesData.length > 0) {
+                    const testEmployee = window.employeesData[0];
+                    log(`Тестируем с сотрудником: ${testEmployee.table_number}`);
+                    
+                    try {
+                        window.openEmployeeModal(testEmployee.table_number);
+                        log('✅ Функция openEmployeeModal выполнена');
+                    } catch (error) {
+                        log(`❌ Ошибка при открытии модального окна: ${error.message}`);
+                    }
+                } else {
+                    log('❌ Нет данных сотрудников для тестирования');
+                    log('💡 Убедитесь, что вы в разделе "Сотрудники" админ-панели');
+                }
+            } else {
+                log('❌ Функция openEmployeeModal не найдена');
+                log('💡 Убедитесь, что админ-панель загружена');
+            }
+        }
+        
+        function checkGlobalHandlers() {
+            log('🔍 Проверяем глобальные обработчики событий...');
+            
+            // Проверяем обработчики клика на document
+            const clickEvents = getEventListeners ? getEventListeners(document) : null;
+            if (clickEvents && clickEvents.click) {
+                log(`Найдено ${clickEvents.click.length} обработчиков click на document`);
+                clickEvents.click.forEach((handler, index) => {
+                    log(`  ${index + 1}. ${handler.listener.name || 'anonymous'}`);
+                });
+            } else {
+                log('Не удалось получить информацию об обработчиках (откройте DevTools)');
+            }
+            
+            // Проверяем текущий экран
+            const screens = document.querySelectorAll('.screen');
+            let activeScreen = null;
+            screens.forEach(screen => {
+                if (screen.classList.contains('active') || screen.style.display !== 'none') {
+                    activeScreen = screen.id;
+                }
+            });
+            
+            log(`Активный экран: ${activeScreen || 'не определен'}`);
+        }
+        
+        // Перехватываем глобальные ошибки
+        window.addEventListener('error', (event) => {
+            log(`❌ Глобальная ошибка: ${event.message} в ${event.filename}:${event.lineno}`);
+        });
+        
+        // Перехватываем нехватывающие промисы
+        window.addEventListener('unhandledrejection', (event) => {
+            log(`❌ Необработанное отклонение промиса: ${event.reason}`);
+        });
+        
+        log('🚀 Страница отладки загружена');
+        log('📝 Откройте консоль браузера (F12) для дополнительной информации');
+    </script>
+</body>
+</html>

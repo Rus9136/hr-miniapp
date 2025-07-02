@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест цветов статусов</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { padding: 20px; }
+        .test-container { 
+            display: grid; 
+            grid-template-columns: repeat(4, 150px); 
+            gap: 10px; 
+            margin: 20px 0;
+        }
+        .test-day {
+            height: 80px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h2>Тест контрастности статусов календаря</h2>
+    
+    <div class="test-container">
+        <div class="test-day calendar-day--present">
+            <div class="day-number">15</div>
+            <div class="day-status">Присутствовал</div>
+            <div class="day-schedule">09:00-18:00</div>
+        </div>
+        
+        <div class="test-day calendar-day--planned">
+            <div class="day-number">16</div>
+            <div class="day-status">Запланировано</div>
+            <div class="day-schedule">09:00-18:00</div>
+        </div>
+        
+        <div class="test-day calendar-day--absent">
+            <div class="day-number">17</div>
+            <div class="day-status">Отсутствие</div>
+            <div class="day-schedule">09:00-18:00</div>
+        </div>
+        
+        <div class="test-day calendar-day--weekend">
+            <div class="day-number">18</div>
+            <div class="day-status">Выходной</div>
+            <div class="day-schedule">-</div>
+        </div>
+    </div>
+    
+    <h3>Легенда:</h3>
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color legend-color--present"></div>
+            <span>Присутствовал</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-color--planned"></div>
+            <span>Запланировано</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-color--absent"></div>
+            <span>Отсутствие</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-color--weekend"></div>
+            <span>Выходной</span>
+        </div>
+    </div>
+
+    <h3>Статусы в модальных окнах:</h3>
+    <p>
+        <span class="detail-status status--present">Присутствовал</span>
+        <span class="detail-status status--planned">Запланировано</span> 
+        <span class="detail-status status--absent">Отсутствие</span>
+        <span class="detail-status status--weekend">Выходной</span>
+    </p>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Calendar Colors</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="telegram.css">
+    <style>
+        body {
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            margin-bottom: 40px;
+        }
+        h2 {
+            margin-bottom: 20px;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calendar Colors Test</h1>
+    
+    <div class="test-section">
+        <h2>Normal Theme</h2>
+        <div class="calendar-grid">
+            <div class="calendar-day calendar-day--present">
+                <div class="day-number">1</div>
+                <div class="day-status">Присутствовал</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--planned">
+                <div class="day-number">2</div>
+                <div class="day-status">Рабочий день</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--absent">
+                <div class="day-number">3</div>
+                <div class="day-status">Отсутствовал</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--weekend">
+                <div class="day-number">4</div>
+                <div class="day-status">Выходной</div>
+                <div class="day-schedule"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section telegram-theme">
+        <h2>Telegram Theme</h2>
+        <div class="calendar-grid">
+            <div class="calendar-day calendar-day--present">
+                <div class="day-number">1</div>
+                <div class="day-status">Присутствовал</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--planned">
+                <div class="day-number">2</div>
+                <div class="day-status">Рабочий день</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--absent">
+                <div class="day-number">3</div>
+                <div class="day-status">Отсутствовал</div>
+                <div class="day-schedule">09:00-18:00</div>
+            </div>
+            <div class="calendar-day calendar-day--weekend">
+                <div class="day-number">4</div>
+                <div class="day-status">Выходной</div>
+                <div class="day-schedule"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section telegram-theme">
+        <h2>Modal Status Badges (Telegram Theme)</h2>
+        <div class="modal-content" style="padding: 20px; background: #2b3544;">
+            <div class="detail-section" style="padding: 15px;">
+                <span class="detail-status status--present">Присутствовал</span>
+                <span class="detail-status status--planned">Запланировано</span>
+                <span class="detail-status status--absent">Отсутствовал</span>
+                <span class="detail-status status--weekend">Выходной</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

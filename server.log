@@ -1,0 +1,56 @@
+
+> hr-miniapp@1.0.0 start
+> concurrently "npm run server" "npm run client"
+
+[1] 
+[1] > hr-miniapp@1.0.0 client
+[1] > http-server . -p 5555 -c-1
+[1] 
+[0] 
+[0] > hr-miniapp@1.0.0 server
+[0] > node --max-old-space-size=512 backend/server.js
+[0] 
+[1] Starting up http-server, serving .
+[1] 
+[1] http-server version: 14.1.1
+[1] 
+[1] http-server settings: 
+[1] CORS: disabled
+[1] Cache: -1 seconds
+[1] Connection Timeout: 120 seconds
+[1] Directory Listings: visible
+[1] AutoIndex: visible
+[1] Serve GZIP Files: false
+[1] Serve Brotli Files: false
+[1] Default File Extension: none
+[1] 
+[1] Available on:
+[1]   http://127.0.0.1:5555
+[1]   http://109.205.178.74:5555
+[1]   http://192.168.224.1:5555
+[1]   http://172.30.0.1:5555
+[1]   http://172.18.0.1:5555
+[1] Hit CTRL-C to stop the server
+[1] 
+[0] node:events:495
+[0]       throw er; // Unhandled 'error' event
+[0]       ^
+[0] 
+[0] Error: listen EADDRINUSE: address already in use 0.0.0.0:3030
+[0]     at Server.setupListenHandle [as _listen2] (node:net:1817:16)
+[0]     at listenInCluster (node:net:1865:12)
+[0]     at doListen (node:net:2014:7)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+[0] Emitted 'error' event on Server instance at:
+[0]     at emitErrorNT (node:net:1844:8)
+[0]     at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {
+[0]   code: 'EADDRINUSE',
+[0]   errno: -98,
+[0]   syscall: 'listen',
+[0]   address: '0.0.0.0',
+[0]   port: 3030
+[0] }
+[0] 
+[0] Node.js v18.20.8
+[0] npm run server exited with code 1
+Killed

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Status Text</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .calendar-day { 
+            display: inline-block;
+            width: 80px;
+            height: 80px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            vertical-align: top;
+        }
+        .calendar-day--present { background-color: #28a745; color: white; }
+        .calendar-day--planned { background-color: #ffc107; color: black; }
+        .calendar-day--absent { background-color: #dc3545; color: white; }
+        .calendar-day--weekend { background-color: #495057; color: #e1e1e1; }
+        .day-status { font-size: 10px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Status Text Issue</h1>
+    
+    <div class="debug-section">
+        <h2>1. API Response</h2>
+        <div id="apiResponse">Loading...</div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>2. Status Text Mapping Test</h2>
+        <div id="statusMapping"></div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>3. Calendar Rendering Test</h2>
+        <div id="calendarTest"></div>
+    </div>
+
+    <script>
+        // Get status text function (copy from app.js)
+        function getStatusText(status) {
+            const statusMap = {
+                'present': 'Присутствие',
+                'absent': 'Отсутствие',
+                'planned': 'Запланировано',
+                'weekend': 'Выходной',
+                'on_time': 'Вовремя',
+                'late': 'Опоздание',
+                'early_leave': 'Ранний уход',
+                'no_exit': 'Нет выхода',
+                'night_shift_on_time': 'Ночная смена',
+                'night_shift_late': 'Ночная смена (опоздание)',
+                'night_shift_auto': 'Ночная смена (авто)',
+                'weekend_worked': 'Работа в выходной'
+            };
+            return statusMap[status] || status;
+        }
+
+        // Test API and rendering
+        async function debugStatusIssue() {
+            try {
+                // 1. Fetch API data
+                const response = await fetch('https://madlen.space/api/employee/by-number/АП00-00358/timesheet/2025/6');
+                const data = await response.json();
+                
+                document.getElementById('apiResponse').innerHTML = 
+                    `<pre>${JSON.stringify(data.calendar.slice(0, 10), null, 2)}</pre>`;
+                
+                // 2. Test status mappings
+                const statusTypes = ['present', 'planned', 'absent', 'weekend'];
+                let mappingHTML = '';
+                statusTypes.forEach(status => {
+                    mappingHTML += `<p><strong>${status}</strong> → ${getStatusText(status)}</p>`;
+                });
+                document.getElementById('statusMapping').innerHTML = mappingHTML;
+                
+                // 3. Test calendar rendering
+                let calendarHTML = '';
+                data.calendar.slice(0, 8).forEach(day => {
+                    const cssStatus = day.status.replace(/_/g, '-');
+                    const statusText = getStatusText(day.status);
+                    calendarHTML += `
+                        <div class="calendar-day calendar-day--${cssStatus}">
+                            <div class="day-number">${day.day}</div>
+                            <div class="day-status">${statusText}</div>
+                            <div style="font-size:8px; margin-top:2px;">Status: ${day.status}</div>
+                        </div>
+                    `;
+                });
+                document.getElementById('calendarTest').innerHTML = calendarHTML;
+                
+            } catch (error) {
+                console.error('Debug error:', error);
+                document.getElementById('apiResponse').innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        // Run debug on page load
+        debugStatusIssue();
+    </script>
+</body>
+</html>

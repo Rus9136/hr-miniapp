@@ -190,8 +190,8 @@ body.telegram-theme .calendar-day--present .day-schedule,
 
 body.telegram-theme .calendar-day--planned,
 .telegram-theme .calendar-day--planned {
-  background-color: #ffc107 !important;
-  border-color: #ffc107 !important;
+  background-color: #e0a800 !important;
+  border-color: #e0a800 !important;
 }
 
 body.telegram-theme .calendar-day--planned .day-number,
@@ -264,7 +264,7 @@ body.telegram-theme .calendar-day--absent .day-schedule,
 }
 
 .telegram-theme .status--planned {
-  background-color: #ffc107;
+  background-color: #e0a800;
   color: #000000;
 }
 

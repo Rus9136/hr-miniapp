@@ -1,0 +1,67 @@
+# Список файлов для перемещения в archive/test_files/
+# Generated: 2025-06-18
+
+## КАТЕГОРИЯ: Временные тестовые HTML файлы (можно архивировать)
+test_admin_simple.html          # Упрощенная версия админ-панели
+test_final.html                 # Финальные тесты
+test_frontend.html              # Тесты фронтенда
+test_integration.html           # Интеграционные тесты
+test_platform_detection.html   # Тесты определения платформы
+test_schedule_display.html      # Тесты отображения графиков
+test_schedules.html             # Тесты графиков работы
+test_telegram_frontend.html     # Тесты Telegram фронтенда
+
+## КАТЕГОРИЯ: Утилиты создания тестовых данных (можно архивировать)
+add_test_events_for_employee.js # Добавление тестовых событий
+add_test_news.js                # Добавление тестовых новостей
+create_night_shift_test_data.js # Создание данных ночных смен
+
+## КАТЕГОРИЯ: Анализ и исправления (можно архивировать)
+analyze_night_shifts.js         # Анализ ночных смен
+correct_timezone_test.js        # Тест исправления часовых поясов
+final_timezone_test.js          # Финальный тест часовых поясов
+fix_event_types.js              # Исправление типов событий
+fix_night_shift_calculation.js  # Исправление расчета ночных смен
+fix_production_direct.js        # Прямое исправление продакшн данных
+fix_time_events.js              # Исправление временных событий
+fix_timezone_data.js            # Исправление данных часовых поясов
+fix_timezone_direct.js          # Прямое исправление часовых поясов
+fix_timezone_simple.js          # Простое исправление часовых поясов
+
+## КАТЕГОРИЯ: Проверочные скрипты (можно архивировать)
+check_dates.js                  # Проверка дат
+check_loaded_events.js          # Проверка загруженных событий
+check_organization_data.js      # Проверка данных организации
+check_production.js             # Проверка продакшн данных
+check_time_data.js              # Проверка временных данных
+estimate_loading_time.js        # Оценка времени загрузки
+
+## КАТЕГОРИЯ: Скрипты очистки и загрузки (можно архивировать)
+clear_and_reload_production.js  # Очистка и перезагрузка продакшн
+clear_production_tables.js      # Очистка продакшн таблиц
+clear_time_tables.js            # Очистка временных таблиц
+production_test.js              # Тесты продакшн
+
+## КАТЕГОРИЯ: Старые миграции (можно архивировать)
+run_migration_1c.js             # Миграция 1С
+run_migration_hours_breakdown.js # Миграция разбивки часов
+run_migration_off_schedule.js   # Миграция внеплановых работ
+set_db_timezone.js              # Настройка часового пояса БД
+
+## КАТЕГОРИЯ: Python тесты (можно архивировать)
+test_schedule_assignment.py     # Тесты назначения графиков
+test_schedule_assignment_simple.py # Простые тесты графиков
+test_schedules_1c.py            # Тесты 1С графиков
+test_schedules_1c_pytest.py    # Pytest версия тестов 1С
+
+## КАТЕГОРИЯ: ОСТАВИТЬ (важные утилиты)
+# add_test_data.js              # Основная утилита добавления тестовых данных
+# check_db.js                   # Основная утилита проверки БД
+# test_admin.html               # Тесты админ-панели (может понадобиться)
+# test_debug.html               # Консоль отладки (важная утилита)
+# test_debug_auth.html          # Отладка авторизации (может понадобиться)
+# test_telegram.html            # Тесты Telegram (важные)
+# test_night_shift_fix.js       # Утилита тестирования ночных смен
+# test_schedule_based_hours.js  # Утилита графиков (может понадобиться)
+# test_timezone_fix.js          # Утилита часовых поясов (может понадобиться)
+# test_api_with_employees.js    # API тесты с сотрудниками (может понадобиться)
