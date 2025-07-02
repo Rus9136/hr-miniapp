@@ -201,6 +201,9 @@ function switchSection(sectionName) {
         case 'payroll-report':
             initPayrollReportSection();
             break;
+        case 'ai-recommendation':
+            initAIRecommendationSection();
+            break;
         case 'upload':
             initUploadSection();
             break;
@@ -348,7 +351,7 @@ function filterEmployees() {
 // Load departments
 async function loadDepartments() {
     const tbody = document.getElementById('departments-tbody');
-    tbody.innerHTML = '<tr><td colspan="4" class="loading">Загрузка данных</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="loading">Загрузка данных</td></tr>';
 
     try {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
@@ -359,7 +362,7 @@ async function loadDepartments() {
         document.getElementById('departments-total').textContent = departmentsData.length;
     } catch (error) {
         console.error('Error loading departments:', error);
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
@@ -368,7 +371,7 @@ function displayDepartments(departments) {
     const tbody = document.getElementById('departments-tbody');
     
     if (departments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
 
@@ -378,8 +381,33 @@ function displayDepartments(departments) {
             <td>${dept.object_name}</td>
             <td>${dept.object_company || '-'}</td>
             <td>${dept.object_bin || '-'}</td>
+            <td>
+                <button class="btn btn--sm btn--outline edit-department-btn" 
+                        data-department-id="${dept.id}" 
+                        title="Редактировать подразделение">
+                    ✏️
+                </button>
+            </td>
         </tr>
     `).join('');
+    
+    // Add event listeners to edit buttons
+    document.querySelectorAll('.edit-department-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Department edit button clicked');
+            const departmentId = e.target.dataset.departmentId;
+            console.log('Department ID from button:', departmentId);
+            
+            if (departmentId) {
+                openDepartmentModal(departmentId);
+            } else {
+                console.error('No department ID found on button');
+                alert('Ошибка: не удалось определить ID подразделения');
+            }
+        });
+    });
 }
 
 // Filter departments
@@ -3036,3 +3064,396 @@ window.removeWorkDate = removeWorkDate;
 window.handleEmployeeSelection = handleEmployeeSelection;
 window.openEmployeeModal = openEmployeeModal;
 window.closeEmployeeModal = closeEmployeeModal;
+
+// ===== DEPARTMENT MODAL FUNCTIONS =====
+
+// Open department modal for editing
+function openDepartmentModal(departmentId) {
+    try {
+        console.log('Opening department modal for ID:', departmentId);
+        
+        // Validate data availability
+        if (!departmentsData || departmentsData.length === 0) {
+            console.error('No departments data available');
+            alert('Ошибка: данные подразделений не загружены. Попробуйте обновить страницу.');
+            return;
+        }
+        
+        // Find department by ID
+        const department = departmentsData.find(dept => dept.id == departmentId);
+        if (!department) {
+            console.error('Department not found:', departmentId);
+            alert(`Ошибка: подразделение с ID ${departmentId} не найдено.`);
+            return;
+        }
+        
+        console.log('Found department:', department);
+    
+        // Fill form fields with current department data
+        document.getElementById('departmentId').value = department.id;
+        document.getElementById('departmentCode').value = department.object_code || '';
+        document.getElementById('departmentName').value = department.object_name || '';
+        document.getElementById('departmentCompany').value = department.object_company || '';
+        document.getElementById('departmentBin').value = department.object_bin || '';
+        document.getElementById('departmentIikoId').value = department.id_iiko || '';
+        
+        // Clear status message
+        const statusDiv = document.getElementById('departmentFormStatus');
+        statusDiv.style.display = 'none';
+        statusDiv.className = 'status-message';
+        
+        // Show modal
+        const modal = document.getElementById('departmentModal');
+        modal.classList.add('active');
+        
+        // Re-initialize event handlers
+        initDepartmentModal();
+        
+    } catch (error) {
+        console.error('Error opening department modal:', error);
+        alert('Ошибка при открытии модального окна: ' + error.message);
+    }
+}
+
+function closeDepartmentModal() {
+    try {
+        console.log('Closing department modal...');
+        const modal = document.getElementById('departmentModal');
+        if (modal) {
+            modal.classList.remove('active');
+            console.log('Department modal closed');
+        }
+    } catch (error) {
+        console.error('Error closing department modal:', error);
+    }
+}
+
+// Initialize department modal event handlers
+function initDepartmentModal() {
+    const modal = document.getElementById('departmentModal');
+    const closeBtn = document.getElementById('closeDepartmentModal');
+    const cancelBtn = document.getElementById('cancelDepartmentBtn');
+    const form = document.getElementById('departmentForm');
+    
+    console.log('Initializing department modal...');
+    console.log('Modal found:', !!modal);
+    console.log('Close button found:', !!closeBtn);
+    console.log('Cancel button found:', !!cancelBtn);
+    console.log('Form found:', !!form);
+    
+    // Remove existing event listeners to prevent duplicates
+    if (closeBtn) {
+        closeBtn.removeEventListener('click', closeDepartmentModal);
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Close button clicked');
+            closeDepartmentModal();
+        });
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.removeEventListener('click', closeDepartmentModal);
+        cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Cancel button clicked');
+            closeDepartmentModal();
+        });
+    }
+    
+    // Close on background click
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                console.log('Background clicked');
+                closeDepartmentModal();
+            }
+        });
+    }
+    
+    // Save button handler
+    const saveBtn = document.getElementById('saveDepartmentBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Save department button clicked');
+            
+            const submitBtn = saveBtn;
+            const btnText = submitBtn.querySelector('.btn-text');
+            const spinner = submitBtn.querySelector('.spinner');
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            if (btnText) btnText.style.display = 'none';
+            if (spinner) spinner.style.display = 'inline';
+            
+            try {
+                // Get form data
+                const departmentId = document.getElementById('departmentId').value;
+                const iikoId = document.getElementById('departmentIikoId').value;
+                
+                console.log('Saving department data:', { departmentId, iikoId });
+                
+                const result = await saveDepartment(departmentId, iikoId);
+                console.log('Save result:', result);
+                
+                showDepartmentFormStatus('Данные подразделения успешно сохранены', false);
+                
+                // Reload departments data
+                await loadDepartments();
+                
+                // Close modal after delay
+                setTimeout(() => {
+                    closeDepartmentModal();
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error saving department:', error);
+                showDepartmentFormStatus(error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                if (btnText) btnText.style.display = 'inline';
+                if (spinner) spinner.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Save department data
+async function saveDepartment(departmentId, iikoId) {
+    console.log('saveDepartment called with:', { departmentId, iikoId });
+    
+    // Validate required fields
+    if (!departmentId) {
+        throw new Error('ID подразделения обязателен');
+    }
+    
+    // Prepare data for API call
+    const updateData = {
+        id_iiko: iikoId || null
+    };
+    
+    console.log('Sending API request with data:', updateData);
+    
+    // Call API to update department
+    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments/${departmentId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateData)
+    });
+    
+    console.log('API response status:', response.status);
+    
+    if (!response.ok) {
+        let errorMessage = 'Ошибка при сохранении данных';
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+            errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.error || 'Ошибка при сохранении данных');
+    }
+    
+    return result;
+}
+
+// Show status message in department form
+function showDepartmentFormStatus(message, isError = false) {
+    const statusDiv = document.getElementById('departmentFormStatus');
+    if (statusDiv) {
+        statusDiv.textContent = message;
+        statusDiv.className = `status-message ${isError ? 'error' : 'success'}`;
+        statusDiv.style.display = 'block';
+        
+        // Auto-hide success messages after 3 seconds
+        if (!isError) {
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+    }
+}
+
+// Export department functions to global scope
+window.openDepartmentModal = openDepartmentModal;
+window.closeDepartmentModal = closeDepartmentModal;
+
+// ================== AI-РЕКОМЕНДАЦИЯ SECTION ==================
+
+// Initialize AI recommendation section
+async function initAIRecommendationSection() {
+    console.log('🤖 Initializing AI Recommendation section...');
+    
+    // Load organizations and departments for filter
+    await loadAIOrganizations();
+    await loadAIDepartments();
+    
+    // Set up event handlers
+    const orgFilter = document.getElementById('ai-organization-filter');
+    const deptFilter = document.getElementById('ai-department-filter');
+    const processBtn = document.getElementById('ai-process-btn');
+    
+    // Organization filter change - update departments
+    if (orgFilter) {
+        orgFilter.addEventListener('change', async (e) => {
+            const selectedOrg = e.target.value;
+            console.log('AI organization changed to:', selectedOrg);
+            
+            // Clear department selection
+            const deptFilter = document.getElementById('ai-department-filter');
+            if (deptFilter) {
+                deptFilter.value = '';
+                deptFilter.innerHTML = '<option value="">Выберите подразделение</option>';
+            }
+            
+            // Reload departments filtered by organization
+            await loadAIDepartments(selectedOrg || null);
+        });
+    }
+    
+    // Process button click
+    if (processBtn) {
+        processBtn.addEventListener('click', processAIRecommendation);
+    }
+    
+    console.log('✅ AI Recommendation section initialized');
+}
+
+// Load organizations for AI recommendation filter
+async function loadAIOrganizations() {
+    console.log('=== loadAIOrganizations called ===');
+    try {
+        console.log('Loading organizations for AI recommendation...');
+        console.log('API URL:', `${ADMIN_API_BASE_URL}/admin/organizations`);
+        
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const organizations = await response.json();
+        console.log('Organizations loaded:', organizations.length);
+        
+        const select = document.getElementById('ai-organization-filter');
+        console.log('AI organization filter element:', select);
+        
+        if (select) {
+            select.innerHTML = '<option value="">Выберите организацию</option>';
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.object_bin;
+                option.textContent = `${org.object_company} (${org.object_bin})`;
+                select.appendChild(option);
+            });
+            console.log('AI organizations filter populated with', organizations.length, 'options');
+        } else {
+            console.error('AI organization filter element not found!');
+        }
+    } catch (error) {
+        console.error('Error loading organizations for AI recommendation:', error);
+    }
+}
+
+// Load departments for AI recommendation filter
+async function loadAIDepartments(organizationBin = null) {
+    console.log('=== loadAIDepartments called ===', { organizationBin });
+    try {
+        let url = `${ADMIN_API_BASE_URL}/admin/departments`;
+        if (organizationBin) {
+            url += `?organization=${organizationBin}`;
+        }
+        
+        console.log('Loading departments for AI recommendation...');
+        console.log('API URL:', url);
+        
+        const response = await fetch(url);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const departments = await response.json();
+        console.log('Departments loaded:', departments.length);
+        
+        const select = document.getElementById('ai-department-filter');
+        console.log('AI department filter element:', select);
+        
+        if (select) {
+            select.innerHTML = '<option value="">Выберите подразделение</option>';
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept.object_code;
+                option.textContent = dept.object_name;
+                select.appendChild(option);
+            });
+            console.log('AI departments filter populated with', departments.length, 'options');
+        } else {
+            console.error('AI department filter element not found!');
+        }
+    } catch (error) {
+        console.error('Error loading departments for AI recommendation:', error);
+    }
+}
+
+// Process AI recommendation (заглушка)
+async function processAIRecommendation() {
+    const orgFilter = document.getElementById('ai-organization-filter');
+    const deptFilter = document.getElementById('ai-department-filter');
+    const processBtn = document.getElementById('ai-process-btn');
+    const spinner = processBtn?.querySelector('.spinner');
+    const btnText = processBtn?.querySelector('.btn-text');
+    
+    // Validation
+    if (!orgFilter?.value) {
+        alert('Пожалуйста, выберите организацию');
+        return;
+    }
+    
+    if (!deptFilter?.value) {
+        alert('Пожалуйста, выберите подразделение');
+        return;
+    }
+    
+    // Show loading state
+    if (processBtn) processBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    if (btnText) btnText.style.display = 'none';
+    
+    try {
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Show success message
+        alert(`AI-рекомендация для организации "${orgFilter.options[orgFilter.selectedIndex].textContent}" и подразделения "${deptFilter.options[deptFilter.selectedIndex].textContent}" отправлена для обработки.\n\nЭто демо-версия. В полной версии здесь будет вызов API для анализа данных и получения рекомендаций.`);
+        
+    } catch (error) {
+        console.error('Error processing AI recommendation:', error);
+        alert('Произошла ошибка при отправке данных для обработки');
+    } finally {
+        // Hide loading state
+        if (processBtn) processBtn.disabled = false;
+        if (spinner) spinner.style.display = 'none';
+        if (btnText) btnText.style.display = 'inline';
+    }
+}
+
+// Export AI recommendation functions
+window.initAIRecommendationSection = initAIRecommendationSection;
+window.loadAIOrganizations = loadAIOrganizations;
+window.loadAIDepartments = loadAIDepartments;
+window.processAIRecommendation = processAIRecommendation;
