@@ -2535,4 +2535,181 @@ router.put('/admin/departments/:id', async (req, res) => {
     }
 });
 
+// Get payroll attendance report - detailed shifts with payroll calculation
+router.get('/admin/payroll/attendance', async (req, res) => {
+    try {
+        const { department_id, from_date, to_date } = req.query;
+        
+        // Validate required parameters
+        if (!department_id || !from_date || !to_date) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо указать department_id, from_date и to_date'
+            });
+        }
+        
+        // Validate UUID format for department_id
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(department_id)) {
+            return res.status(400).json({
+                success: false,
+                error: 'department_id должен быть в формате UUID'
+            });
+        }
+        
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(from_date) || !dateRegex.test(to_date)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Даты должны быть в формате YYYY-MM-DD'
+            });
+        }
+        
+        // Validate date range
+        const fromDate = new Date(from_date);
+        const toDate = new Date(to_date);
+        if (fromDate > toDate) {
+            return res.status(400).json({
+                success: false,
+                error: 'from_date не может быть позже to_date'
+            });
+        }
+        
+        console.log('Payroll attendance request:', { department_id, from_date, to_date });
+        
+        // Get all employees for the department with their shifts
+        const query = `
+            WITH department_employees AS (
+                -- Get employees for the department by id_iiko
+                SELECT DISTINCT
+                    e.id as employee_id,
+                    e.table_number,
+                    e.full_name,
+                    e.payroll,
+                    e.object_code
+                FROM employees e
+                INNER JOIN departments d ON e.object_code = d.object_code
+                WHERE d.id_iiko = $1::uuid
+                AND e.status = 1
+                AND e.payroll IS NOT NULL
+                AND e.payroll > 0
+            ),
+            employee_shifts AS (
+                -- Get all shifts for these employees in the period
+                SELECT 
+                    de.employee_id,
+                    de.table_number,
+                    de.full_name,
+                    de.payroll,
+                    ws.work_date,
+                    ws.schedule_name,
+                    ws.work_hours
+                FROM department_employees de
+                INNER JOIN employee_schedule_assignments esa ON de.table_number = esa.employee_number
+                INNER JOIN work_schedules_1c ws ON esa.schedule_code = ws.schedule_code
+                WHERE ws.work_date >= $2::date
+                AND ws.work_date <= $3::date
+                AND esa.start_date <= ws.work_date
+                AND (esa.end_date IS NULL OR esa.end_date >= ws.work_date)
+                AND ws.time_type != 'В' -- Exclude weekends/holidays
+                ORDER BY de.full_name, ws.work_date
+            ),
+            employee_shift_counts AS (
+                -- Count shifts per employee
+                SELECT 
+                    employee_id,
+                    COUNT(*) as shift_count
+                FROM employee_shifts
+                GROUP BY employee_id
+            )
+            SELECT 
+                es.employee_id::text,
+                es.table_number,
+                es.full_name,
+                es.payroll,
+                es.work_date,
+                es.schedule_name,
+                es.work_hours,
+                esc.shift_count
+            FROM employee_shifts es
+            INNER JOIN employee_shift_counts esc ON es.employee_id = esc.employee_id
+            ORDER BY es.full_name, es.work_date
+        `;
+        
+        const result = await db.query(query, [department_id, from_date, to_date]);
+        
+        if (result.rows.length === 0) {
+            return res.json({
+                success: true,
+                data: [],
+                summary: {
+                    department_id,
+                    from_date,
+                    to_date,
+                    total_employees: 0,
+                    total_shifts: 0,
+                    total_payroll: 0
+                }
+            });
+        }
+        
+        // Group results by employee
+        const employeesMap = new Map();
+        
+        result.rows.forEach(row => {
+            const employeeId = row.employee_id;
+            const payrollTotal = parseFloat(row.payroll);
+            const shiftCount = parseInt(row.shift_count);
+            const payrollPerShift = Math.round(payrollTotal / shiftCount * 100) / 100;
+            
+            if (!employeesMap.has(employeeId)) {
+                employeesMap.set(employeeId, {
+                    employee_id: employeeId,
+                    employee_name: row.full_name,
+                    table_number: row.table_number,
+                    payroll_total: payrollTotal,
+                    shifts: []
+                });
+            }
+            
+            employeesMap.get(employeeId).shifts.push({
+                date: row.work_date.toISOString().split('T')[0],
+                payroll_for_shift: payrollPerShift,
+                schedule_name: row.schedule_name,
+                work_hours: parseInt(row.work_hours)
+            });
+        });
+        
+        // Convert map to array
+        const employeesData = Array.from(employeesMap.values());
+        
+        // Calculate summary
+        const totalShifts = result.rows.length;
+        const totalPayroll = employeesData.reduce((sum, emp) => {
+            return sum + emp.shifts.reduce((shiftSum, shift) => shiftSum + shift.payroll_for_shift, 0);
+        }, 0);
+        
+        res.json({
+            success: true,
+            data: employeesData,
+            summary: {
+                department_id,
+                from_date,
+                to_date,
+                total_employees: employeesData.length,
+                total_shifts: totalShifts,
+                total_payroll: Math.round(totalPayroll * 100) / 100
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error in payroll attendance endpoint:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при формировании отчета: ' + error.message
+        });
+    }
+});
+
 module.exports = router;

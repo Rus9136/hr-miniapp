@@ -134,6 +134,46 @@ DELETE /api/admin/news/:id
        Delete news article
 ```
 
+### Payroll Reports
+```
+GET    /api/admin/reports/payroll
+       Query params: organization, department, dateFrom, dateTo
+       Get payroll report with shift calculations
+
+GET    /api/admin/payroll/attendance
+       Query params: department_id (UUID), from_date (YYYY-MM-DD), to_date (YYYY-MM-DD)
+       Get detailed payroll report by employee shifts
+       
+       Returns:
+       {
+         "success": true,
+         "data": [
+           {
+             "employee_id": "string",
+             "employee_name": "string",
+             "table_number": "string", 
+             "payroll_total": number,
+             "shifts": [
+               {
+                 "date": "YYYY-MM-DD",
+                 "payroll_for_shift": number,
+                 "schedule_name": "string",
+                 "work_hours": number
+               }
+             ]
+           }
+         ],
+         "summary": {
+           "department_id": "uuid",
+           "from_date": "YYYY-MM-DD",
+           "to_date": "YYYY-MM-DD", 
+           "total_employees": number,
+           "total_shifts": number,
+           "total_payroll": number
+         }
+       }
+```
+
 ## Error Responses
 
 All endpoints return consistent error format:
