@@ -401,7 +401,7 @@ function displayDepartments(departments) {
     const tbody = document.getElementById('departments-tbody');
     
     if (departments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
 
@@ -411,6 +411,7 @@ function displayDepartments(departments) {
             <td>${dept.object_name}</td>
             <td>${dept.object_company || '-'}</td>
             <td>${dept.object_bin || '-'}</td>
+            <td>${dept.hall_area ? dept.hall_area : '-'}</td>
             <td>
                 <button class="btn btn--sm btn--outline edit-department-btn" 
                         data-department-id="${dept.id}" 
@@ -3126,6 +3127,9 @@ function openDepartmentModal(departmentId) {
         document.getElementById('departmentCompany').value = department.object_company || '';
         document.getElementById('departmentBin').value = department.object_bin || '';
         document.getElementById('departmentIikoId').value = department.id_iiko || '';
+        document.getElementById('departmentHallArea').value = department.hall_area || '';
+        document.getElementById('departmentKitchenArea').value = department.kitchen_area || '';
+        document.getElementById('departmentSeatsCount').value = department.seats_count || '';
         
         // Clear status message
         const statusDiv = document.getElementById('departmentFormStatus');
@@ -3224,10 +3228,13 @@ function initDepartmentModal() {
                 // Get form data
                 const departmentId = document.getElementById('departmentId').value;
                 const iikoId = document.getElementById('departmentIikoId').value;
+                const hallArea = document.getElementById('departmentHallArea').value;
+                const kitchenArea = document.getElementById('departmentKitchenArea').value;
+                const seatsCount = document.getElementById('departmentSeatsCount').value;
                 
-                console.log('Saving department data:', { departmentId, iikoId });
+                console.log('Saving department data:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount });
                 
-                const result = await saveDepartment(departmentId, iikoId);
+                const result = await saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount);
                 console.log('Save result:', result);
                 
                 showDepartmentFormStatus('Данные подразделения успешно сохранены', false);
@@ -3253,17 +3260,42 @@ function initDepartmentModal() {
 }
 
 // Save department data
-async function saveDepartment(departmentId, iikoId) {
-    console.log('saveDepartment called with:', { departmentId, iikoId });
+async function saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount) {
+    console.log('saveDepartment called with:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount });
     
     // Validate required fields
     if (!departmentId) {
         throw new Error('ID подразделения обязателен');
     }
     
+    // Client-side validation
+    if (hallArea && hallArea !== '') {
+        const hallAreaNum = parseFloat(hallArea);
+        if (isNaN(hallAreaNum) || hallAreaNum <= 0) {
+            throw new Error('Площадь зала должна быть положительным числом');
+        }
+    }
+    
+    if (kitchenArea && kitchenArea !== '') {
+        const kitchenAreaNum = parseFloat(kitchenArea);
+        if (isNaN(kitchenAreaNum) || kitchenAreaNum <= 0) {
+            throw new Error('Площадь кухни должна быть положительным числом');
+        }
+    }
+    
+    if (seatsCount && seatsCount !== '') {
+        const seatsNum = parseInt(seatsCount);
+        if (isNaN(seatsNum) || seatsNum < 0) {
+            throw new Error('Количество посадочных мест должно быть неотрицательным целым числом');
+        }
+    }
+    
     // Prepare data for API call
     const updateData = {
-        id_iiko: iikoId || null
+        id_iiko: iikoId || null,
+        hall_area: hallArea && hallArea !== '' ? parseFloat(hallArea) : null,
+        kitchen_area: kitchenArea && kitchenArea !== '' ? parseFloat(kitchenArea) : null,
+        seats_count: seatsCount && seatsCount !== '' ? parseInt(seatsCount) : null
     };
     
     console.log('Sending API request with data:', updateData);
@@ -3456,6 +3488,8 @@ async function loadAIDepartments(organizationBin = null) {
 async function processAIRecommendation() {
     const orgFilter = document.getElementById('ai-organization-filter');
     const deptFilter = document.getElementById('ai-department-filter');
+    const dateFromInput = document.getElementById('ai-date-from');
+    const dateToInput = document.getElementById('ai-date-to');
     const processBtn = document.getElementById('ai-process-btn');
     const spinner = processBtn?.querySelector('.spinner');
     const btnText = processBtn?.querySelector('.btn-text');
@@ -3468,6 +3502,16 @@ async function processAIRecommendation() {
     
     if (!deptFilter?.value) {
         showNotification('Выберите подразделение', 'error');
+        return;
+    }
+    
+    if (!dateFromInput?.value) {
+        showNotification('Выберите дату начала', 'error');
+        return;
+    }
+    
+    if (!dateToInput?.value) {
+        showNotification('Выберите дату конца', 'error');
         return;
     }
     
@@ -3485,9 +3529,6 @@ async function processAIRecommendation() {
         return;
     }
     
-    // Get current date in YYYY-MM-DD format
-    const currentDate = new Date().toISOString().split('T')[0];
-    
     // Show loading state
     if (processBtn) processBtn.disabled = true;
     if (spinner) spinner.style.display = 'inline';
@@ -3497,7 +3538,11 @@ async function processAIRecommendation() {
         // Prepare request data
         const requestData = {
             branch_id: departmentIdIiko,
-            date: currentDate
+            hall_area: department?.hall_area || null,
+            kitchen_area: department?.kitchen_area || null,
+            seats_count: department?.seats_count || null,
+            date_start: dateFromInput.value,
+            date_end: dateToInput.value
         };
         
         console.log('Sending AI recommendation request:', requestData);
@@ -3511,12 +3556,23 @@ async function processAIRecommendation() {
             body: JSON.stringify(requestData)
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const result = await response.json();
         console.log('AI recommendation response:', result);
+        
+        if (!response.ok) {
+            // Handle specific error responses
+            if (response.status === 404) {
+                showNotification('Сервис AI-рекомендаций временно недоступен. Попробуйте позже.', 'error');
+                return;
+            }
+            
+            if (response.status === 400) {
+                showNotification('Неверные данные для обработки. Проверьте выбранные параметры.', 'error');
+                return;
+            }
+            
+            throw new Error(result.message || `HTTP error! status: ${response.status}`);
+        }
         
         // Show success message
         showNotification(

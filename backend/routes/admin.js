@@ -41,7 +41,7 @@ router.get('/admin/departments', async (req, res) => {
     try {
         const { organization } = req.query;
         
-        let query = 'SELECT *, id_iiko::text as id_iiko FROM departments';
+        let query = 'SELECT *, id_iiko::text as id_iiko, hall_area, kitchen_area, seats_count FROM departments';
         let params = [];
         
         if (organization) {
@@ -393,20 +393,27 @@ router.get('/admin/time-records', (req, res) => {
 // Proxy endpoint for AI webhook to bypass CSP
 router.post('/admin/ai-webhook-proxy', async (req, res) => {
     try {
-        const { branch_id, date } = req.body;
+        const { branch_id, hall_area, kitchen_area, seats_count, date_start, date_end } = req.body;
         
-        console.log('AI webhook proxy request:', { branch_id, date });
+        console.log('AI webhook proxy request:', { branch_id, hall_area, kitchen_area, seats_count, date_start, date_end });
         
         // Validate required fields
-        if (!branch_id || !date) {
+        if (!branch_id || !date_start || !date_end) {
             return res.status(400).json({ 
-                error: 'Missing required fields: branch_id and date' 
+                error: 'Missing required fields: branch_id, date_start, and date_end' 
             });
         }
         
         // Make request to external webhook
         const webhookUrl = 'https://n8n.sandyq.space/webhook/optimize-branch';
-        const webhookData = { branch_id, date };
+        const webhookData = { 
+            branch_id, 
+            hall_area, 
+            kitchen_area, 
+            seats_count, 
+            date_start, 
+            date_end 
+        };
         
         console.log('Sending request to webhook:', webhookUrl, webhookData);
         
@@ -420,7 +427,27 @@ router.post('/admin/ai-webhook-proxy', async (req, res) => {
         });
         
         if (!response.ok) {
-            throw new Error(`Webhook responded with status: ${response.status}`);
+            const errorMessage = `Webhook responded with status: ${response.status}`;
+            console.warn(errorMessage);
+            
+            // Handle specific error codes
+            if (response.status === 404) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Webhook endpoint not found',
+                    message: 'The AI recommendation service is currently unavailable'
+                });
+            }
+            
+            if (response.status >= 400 && response.status < 500) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Bad request to webhook',
+                    message: `The request was rejected by the AI service (status: ${response.status})`
+                });
+            }
+            
+            throw new Error(errorMessage);
         }
         
         const result = await response.json();
@@ -2400,9 +2427,9 @@ router.get('/admin/reports/payroll', async (req, res) => {
 router.put('/admin/departments/:id', async (req, res) => {
     try {
         const departmentId = req.params.id;
-        const { id_iiko } = req.body;
+        const { id_iiko, hall_area, kitchen_area, seats_count } = req.body;
         
-        console.log(`Updating department ${departmentId} with id_iiko: ${id_iiko}`);
+        console.log(`Updating department ${departmentId} with data:`, { id_iiko, hall_area, kitchen_area, seats_count });
         
         // Validate input
         if (!departmentId || isNaN(departmentId)) {
@@ -2434,13 +2461,48 @@ router.put('/admin/departments/:id', async (req, res) => {
             });
         }
         
+        // Validate area fields (must be positive numbers if provided)
+        if (hall_area !== undefined && hall_area !== null && hall_area !== '') {
+            const hallAreaNum = parseFloat(hall_area);
+            if (isNaN(hallAreaNum) || hallAreaNum <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Площадь зала должна быть положительным числом'
+                });
+            }
+        }
+        
+        if (kitchen_area !== undefined && kitchen_area !== null && kitchen_area !== '') {
+            const kitchenAreaNum = parseFloat(kitchen_area);
+            if (isNaN(kitchenAreaNum) || kitchenAreaNum <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Площадь кухни должна быть положительным числом'
+                });
+            }
+        }
+        
+        // Validate seats_count (must be non-negative integer if provided)
+        if (seats_count !== undefined && seats_count !== null && seats_count !== '') {
+            const seatsNum = parseInt(seats_count);
+            if (isNaN(seatsNum) || seatsNum < 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Количество посадочных мест должно быть неотрицательным целым числом'
+                });
+            }
+        }
+        
         // Prepare update data
-        const updateData = id_iiko && id_iiko.trim() !== '' ? id_iiko.trim() : null;
+        const updateIdIiko = id_iiko && id_iiko.trim() !== '' ? id_iiko.trim() : null;
+        const updateHallArea = hall_area && hall_area !== '' ? parseFloat(hall_area) : null;
+        const updateKitchenArea = kitchen_area && kitchen_area !== '' ? parseFloat(kitchen_area) : null;
+        const updateSeatsCount = seats_count && seats_count !== '' ? parseInt(seats_count) : null;
         
         // Update department
         const updateResult = await db.query(
-            'UPDATE departments SET id_iiko = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            [updateData, departmentId]
+            'UPDATE departments SET id_iiko = $1, hall_area = $2, kitchen_area = $3, seats_count = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
+            [updateIdIiko, updateHallArea, updateKitchenArea, updateSeatsCount, departmentId]
         );
         
         if (updateResult.rowCount === 0) {
@@ -2452,7 +2514,7 @@ router.put('/admin/departments/:id', async (req, res) => {
         
         // Get updated department data
         const updatedDept = await db.queryRow(
-            'SELECT * FROM departments WHERE id = $1',
+            'SELECT *, id_iiko::text as id_iiko FROM departments WHERE id = $1',
             [departmentId]
         );
         
