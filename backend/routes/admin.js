@@ -41,7 +41,7 @@ router.get('/admin/departments', async (req, res) => {
     try {
         const { organization } = req.query;
         
-        let query = 'SELECT *, id_iiko::text as id_iiko, hall_area, kitchen_area, seats_count FROM departments';
+        let query = 'SELECT *, id_iiko::text as id_iiko, hall_area, kitchen_area, seats_count, trade_point FROM departments';
         let params = [];
         
         if (organization) {
@@ -393,9 +393,18 @@ router.get('/admin/time-records', (req, res) => {
 // Proxy endpoint for AI webhook to bypass CSP
 router.post('/admin/ai-webhook-proxy', async (req, res) => {
     try {
-        const { branch_id, hall_area, kitchen_area, seats_count, date_start, date_end } = req.body;
+        const { branch_id, hall_area, kitchen_area, seats_count, date_start, date_end, prev_period_start, prev_period_end } = req.body;
         
-        console.log('AI webhook proxy request:', { branch_id, hall_area, kitchen_area, seats_count, date_start, date_end });
+        console.log('AI webhook proxy request:', { 
+            branch_id, 
+            hall_area, 
+            kitchen_area, 
+            seats_count, 
+            date_start, 
+            date_end,
+            prev_period_start,
+            prev_period_end
+        });
         
         // Validate required fields
         if (!branch_id || !date_start || !date_end) {
@@ -412,7 +421,9 @@ router.post('/admin/ai-webhook-proxy', async (req, res) => {
             kitchen_area, 
             seats_count, 
             date_start, 
-            date_end 
+            date_end,
+            prev_period_start,
+            prev_period_end
         };
         
         console.log('Sending request to webhook:', webhookUrl, webhookData);
@@ -2423,13 +2434,92 @@ router.get('/admin/reports/payroll', async (req, res) => {
     }
 });
 
+// Get department by ID or id_iiko
+router.get('/admin/departments/:id', async (req, res) => {
+    try {
+        const identifier = req.params.id;
+        
+        console.log(`Getting department with identifier: ${identifier}`);
+        
+        // Check if the identifier is a UUID (id_iiko format)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+        
+        let query;
+        let queryParam;
+        
+        if (isUUID) {
+            // Search by id_iiko
+            console.log('Searching by id_iiko (UUID format)');
+            query = `
+                SELECT 
+                    id,
+                    id_iiko::text as id_iiko,
+                    object_name,
+                    object_code,
+                    object_parent,
+                    object_company,
+                    object_bin,
+                    hall_area,
+                    kitchen_area,
+                    seats_count,
+                    trade_point
+                FROM departments 
+                WHERE id_iiko = $1
+            `;
+            queryParam = identifier;
+        } else {
+            // Search by numeric ID
+            console.log('Searching by numeric ID');
+            query = `
+                SELECT 
+                    id,
+                    id_iiko::text as id_iiko,
+                    object_name,
+                    object_code,
+                    object_parent,
+                    object_company,
+                    object_bin,
+                    hall_area,
+                    kitchen_area,
+                    seats_count,
+                    trade_point
+                FROM departments 
+                WHERE id = $1
+            `;
+            queryParam = identifier;
+        }
+        
+        const rows = await db.queryRows(query, [queryParam]);
+        
+        if (rows.length === 0) {
+            const identifierType = isUUID ? 'id_iiko' : 'ID';
+            return res.status(404).json({ 
+                error: 'Department not found',
+                message: `Подразделение с ${identifierType} ${identifier} не найдено`
+            });
+        }
+        
+        console.log('Department found:', rows[0]);
+        
+        // Return the department data
+        res.json(rows[0]);
+        
+    } catch (err) {
+        console.error('Error fetching department:', err);
+        res.status(500).json({ 
+            error: 'Internal server error',
+            message: 'Ошибка при получении данных подразделения'
+        });
+    }
+});
+
 // Update department
 router.put('/admin/departments/:id', async (req, res) => {
     try {
         const departmentId = req.params.id;
-        const { id_iiko, hall_area, kitchen_area, seats_count } = req.body;
+        const { id_iiko, hall_area, kitchen_area, seats_count, trade_point } = req.body;
         
-        console.log(`Updating department ${departmentId} with data:`, { id_iiko, hall_area, kitchen_area, seats_count });
+        console.log(`Updating department ${departmentId} with data:`, { id_iiko, hall_area, kitchen_area, seats_count, trade_point });
         
         // Validate input
         if (!departmentId || isNaN(departmentId)) {
@@ -2498,11 +2588,12 @@ router.put('/admin/departments/:id', async (req, res) => {
         const updateHallArea = hall_area && hall_area !== '' ? parseFloat(hall_area) : null;
         const updateKitchenArea = kitchen_area && kitchen_area !== '' ? parseFloat(kitchen_area) : null;
         const updateSeatsCount = seats_count && seats_count !== '' ? parseInt(seats_count) : null;
+        const updateTradePoint = trade_point !== undefined ? trade_point : null;
         
         // Update department
         const updateResult = await db.query(
-            'UPDATE departments SET id_iiko = $1, hall_area = $2, kitchen_area = $3, seats_count = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5',
-            [updateIdIiko, updateHallArea, updateKitchenArea, updateSeatsCount, departmentId]
+            'UPDATE departments SET id_iiko = $1, hall_area = $2, kitchen_area = $3, seats_count = $4, trade_point = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6',
+            [updateIdIiko, updateHallArea, updateKitchenArea, updateSeatsCount, updateTradePoint, departmentId]
         );
         
         if (updateResult.rowCount === 0) {

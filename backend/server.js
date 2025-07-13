@@ -11,6 +11,7 @@ const employeeRoutes = require('./routes/employee');
 const adminRoutes = require('./routes/admin');
 const telegramRoutes = require('./routes/telegram');
 const newsRoutes = require('./routes/news');
+const aiRecommendationsRoutes = require('./routes/ai-recommendations');
 
 const app = express();
 const PORT = process.env.PORT || 3030;
@@ -76,6 +77,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api', authRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', adminRoutes);
+app.use('/api/admin/ai-recommendations', aiRecommendationsRoutes);
 app.use('/api', telegramRoutes);
 app.use('/api', newsRoutes);
 

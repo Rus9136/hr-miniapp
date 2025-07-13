@@ -13,6 +13,7 @@
     "install-all": "npm install"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.56.0",
     "axios": "^1.6.2",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",

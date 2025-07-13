@@ -10,16 +10,14 @@
 
 ## 🔧 NGINX MULTI-DOMAIN НАСТРОЙКА (Полная инструкция)
 
-### 📋 Обзор архитектуры
+### 📋 Обзор архитектуры (ОБНОВЛЕНО 2025-07-13)
 ```
-NGINX (host network mode) - порты 80/443
-├── madlen.space → 127.0.0.1:3030 (HR Time Tracking)
-└── aqniet.site → 
-    ├── /api/exchange/ → 127.0.0.1:8000 (1C Exchange Service)
-    ├── /docs → 127.0.0.1:8000 (1C Exchange Docs)
-    ├── /openapi.json → 127.0.0.1:8000 (OpenAPI Schema)
-    ├── /api/ → 127.0.0.1:8002 (Sales Forecast API)
-    └── / → 127.0.0.1:8002 (Sales Forecast Admin)
+NGINX (hr-nginx контейнер) - Docker bridge networks
+├── madlen.space → hr-miniapp:3030 (HR Time Tracking System)
+├── aqniet.site → sales-forecast-app:8000 + 127.0.0.1:8000 (Sales Forecast + 1C Exchange)
+├── mcp.madlen.space → 172.18.0.1:8003 (MCP Restaurant Optimizer)
+├── n8n.sandyq.space → n8n:5678 (N8N Workflow Automation)
+└── reviews.aqniet.site → 172.18.0.1:8004 (Reviews Parser API)
 ```
 
 ### 🚀 ПОШАГОВАЯ НАСТРОЙКА NGINX
@@ -31,20 +29,15 @@ sudo systemctl stop nginx
 docker stop hr-nginx 2>/dev/null || true
 docker rm hr-nginx 2>/dev/null || true
 
-# Получить SSL сертификаты для обоих доменов
-docker run --rm --name certbot \
-  -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" \
-  -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" \
-  certbot/certbot certonly --webroot -w /var/www/certbot \
-  --email admin@madlen.space --agree-tos --no-eff-email \
-  -d madlen.space -d www.madlen.space
-
-docker run --rm --name certbot \
-  -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" \
-  -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" \
-  certbot/certbot certonly --webroot -w /var/www/certbot \
-  --email admin@aqniet.site --agree-tos --no-eff-email \
-  -d aqniet.site -d www.aqniet.site
+# Получить SSL сертификаты для всех доменов
+# Получить сертификаты для всех доменов
+for domain in madlen.space aqniet.site mcp.madlen.space n8n.sandyq.space reviews.aqniet.site; do
+  docker run --rm --name certbot \
+    -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" \
+    -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" \
+    certbot/certbot certonly --webroot -w /var/www/certbot \
+    --email admin@$domain --agree-tos --no-eff-email -d $domain
+done
 ```
 
 #### 2. Настройка брандмауэра
@@ -57,32 +50,35 @@ ufw allow 8000/tcp  # 1C Exchange (опционально)
 ufw status
 ```
 
-#### 3. Запуск сервисов backend
+#### 3. Запуск всех backend сервисов (ОБНОВЛЕНО)
 ```bash
-# 1C Exchange Service (порт 8000)
-cd /root/projects/1c-exchange-service
-source venv/bin/activate
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > 1c-exchange.log 2>&1 &
-
-# Sales Forecast (порт 8002)
+# 1. Sales Forecast + 1C Exchange (Docker)
 cd /root/projects/SalesForecast/sales_forecast
-source venv/bin/activate
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8002 > sales_forecast.log 2>&1 &
+docker-compose up -d
 
-# PostgreSQL для Sales Forecast
-docker run -d --name sales-forecast-db \
-  -e POSTGRES_DB=sales_forecast \
-  -e POSTGRES_USER=sales_user \
-  -e POSTGRES_PASSWORD=sales_password \
-  -p 5435:5432 \
-  postgres:15
+# 2. MCP Restaurant Optimizer (systemd)
+systemctl enable mcp-restaurant.service
+systemctl start mcp-restaurant.service
 
-# Проверить что все сервисы запущены
-ps aux | grep -E "(8000|8002)" | grep -v grep
-netstat -tlnp | grep -E ":(8000|8002)"
+# 3. Reviews Parser API (systemd) 
+systemctl enable reviews-api.service
+systemctl start reviews-api.service
+
+# 4. N8N Workflow (Docker)
+cd /root/projects/n8n
+docker-compose up -d
+
+# 5. Настройка UFW для systemd сервисов
+ufw allow from 172.18.0.0/16 to any port 8003  # MCP
+ufw allow from 172.18.0.0/16 to any port 8004  # Reviews
+
+# Проверить все сервисы
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+systemctl status mcp-restaurant.service reviews-api.service
+netstat -tlnp | grep -E ":(3030|5678|8000|8002|8003|8004)"
 ```
 
-#### 4. Запуск HR системы
+#### 4. Запуск HR системы + nginx
 ```bash
 cd /root/projects/hr-miniapp
 docker-compose up -d hr-postgres hr-miniapp
@@ -106,16 +102,22 @@ docker ps | grep hr-nginx
 docker logs hr-nginx
 ```
 
-#### 6. Тестирование
+#### 6. Тестирование всех доменов (ОБНОВЛЕНО)
 ```bash
-# Проверить оба сайта
-curl -I https://madlen.space
-curl -I https://aqniet.site
+# Проверить все 5 сайтов
+echo "=== Sites Status Check ==="
+for site in madlen.space aqniet.site mcp.madlen.space n8n.sandyq.space reviews.aqniet.site; do
+  echo -n "$site: "
+  curl -I https://$site/ 2>/dev/null | head -1 | cut -d' ' -f2
+done
 
-# Проверить API endpoints
+# Проверить Health Check эндпоинты
 curl https://madlen.space/api/health
-curl https://aqniet.site/api/branches/
-curl https://aqniet.site/docs
+curl https://mcp.madlen.space/health
+curl https://reviews.aqniet.site/health
+curl -u admin:supersecret123 https://n8n.sandyq.space/
+curl https://aqniet.site/api/health
+curl https://aqniet.site/api/exchange/health
 
 # Проверить перенаправления HTTP → HTTPS
 curl -I http://madlen.space
@@ -194,16 +196,28 @@ docker ps -a | grep nginx
 docker rm $(docker ps -a | grep nginx | awk '{print $1}')
 ```
 
-#### Проблема: SSL сертификат недоступен
+#### Проблема: SSL сертификат недоступен или истек
 ```bash
-# Проверить сертификаты
+# Проверить сертификаты и сроки действия
 ls -la /root/projects/infra/infra/certbot/conf/live/
-openssl x509 -in /root/projects/infra/infra/certbot/conf/live/madlen.space/fullchain.pem -text -noout
-openssl x509 -in /root/projects/infra/infra/certbot/conf/live/aqniet.site/fullchain.pem -text -noout
+openssl x509 -in /root/projects/infra/infra/certbot/conf/live/madlen.space/fullchain.pem -dates -noout
+openssl x509 -in /root/projects/infra/infra/certbot/conf/live/aqniet.site/fullchain.pem -dates -noout
+openssl x509 -in /root/projects/infra/infra/certbot/conf/live/n8n.sandyq.space/fullchain.pem -dates -noout
 
-# Обновить сертификаты
-docker run --rm -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" certbot/certbot renew
+# Принудительно обновить ВСЕ сертификаты (если истекли)
+docker run --rm -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" certbot/certbot renew --force-renewal
+
+# Перезагрузить nginx для применения новых сертификатов
 docker exec hr-nginx nginx -s reload
+
+# Проверить автообновление cron
+crontab -l | grep certbot
+```
+
+#### ✅ Автоматическое обновление SSL (настроено 2025-07-02)
+```bash
+# Добавлена cron задача для автоматического обновления каждый понедельник в 3:00
+0 3 * * 1 docker run --rm -v "/root/projects/infra/infra/certbot/conf:/etc/letsencrypt" -v "/root/projects/infra/infra/certbot/www:/var/www/certbot" certbot/certbot renew && docker exec hr-nginx nginx -s reload
 ```
 
 ### 🔄 ОБСЛУЖИВАНИЕ
@@ -227,9 +241,12 @@ docker exec hr-nginx nginx -s reload
 # Nginx
 docker logs hr-nginx
 
-# Backend сервисы
-tail -f /root/projects/1c-exchange-service/1c-exchange.log
-tail -f /root/projects/SalesForecast/sales_forecast/sales_forecast.log
+# Backend сервисы (ОБНОВЛЕНО)
+docker logs sales-forecast-app
+docker logs exchange-service
+journalctl -u mcp-restaurant.service -f
+journalctl -u reviews-api.service -f
+docker logs n8n
 
 # HR приложение
 docker logs hr-miniapp
@@ -323,6 +340,97 @@ docker-compose up -d
 ./rebuild_docker.sh
 ```
 
+---
+
+## 🌐 ПОЛНАЯ МУЛЬТИ-ДОМЕННАЯ АРХИТЕКТУРА (ОБНОВЛЕНО 2025-07-13)
+
+### Текущие работающие домены:
+
+#### 1. **madlen.space** - HR Time Tracking System
+- **Технология**: Node.js + Express + PostgreSQL
+- **Контейнеры**: hr-miniapp, hr-postgres
+- **Порт**: 3030 (внутри Docker сети)
+- **Управление**: `docker-compose -f /root/projects/hr-miniapp/docker-compose.yml`
+- **Health Check**: `curl https://madlen.space/api/health`
+
+#### 2. **aqniet.site** - Sales Forecast + 1C Exchange
+- **Технология**: FastAPI + PostgreSQL
+- **Контейнеры**: sales-forecast-app, exchange-service, sales-forecast-db
+- **Порты**: 8000 (1C Exchange), 8002 (Sales Forecast)
+- **Управление**: `docker-compose -f /root/projects/SalesForecast/sales_forecast/docker-compose.yml`
+- **Health Check**: `curl https://aqniet.site/api/health`
+
+#### 3. **mcp.madlen.space** - MCP Restaurant Optimizer
+- **Технология**: FastAPI
+- **Управление**: systemd (`mcp-restaurant.service`)
+- **Порт**: 8003
+- **Команды**: `systemctl status/restart mcp-restaurant.service`
+- **Health Check**: `curl https://mcp.madlen.space/health`
+
+#### 4. **n8n.sandyq.space** - N8N Workflow Automation
+- **Технология**: N8N (Node.js)
+- **Контейнер**: n8n
+- **Порт**: 5678
+- **Управление**: `docker-compose -f /root/projects/n8n/docker-compose.yml`
+- **Авторизация**: admin / supersecret123
+- **Health Check**: `curl -u admin:supersecret123 https://n8n.sandyq.space/`
+
+#### 5. **reviews.aqniet.site** - Reviews Parser API
+- **Технология**: FastAPI + PostgreSQL
+- **Управление**: systemd (`reviews-api.service`)
+- **Порт**: 8004
+- **Команды**: `systemctl status/restart reviews-api.service`
+- **Health Check**: `curl https://reviews.aqniet.site/health`
+
+### 🔗 Ссылки на документацию:
+- **Мастер-гайд**: `/root/projects/DEPLOYMENT_MASTER.md`
+- **MCP документация**: `/root/projects/mcp_restaurant_optimizer/DEPLOYMENT.md`
+- **N8N документация**: `/root/projects/n8n/CLAUDE.md`
+- **Reviews документация**: `/root/projects/reviews-parser/DEPLOYMENT_REVIEWS.md`
+- **Sales Forecast документация**: `/root/projects/SalesForecast/sales_forecast/AQNIET_SITE_DEPLOYMENT.md`
+
+### 🔄 Команды для управления всеми сервисами:
+
+```bash
+# Проверка статуса всех сайтов
+echo "=== Sites Status Check ==="
+for site in madlen.space aqniet.site mcp.madlen.space n8n.sandyq.space reviews.aqniet.site; do
+  echo -n "$site: "
+  curl -I https://$site/ 2>/dev/null | head -1 | cut -d' ' -f2
+done
+
+# Перезапуск Docker сервисов
+docker-compose -f /root/projects/hr-miniapp/docker-compose.yml restart
+docker-compose -f /root/projects/n8n/docker-compose.yml restart  
+docker-compose -f /root/projects/SalesForecast/sales_forecast/docker-compose.yml restart
+
+# Перезапуск systemd сервисов
+systemctl restart mcp-restaurant.service
+systemctl restart reviews-api.service
+
+# Перезапуск nginx
+docker restart hr-nginx
+```
+
+**❗ ВАЖНО**: Основная nginx конфигурация находится в `/root/projects/hr-miniapp/nginx.conf` и обслуживает **все 5 доменов**!
+
+---
+
+## ✅ ФИНАЛЬНЫЙ СТАТУС (2025-07-13)
+
+**🎉 ВСЕ 5 ДОМЕНОВ ПОЛНОСТЬЮ РАБОТАЮТ!**
+
+✅ **madlen.space** - HR Time Tracking System  
+✅ **aqniet.site** - Sales Forecast + 1C Exchange  
+✅ **mcp.madlen.space** - MCP Restaurant Optimizer  
+✅ **n8n.sandyq.space** - N8N Workflow Automation  
+✅ **reviews.aqniet.site** - Reviews Parser API  
+
+**Deployment Completed**: 2025-07-13  
+**All SSL certificates**: Valid and auto-renewing  
+**All services**: Monitored and healthy  
+**Master Documentation**: `/root/projects/DEPLOYMENT_MASTER.md`
+
 ### ⚠️ Важно: Конфликт портов с системным nginx
 Если при запуске nginx контейнера возникает ошибка "bind: address already in use", необходимо:
 ```bash
@@ -399,10 +507,12 @@ curl -X POST https://madlen.space/api/telegram/auth \
 ## 🔒 Безопасность
 
 ### SSL/TLS
-- ✅ **Let's Encrypt сертификаты** автоматически подключены
+- ✅ **Let's Encrypt сертификаты** автоматически подключены (обновлены 2025-07-02)
 - ✅ **HTTPS редирект** с HTTP
 - ✅ **HSTS headers** настроены
-- ✅ **Modern TLS** конфигурация
+- ✅ **Modern TLS** конфигурация (TLSv1.2, TLSv1.3)
+- ✅ **Автообновление SSL** настроено через cron (каждый понедельник 3:00)
+- ✅ **Сертификаты действуют** до 30 сентября 2025
 
 ### Telegram Security
 - ✅ **HMAC-SHA256 валидация** initData

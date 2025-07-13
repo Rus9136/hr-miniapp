@@ -3130,6 +3130,7 @@ function openDepartmentModal(departmentId) {
         document.getElementById('departmentHallArea').value = department.hall_area || '';
         document.getElementById('departmentKitchenArea').value = department.kitchen_area || '';
         document.getElementById('departmentSeatsCount').value = department.seats_count || '';
+        document.getElementById('departmentTradePoint').value = department.trade_point || '';
         
         // Clear status message
         const statusDiv = document.getElementById('departmentFormStatus');
@@ -3231,10 +3232,11 @@ function initDepartmentModal() {
                 const hallArea = document.getElementById('departmentHallArea').value;
                 const kitchenArea = document.getElementById('departmentKitchenArea').value;
                 const seatsCount = document.getElementById('departmentSeatsCount').value;
+                const tradePoint = document.getElementById('departmentTradePoint').value;
                 
-                console.log('Saving department data:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount });
+                console.log('Saving department data:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount, tradePoint });
                 
-                const result = await saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount);
+                const result = await saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount, tradePoint);
                 console.log('Save result:', result);
                 
                 showDepartmentFormStatus('Данные подразделения успешно сохранены', false);
@@ -3260,8 +3262,8 @@ function initDepartmentModal() {
 }
 
 // Save department data
-async function saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount) {
-    console.log('saveDepartment called with:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount });
+async function saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seatsCount, tradePoint) {
+    console.log('saveDepartment called with:', { departmentId, iikoId, hallArea, kitchenArea, seatsCount, tradePoint });
     
     // Validate required fields
     if (!departmentId) {
@@ -3295,7 +3297,8 @@ async function saveDepartment(departmentId, iikoId, hallArea, kitchenArea, seats
         id_iiko: iikoId || null,
         hall_area: hallArea && hallArea !== '' ? parseFloat(hallArea) : null,
         kitchen_area: kitchenArea && kitchenArea !== '' ? parseFloat(kitchenArea) : null,
-        seats_count: seatsCount && seatsCount !== '' ? parseInt(seatsCount) : null
+        seats_count: seatsCount && seatsCount !== '' ? parseInt(seatsCount) : null,
+        trade_point: tradePoint !== undefined ? tradePoint : null
     };
     
     console.log('Sending API request with data:', updateData);
@@ -3355,32 +3358,8 @@ window.closeDepartmentModal = closeDepartmentModal;
 // ================== AI-РЕКОМЕНДАЦИЯ SECTION ==================
 
 // Initialize AI recommendation section
-async function initAIRecommendationSection() {
-    console.log('🤖 Initializing AI Recommendation section...');
-    
-    // Load organizations and departments for filter
-    await loadAIOrganizations();
-    await loadAIDepartments();
-    
-    // Set up event handlers
-    const orgFilter = document.getElementById('ai-organization-filter');
-    const deptFilter = document.getElementById('ai-department-filter');
-    const processBtn = document.getElementById('ai-process-btn');
-    
-    // Organization filter change - update departments
-    if (orgFilter) {
-        // Remove existing event listeners to prevent duplicates
-        orgFilter.removeEventListener('change', handleAIOrganizationChange);
-        orgFilter.addEventListener('change', handleAIOrganizationChange);
-    }
-    
-    // Process button click
-    if (processBtn) {
-        processBtn.addEventListener('click', processAIRecommendation);
-    }
-    
-    console.log('✅ AI Recommendation section initialized');
-}
+// Note: AI Recommendation section initialization is now handled by ai-recommendations.js
+// This is a placeholder to maintain compatibility
 
 // Handle organization change for AI section
 async function handleAIOrganizationChange(e) {
@@ -3535,6 +3514,29 @@ async function processAIRecommendation() {
     if (btnText) btnText.style.display = 'none';
     
     try {
+        // Calculate previous period dates
+        const startDate = new Date(dateFromInput.value);
+        const endDate = new Date(dateToInput.value);
+        
+        // Calculate period length in days (inclusive)
+        const periodLength = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Calculate previous period end date (day before current start)
+        const prevEndDate = new Date(startDate);
+        prevEndDate.setDate(prevEndDate.getDate() - 1);
+        
+        // Calculate previous period start date
+        const prevStartDate = new Date(prevEndDate);
+        prevStartDate.setDate(prevStartDate.getDate() - periodLength + 1);
+        
+        // Format dates to YYYY-MM-DD
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
         // Prepare request data
         const requestData = {
             branch_id: departmentIdIiko,
@@ -3542,7 +3544,9 @@ async function processAIRecommendation() {
             kitchen_area: department?.kitchen_area || null,
             seats_count: department?.seats_count || null,
             date_start: dateFromInput.value,
-            date_end: dateToInput.value
+            date_end: dateToInput.value,
+            prev_period_start: formatDate(prevStartDate),
+            prev_period_end: formatDate(prevEndDate)
         };
         
         console.log('Sending AI recommendation request:', requestData);

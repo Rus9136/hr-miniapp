@@ -21,6 +21,7 @@ curl https://madlen.space/api/health
 - ✅ iOS WebView поддержка
 - ✅ Расчет ночных смен
 - ✅ Админ-панель с синхронизацией 1С
+- ✅ AI-рекомендации с мультиагентным анализом 🤖
 - ✅ Docker deployment на madlen.space
 
 ## 🏗️ Архитектура
@@ -60,6 +61,10 @@ docker-compose restart      # Перезапуск контейнеров
 node add_test_data.js       # Добавить тестовые данные
 node check_db.js            # Проверить БД
 node test_night_shift_fix.js # Тест ночных смен
+
+# AI система тестирование
+node test_ai_direct.js      # Прямое тестирование AI анализа
+node test_ai_full.js        # Полное тестирование AI системы
 ```
 
 ## ⚠️ КРИТИЧЕСКИ ВАЖНО: Работа с Docker volumes
@@ -107,6 +112,36 @@ node test_night_shift_fix.js # Тест ночных смен
 - `GET /api/admin/time-events` - события входа/выхода с фильтрацией
 - `GET /api/admin/time-records` - обработанные записи времени
 - `POST /api/admin/recalculate-time-records` - пересчет рабочего времени
+
+### 🤖 AI-рекомендации (добавлено 2025-07-13)
+- `POST /api/admin/ai-recommendations/analyze` - запуск мультиагентного анализа подразделения
+- `GET /api/admin/ai-recommendations/history` - история выполненных анализов
+- `GET /api/admin/ai-recommendations/:id` - получение детального анализа по ID
+- `GET /api/admin/ai-recommendations/prompts` - получение промптов агентов
+- `PUT /api/admin/ai-recommendations/prompts` - обновление промптов агентов
+- `POST /api/admin/ai-recommendations/rerun-agent` - перезапуск отдельного агента
+- `POST /api/admin/ai-webhook-proxy` - отправка результатов на webhook
+
+#### AI анализ подразделений
+**Endpoint:** `POST /api/admin/ai-recommendations/analyze`
+**Параметры:**
+- `department_id` (UUID) - идентификатор подразделения (поле id_iiko)
+- `date_start` (YYYY-MM-DD) - начало периода анализа
+- `date_end` (YYYY-MM-DD) - конец периода анализа 
+- `reviews_count` (число) - количество отзывов для анализа (по умолчанию 50)
+
+**Мультиагентная система (6 AI агентов):**
+1. **SalesAnalysisAgent** 📈 - анализ прогнозов и динамики продаж
+2. **PayrollAnalysisAgent** 💰 - анализ ФОТ и эффективности персонала
+3. **StaffingAgent** 👥 - оптимизация распределения персонала по сменам
+4. **ReputationAgent** ⭐ - анализ отзывов клиентов и проблем сервиса
+5. **OptimizationAgent** 🎯 - конкретные шаги для улучшения операций
+6. **NarrativeAgent** 📊 - итоговый бизнес-отчет для управляющего
+
+**Интеграция с внешними API:**
+- **MCP API** (https://mcp.madlen.space/api/v1) - получение данных подразделений
+- **Anthropic Claude API** - выполнение AI анализа
+- **Reviews API** - получение отзывов клиентов
 
 ### 🆕 Отчеты по ФОТ (добавлено 2025-07-03)
 - `GET /api/admin/reports/payroll` - общий отчет ФОТ с группировкой по датам
@@ -507,9 +542,71 @@ docker-compose up -d --build
 - **Тёмная тема** - учитывать контрастность цветов
 - **Специальные CSS правила** - использовать `telegram-mobile-fix.css`
 
+## 🤖 AI-рекомендации: Конфигурация и использование
+
+### Переменные окружения
+```bash
+# .env.production (обязательно для Docker)
+ANTHROPIC_API_KEY=sk-ant-api03-...  # API ключ для Claude
+MCP_API_BASE_URL=https://mcp.madlen.space/api/v1  # Базовый URL MCP API
+```
+
+### Структура файлов AI системы
+```
+backend/
+├── routes/
+│   └── ai-recommendations.js    # REST API для AI системы
+├── services/
+│   ├── anthropic-client.js      # Клиент для Claude API
+│   ├── mcp-client.js            # Клиент для MCP API
+│   └── multi-agent-system.js    # Мультиагентная система
+frontend/
+├── ai-recommendations.js        # Frontend логика AI секции
+├── ai-recommendations.css       # Стили для AI интерфейса
+└── index.html                   # UI компоненты AI раздела
+```
+
+### База данных
+```sql
+-- Таблицы для AI системы
+CREATE TABLE ai_recommendations (
+    id SERIAL PRIMARY KEY,
+    department_id UUID NOT NULL,
+    date_start DATE NOT NULL,
+    date_end DATE NOT NULL,
+    mcp_response JSONB,
+    agent_results JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE ai_prompts (
+    id SERIAL PRIMARY KEY,
+    agent_name VARCHAR(100) NOT NULL UNIQUE,
+    prompt_text TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Использование AI раздела
+1. Вход в админ-панель: пароль `admin12qw`
+2. Выбор раздела "AI рекомендация"
+3. Выбор подразделения и дат (максимум 30 дней)
+4. Запуск анализа (занимает 1-2 минуты)
+5. Просмотр результатов каждого агента
+6. Отправка на webhook (опционально)
+7. Редактирование промптов агентов
+
+### Известные ограничения
+- **Таймаут**: анализ может занимать до 2 минут, nginx может выдать 504
+- **Reviews API**: некоторые подразделения могут не иметь отзывов
+- **MCP API**: требует актуальные данные подразделений с id_iiko
+- **Anthropic API**: требует валидный API ключ и квоты
+
 ## ⚠️ Важные замечания
 1. **Не создавайте SESSION_LOG файлы** - обновляйте этот файл
 2. **API по табельному номеру** - используйте `/api/employee/by-number/`
 3. **Python сервер** - используем вместо http-server для стабильности
 4. **Внешний API** - часто возвращает пустые массивы, есть fallback
 5. **НИКОГДА не используйте docker-compose down -v** - удаляет всю БД!
+6. **AI система требует .env.production** - для Docker deployment ✅

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2025-07-13
+
+### Added
+- 🤖 AI-рекомендации: полная мультиагентная система анализа
+- 6 специализированных AI агентов для комплексного анализа подразделений:
+  - SalesAnalysisAgent (анализ продаж) 📈
+  - PayrollAnalysisAgent (анализ ФОТ) 💰  
+  - StaffingAgent (оптимизация смен) 👥
+  - ReputationAgent (анализ отзывов) ⭐
+  - OptimizationAgent (шаги улучшения) 🎯
+  - NarrativeAgent (бизнес-отчет) 📊
+- Новые API endpoints для AI системы:
+  - `POST /api/admin/ai-recommendations/analyze` - запуск анализа
+  - `GET /api/admin/ai-recommendations/history` - история анализов
+  - `GET /api/admin/ai-recommendations/prompts` - управление промптами
+  - `POST /api/admin/ai-webhook-proxy` - отправка на webhook
+- Интеграция с Anthropic Claude API
+- Интеграция с MCP API для получения данных подразделений
+- UI раздел "AI рекомендация" в админ-панели
+- База данных для хранения результатов анализа и промптов
+- Возможность редактирования промптов агентов
+- Отправка результатов на внешние webhook URL
+
+### Changed
+- Обновлён docker-compose.yml с переменными окружения для AI
+- Добавлен .env.production для Docker deployment
+- Обновлена документация CLAUDE.md с описанием AI системы
+
+### Technical
+- Добавлен @anthropic-ai/sdk в зависимости
+- Создана модульная архитектура AI сервисов
+- Реализован webhook proxy для обхода CSP ограничений
+- Добавлены таблицы ai_recommendations и ai_prompts в PostgreSQL
+
 ## [1.6.0] - 2025-07-03
 
 ### Added
