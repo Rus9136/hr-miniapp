@@ -232,7 +232,20 @@ function switchSection(sectionName) {
             initPayrollReportSection();
             break;
         case 'ai-recommendation':
-            initAIRecommendationSection();
+            // Check if AI recommendations script is loaded
+            if (typeof window.initAIRecommendationSection === 'function') {
+                initAIRecommendationSection();
+            } else {
+                console.log('⏳ Waiting for AI recommendations script to load...');
+                // Retry after a short delay
+                setTimeout(() => {
+                    if (typeof window.initAIRecommendationSection === 'function') {
+                        initAIRecommendationSection();
+                    } else {
+                        console.error('❌ AI recommendations script failed to load');
+                    }
+                }, 100);
+            }
             break;
         case 'upload':
             initUploadSection();
@@ -3595,8 +3608,5 @@ async function processAIRecommendation() {
     }
 }
 
-// Export AI recommendation functions
-window.initAIRecommendationSection = initAIRecommendationSection;
-window.loadAIOrganizations = loadAIOrganizations;
-window.loadAIDepartments = loadAIDepartments;
-window.processAIRecommendation = processAIRecommendation;
+// AI recommendation functions will be loaded from ai-recommendations.js
+// Remove these exports as they cause reference errors

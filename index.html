@@ -12,12 +12,27 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css?v=planned-darker-v9.2&ts=20250619-darker-yellow">
     <link rel="stylesheet" href="admin.css?v=ai-recommendation-v11.0&ts=20250702-2000&webhook=added">
-    <link rel="stylesheet" href="ai-recommendations.css?v=1.0">
+    <link rel="stylesheet" href="ai-recommendations.css?v=PDF-v3.0&ts=20250713-1505&feature=pdf-export">
     <link rel="stylesheet" href="telegram.css?v=planned-darker-v8.8&ts=20250619-darker-yellow">
     <link rel="stylesheet" href="styles/ios-styles.css?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true">
     <link rel="stylesheet" href="telegram-mobile-fix.css?v=6.1&ts=20250619-darker-yellow">
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- jsPDF for PDF export (will be loaded dynamically if needed) -->
+    <script>
+        // Pre-load jsPDF on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('📄 Checking jsPDF availability on DOMContentLoaded:', typeof window.jsPDF);
+            if (typeof window.jsPDF === 'undefined') {
+                console.log('📄 jsPDF not found in global scope, will load dynamically when needed');
+            } else {
+                console.log('✅ jsPDF already available globally');
+            }
+        });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" 
+            onload="console.log('📄 jsPDF loaded from static HTML:', typeof window.jsPDF)"
+            onerror="console.warn('⚠️ jsPDF failed to load from static HTML')"></script>
 </head>
 <body>
     <!-- Экран входа -->
@@ -722,6 +737,9 @@
                         <h2>AI-рекомендации</h2>
                         <div class="section-controls">
                             <div class="filter-controls">
+                                <select id="ai-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
                                 <select id="ai-department-filter" class="search-input" style="width: 300px; margin-right: 10px;">
                                     <option value="">Выберите подразделение</option>
                                 </select>
@@ -1367,7 +1385,7 @@
     <!-- Application scripts -->
     <script src="telegram.js?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true"></script>
     <script src="app.js?v=admin-auth-fix-v10.4&ts=20250701-1955&admin-fix=true"></script>
-    <script src="admin.js?v=ai-webhook-v11.1&ts=20250702-2010&proxy=added"></script>
-    <script src="ai-recommendations.js?v=1.0"></script>
+    <script src="admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init"></script>
+    <script src="ai-recommendations.js?v=PDF-v3.0&ts=20250713-1505&feature=pdf-export"></script>
 </body>
 </html>

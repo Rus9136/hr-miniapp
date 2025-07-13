@@ -22,7 +22,7 @@ app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) {
     res.setHeader('Content-Security-Policy', 
       "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' https://telegram.org; " +
+      "script-src 'self' 'unsafe-inline' https://telegram.org https://cdnjs.cloudflare.com https://unpkg.com; " +
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "font-src 'self' data: https://fonts.gstatic.com; " +
       "connect-src 'self' https://api.telegram.org; " +

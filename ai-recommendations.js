@@ -8,7 +8,8 @@ let analysisHistory = [];
 async function initAIRecommendationSection() {
     console.log('🤖 Initializing AI Recommendation section...');
     
-    // Load departments for filter
+    // Load organizations and departments for filters
+    await loadAIOrganizations();
     await loadAIDepartments();
     
     // Set default dates (last 7 days)
@@ -24,10 +25,52 @@ async function initAIRecommendationSection() {
     console.log('✅ AI Recommendation section initialized');
 }
 
-// Load departments for AI section
-async function loadAIDepartments() {
+// Load organizations for AI-recommendations filter
+async function loadAIOrganizations() {
+    console.log('=== loadAIOrganizations called ===');
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/departments`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error(`Failed to load organizations: ${response.status}`);
+        
+        const organizations = await response.json();
+        const select = document.getElementById('ai-organization-filter');
+        
+        if (select) {
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Все организации</option>';
+            
+            // Add organizations
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.object_bin;
+                option.textContent = `${org.object_company} (${org.object_bin})`;
+                select.appendChild(option);
+            });
+            
+            console.log(`📊 Loaded ${organizations.length} organizations for AI`);
+        }
+    } catch (error) {
+        console.error('❌ Error loading AI organizations:', error);
+        showNotification('Ошибка загрузки организаций', 'error');
+    }
+}
+
+// Load departments for AI section with optional organization filter
+async function loadAIDepartments(organizationBin = null) {
+    console.log('=== loadAIDepartments called ===', 'organizationBin:', organizationBin);
+    try {
+        const params = new URLSearchParams();
+        if (organizationBin && organizationBin.trim() !== '') {
+            params.append('organization', organizationBin);
+            console.log('Adding organization filter:', organizationBin);
+        }
+        
+        const url = `${ADMIN_API_BASE_URL}/admin/departments?${params}`;
+        console.log('Fetching departments from:', url);
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to load departments: ${response.status}`);
+        
         const data = await response.json();
         
         const departmentFilter = document.getElementById('ai-department-filter');
@@ -40,18 +83,24 @@ async function loadAIDepartments() {
         const departments = Array.isArray(data) ? data : (data.success && data.data ? data.data : []);
         
         if (departments && departments.length > 0) {
-            departments.forEach(dept => {
+            // Filter by organization on client side if needed (for extra safety)
+            const filteredDepartments = organizationBin 
+                ? departments.filter(dept => dept.object_bin === organizationBin)
+                : departments;
+                
+            filteredDepartments.forEach(dept => {
                 if (dept.id_iiko) { // Only departments with id_iiko
                     const option = document.createElement('option');
                     option.value = dept.id_iiko;
                     option.textContent = `${dept.object_name} (${dept.object_company})`;
                     option.setAttribute('data-department-name', dept.object_name);
                     option.setAttribute('data-company', dept.object_company);
+                    option.setAttribute('data-organization-bin', dept.object_bin);
                     departmentFilter.appendChild(option);
                 }
             });
             
-            console.log(`📊 Loaded ${departments.length} departments for AI (${departments.filter(d => d.id_iiko).length} with id_iiko)`);
+            console.log(`📊 Loaded ${filteredDepartments.length} departments for AI (${filteredDepartments.filter(d => d.id_iiko).length} with id_iiko)`);
         } else {
             console.warn('⚠️ No departments loaded or invalid format');
         }
@@ -79,11 +128,27 @@ function setDefaultDates() {
     }
 }
 
+// Handle organization change for cascading department filter in AI section
+function onAIOrganizationChange() {
+    const organization = document.getElementById('ai-organization-filter').value;
+    console.log('AI organization changed to:', organization);
+    
+    // Clear department selection
+    const departmentSelect = document.getElementById('ai-department-filter');
+    if (departmentSelect) {
+        departmentSelect.value = '';
+    }
+    
+    // Reload departments filtered by organization
+    loadAIDepartments(organization);
+}
+
 // Setup event handlers
 function setupAIEventHandlers() {
     const processBtn = document.getElementById('ai-process-btn');
     const refreshHistoryBtn = document.getElementById('ai-refresh-history');
     const showPromptsBtn = document.getElementById('ai-show-prompts');
+    const orgFilter = document.getElementById('ai-organization-filter');
     
     if (processBtn) {
         processBtn.addEventListener('click', runAIAnalysis);
@@ -95,6 +160,11 @@ function setupAIEventHandlers() {
     
     if (showPromptsBtn) {
         showPromptsBtn.addEventListener('click', showPromptsModal);
+    }
+    
+    // Organization filter change event for cascading departments
+    if (orgFilter) {
+        orgFilter.addEventListener('change', onAIOrganizationChange);
     }
 }
 
@@ -156,11 +226,33 @@ async function runAIAnalysis() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            signal: AbortSignal.timeout(180000) // 3 минуты таймаут
         });
         
-        const result = await response.json();
-        console.log('📊 AI analysis result:', result);
+        let result;
+        try {
+            const responseText = await response.text();
+            console.log('📊 Raw response:', responseText.substring(0, 200) + '...');
+            
+            // Check if response is HTML (error page)
+            if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+                if (response.status === 504) {
+                    // 504 timeout - анализ может все еще выполняться на backend
+                    throw new Error(`Таймаут запроса (504). Анализ может выполняться в фоновом режиме. Проверьте историю анализов через 1-2 минуты.`);
+                } else {
+                    throw new Error(`Сервер вернул HTML вместо JSON. Статус: ${response.status}. Возможно, произошел таймаут или внутренняя ошибка сервера.`);
+                }
+            }
+            
+            result = JSON.parse(responseText);
+            console.log('📊 AI analysis result:', result);
+        } catch (parseError) {
+            if (parseError.message.includes('HTML')) {
+                throw parseError; // Re-throw our custom HTML error
+            }
+            throw new Error(`Ошибка парсинга ответа сервера: ${parseError.message}`);
+        }
         
         if (result.success) {
             currentAnalysisId = result.data.analysis_id;
@@ -181,8 +273,66 @@ async function runAIAnalysis() {
         
     } catch (error) {
         console.error('❌ AI analysis error:', error);
-        updateProgressStep('error', `Ошибка: ${error.message}`);
-        showNotification(`Ошибка анализа: ${error.message}`, 'error');
+        
+        if (error.message.includes('504') || error.message.includes('Таймаут')) {
+            updateProgressStep('warning', `Таймаут запроса. Анализ может выполняться в фоне...`);
+            showNotification(`${error.message}`, 'warning');
+            
+            // Запускаем проверку результатов каждые 10 секунд, до 5 попыток (50 секунд)
+            let checkAttempts = 0;
+            const maxAttempts = 5;
+            
+            const checkForResults = async () => {
+                checkAttempts++;
+                console.log(`⏱️ Попытка ${checkAttempts}/${maxAttempts}: Проверка результатов анализа...`);
+                
+                try {
+                    await loadAIHistory();
+                    
+                    // Проверяем, есть ли новый анализ за последние 2 минуты
+                    const historyContainer = document.querySelector('.ai-history-container');
+                    const latestAnalysis = historyContainer?.querySelector('.ai-history-item');
+                    
+                    if (latestAnalysis) {
+                        const analysisTime = latestAnalysis.getAttribute('data-created-at');
+                        const analysisDate = new Date(analysisTime);
+                        const now = new Date();
+                        const timeDiff = (now - analysisDate) / 1000; // в секундах
+                        
+                        if (timeDiff < 120) { // Анализ создан менее 2 минут назад
+                            const analysisId = latestAnalysis.getAttribute('data-analysis-id');
+                            console.log('✅ Найден свежий анализ, загружаем результаты...', analysisId);
+                            
+                            // Загружаем и отображаем результаты
+                            await displayAnalysisById(analysisId);
+                            updateProgressStep('completed', 'Анализ завершен успешно!');
+                            showNotification('AI-анализ завершен! Результаты отображены.', 'success');
+                            return; // Прекращаем проверки
+                        }
+                    }
+                    
+                    // Если результаты не найдены и это не последняя попытка
+                    if (checkAttempts < maxAttempts) {
+                        updateProgressStep('warning', `Проверка результатов... (${checkAttempts}/${maxAttempts})`);
+                        setTimeout(checkForResults, 10000); // Повторить через 10 секунд
+                    } else {
+                        updateProgressStep('error', 'Таймаут: анализ не завершен. Проверьте историю позже.');
+                        showNotification('Анализ займет больше времени. Проверьте историю анализов через несколько минут.', 'info');
+                    }
+                } catch (checkError) {
+                    console.error('❌ Ошибка при проверке результатов:', checkError);
+                    if (checkAttempts < maxAttempts) {
+                        setTimeout(checkForResults, 10000);
+                    }
+                }
+            };
+            
+            // Начинаем проверку через 10 секунд после таймаута
+            setTimeout(checkForResults, 10000);
+        } else {
+            updateProgressStep('error', `Ошибка: ${error.message}`);
+            showNotification(`Ошибка анализа: ${error.message}`, 'error');
+        }
     } finally {
         // Reset button state
         if (processBtn) processBtn.disabled = false;
@@ -275,15 +425,58 @@ function updateProgressStep(stepId, status) {
     }
 }
 
+// Load and display analysis by ID
+async function displayAnalysisById(analysisId) {
+    console.log('🔍 Loading analysis by ID:', analysisId);
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/${analysisId}`);
+        if (!response.ok) {
+            throw new Error(`Failed to load analysis: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.data) {
+            console.log('✅ Analysis loaded successfully:', result.data);
+            displayAnalysisResults(result.data);
+            return true;
+        } else {
+            throw new Error(result.error || 'Failed to load analysis data');
+        }
+    } catch (error) {
+        console.error('❌ Error loading analysis by ID:', error);
+        showNotification(`Ошибка загрузки анализа: ${error.message}`, 'error');
+        return false;
+    }
+}
+
 // Display analysis results
 function displayAnalysisResults(analysisData) {
+    console.log('🎯 displayAnalysisResults called with:', analysisData);
+    
     const resultsContainer = document.getElementById('ai-results-container');
-    if (!resultsContainer) return;
+    if (!resultsContainer) {
+        console.error('❌ ai-results-container not found!');
+        return;
+    }
+    
+    console.log('✅ Results container found, displaying...');
+    
+    // Make sure container is visible
+    resultsContainer.style.display = 'block';
     
     // Get department info
     const departmentFilter = document.getElementById('ai-department-filter');
     const selectedOption = departmentFilter?.querySelector(`option[value="${analysisData.department_id}"]`);
-    const departmentName = selectedOption?.getAttribute('data-department-name') || 'Неизвестно';
+    let departmentName = selectedOption?.getAttribute('data-department-name') || selectedOption?.textContent;
+    
+    // If we can't find department name from dropdown, try to get it from analysis data
+    if (!departmentName || departmentName === 'Неизвестно') {
+        // Try to extract from period object or use department_id
+        departmentName = analysisData.department_name || analysisData.department_id || 'Неизвестно';
+    }
+    
+    console.log('🏢 Department name:', departmentName);
     
     resultsContainer.innerHTML = `
         <div class="ai-analysis-summary">
@@ -317,21 +510,37 @@ function displayAnalysisResults(analysisData) {
             ${generateAgentResultsHTML(analysisData.agent_results)}
         </div>
         
-        <div class="webhook-section">
-            <div class="webhook-header">
-                <span class="webhook-icon">🔗</span>
-                <h4 class="webhook-title">Отправить результаты на webhook</h4>
+        <div class="export-actions-section">
+            <div class="export-actions-header">
+                <span class="export-icon">📄</span>
+                <h4 class="export-title">Экспорт и отправка результатов</h4>
             </div>
-            <div class="webhook-controls">
-                <input type="url" id="webhook-url" class="webhook-url-input" placeholder="https://example.com/webhook" value="">
-                <button id="webhook-send-btn" class="webhook-send-btn">Отправить</button>
+            
+            <div class="export-controls">
+                <button id="export-pdf-btn" class="export-pdf-btn">
+                    <span class="btn-icon">📄</span>
+                    Скачать PDF
+                </button>
+                
+                <div class="webhook-controls">
+                    <input type="url" id="webhook-url" class="webhook-url-input" placeholder="https://example.com/webhook" value="">
+                    <button id="webhook-send-btn" class="webhook-send-btn">
+                        <span class="btn-icon">🔗</span>
+                        Отправить на webhook
+                    </button>
+                </div>
             </div>
+            
             <div id="webhook-status" class="webhook-status"></div>
+            <div id="export-status" class="export-status"></div>
         </div>
     `;
     
     // Setup webhook functionality
     setupWebhookSender(analysisData);
+    
+    // Setup PDF export functionality
+    setupPDFExport(analysisData, departmentName);
     
     // Setup agent collapse functionality
     setupAgentCollapse();
@@ -438,6 +647,316 @@ function setupWebhookSender(analysisData) {
     }
 }
 
+// Setup PDF export functionality
+function setupPDFExport(analysisData, departmentName) {
+    const exportBtn = document.getElementById('export-pdf-btn');
+    const statusDiv = document.getElementById('export-status');
+    
+    if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = '<span class="btn-icon">⏳</span> Генерация PDF...';
+            
+            try {
+                await generatePDFReport(analysisData, departmentName);
+                showExportStatus('PDF успешно скачан', 'success');
+            } catch (error) {
+                console.error('❌ PDF export error:', error);
+                showExportStatus(`Ошибка генерации PDF: ${error.message}`, 'error');
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.innerHTML = '<span class="btn-icon">📄</span> Скачать PDF';
+            }
+        });
+    }
+    
+    function showExportStatus(message, type) {
+        if (statusDiv) {
+            statusDiv.textContent = message;
+            statusDiv.className = `export-status ${type}`;
+            
+            // Auto-hide success message after 3 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.className = 'export-status';
+                }, 3000);
+            }
+        }
+    }
+}
+
+// Load jsPDF if not available
+async function ensureJsPDFLoaded() {
+    // Check if jsPDF is already loaded in any format
+    if (typeof window.jsPDF !== 'undefined' || 
+        typeof window.jspdf !== 'undefined' ||
+        (window.jsPDF && typeof window.jsPDF.jsPDF === 'function')) {
+        console.log('✅ jsPDF already available:', {
+            'typeof window.jsPDF': typeof window.jsPDF,
+            'typeof window.jspdf': typeof window.jspdf
+        });
+        return true;
+    }
+    
+    console.log('📄 jsPDF not found, attempting to load...');
+    
+    const cdnUrls = [
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+        'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.min.js'
+    ];
+    
+    for (let i = 0; i < cdnUrls.length; i++) {
+        const url = cdnUrls[i];
+        console.log(`📄 Trying to load jsPDF from: ${url}`);
+        
+        try {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                script.onload = () => {
+                    console.log(`✅ jsPDF script loaded from ${url}`);
+                    // Wait a bit for the library to initialize
+                    setTimeout(() => {
+                        console.log('📄 Checking jsPDF availability:', {
+                            'typeof window.jsPDF': typeof window.jsPDF,
+                            'window.jsPDF': window.jsPDF,
+                            'typeof window.jspdf': typeof window.jspdf,
+                            'window.jspdf': window.jspdf,
+                            'jsPDF on window': 'jsPDF' in window,
+                            'jspdf on window': 'jspdf' in window
+                        });
+                        
+                        // jsPDF может быть доступен в разных форматах
+                        if (typeof window.jsPDF !== 'undefined' || 
+                            typeof window.jspdf !== 'undefined' || 
+                            (window.jsPDF && typeof window.jsPDF.jsPDF === 'function')) {
+                            resolve(true);
+                        } else {
+                            reject(new Error(`jsPDF загружен с ${url}, но не инициализирован`));
+                        }
+                    }, 300);
+                };
+                script.onerror = () => {
+                    console.error(`❌ Failed to load jsPDF from ${url}`);
+                    reject(new Error(`Не удалось загрузить jsPDF с ${url}`));
+                };
+                document.head.appendChild(script);
+            });
+            
+            // If we get here, jsPDF was loaded successfully
+            return true;
+            
+        } catch (error) {
+            console.warn(`⚠️ Failed to load from ${url}:`, error.message);
+            if (i === cdnUrls.length - 1) {
+                // This was the last URL, throw the error
+                throw new Error(`Не удалось загрузить jsPDF ни с одного CDN. Последняя ошибка: ${error.message}`);
+            }
+            // Continue to next CDN
+        }
+    }
+}
+
+// Simple PDF generation fallback (if jsPDF fails)
+function generateSimplePDFText(analysisData, departmentName) {
+    const timestamp = new Date().toLocaleString('ru-RU');
+    let content = `AI-рекомендации для подразделения: ${departmentName}\n\n`;
+    content += `Дата создания: ${timestamp}\n\n`;
+    
+    if (analysisData.agent_results) {
+        Object.entries(analysisData.agent_results).forEach(([agentName, result]) => {
+            content += `=== ${agentName} ===\n`;
+            content += typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+            content += '\n\n';
+        });
+    }
+    
+    // Create downloadable text file
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI-рекомендации_${departmentName.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Generate PDF report
+async function generatePDFReport(analysisData, departmentName) {
+    console.log('📄 Starting PDF generation...');
+    
+    // Detailed environment check
+    console.log('📄 Environment check:', {
+        'typeof window.jsPDF': typeof window.jsPDF,
+        'window.jsPDF': window.jsPDF,
+        'typeof window.jspdf': typeof window.jspdf,
+        'window.jspdf': window.jspdf,
+        'navigator.userAgent': navigator.userAgent,
+        'location.hostname': location.hostname
+    });
+    
+    // Try simpler approach first - check if jsPDF is already available
+    let jsPDFConstructor = null;
+    
+    // Check all possible jsPDF locations
+    if (typeof window.jsPDF === 'function') {
+        jsPDFConstructor = window.jsPDF;
+        console.log('📄 Found jsPDF as direct function');
+    } else if (window.jsPDF && typeof window.jsPDF.jsPDF === 'function') {
+        jsPDFConstructor = window.jsPDF.jsPDF;
+        console.log('📄 Found jsPDF.jsPDF (UMD)');
+    } else if (window.jsPDF && window.jsPDF.default && typeof window.jsPDF.default === 'function') {
+        jsPDFConstructor = window.jsPDF.default;
+        console.log('📄 Found jsPDF.default');
+    } else if (typeof window.jspdf === 'function') {
+        jsPDFConstructor = window.jspdf;
+        console.log('📄 Found jspdf (lowercase)');
+    }
+    
+    // If not found, try to load it
+    if (!jsPDFConstructor) {
+        console.log('📄 jsPDF not found, attempting to load...');
+        try {
+            await ensureJsPDFLoaded();
+            
+            // Re-check after loading
+            if (typeof window.jsPDF === 'function') {
+                jsPDFConstructor = window.jsPDF;
+            } else if (window.jsPDF && typeof window.jsPDF.jsPDF === 'function') {
+                jsPDFConstructor = window.jsPDF.jsPDF;
+            } else if (window.jsPDF && window.jsPDF.default && typeof window.jsPDF.default === 'function') {
+                jsPDFConstructor = window.jsPDF.default;
+            } else if (typeof window.jspdf === 'function') {
+                jsPDFConstructor = window.jspdf;
+            }
+        } catch (loadError) {
+            console.error('❌ Failed to load jsPDF:', loadError);
+            // Fallback to text file
+            console.log('📄 Falling back to text file download...');
+            generateSimplePDFText(analysisData, departmentName);
+            return;
+        }
+    }
+    
+    if (!jsPDFConstructor) {
+        console.error('❌ jsPDF still not available after loading');
+        // Fallback to text file
+        console.log('📄 Falling back to text file download...');
+        generateSimplePDFText(analysisData, departmentName);
+        return;
+    }
+    
+    try {
+        console.log('📄 Creating jsPDF instance...');
+        const doc = new jsPDFConstructor();
+    
+    // Set font for Cyrillic support
+    doc.setFont('helvetica');
+    
+    let yPosition = 20;
+    const lineHeight = 7;
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 20;
+    const maxWidth = pageWidth - 2 * margin;
+    
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('AI-рекомендации для подразделения', margin, yPosition);
+    yPosition += lineHeight * 2;
+    
+    // Department and period info
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Подразделение: ${departmentName}`, margin, yPosition);
+    yPosition += lineHeight;
+    doc.text(`Период анализа: ${analysisData.period.start} — ${analysisData.period.end}`, margin, yPosition);
+    yPosition += lineHeight;
+    doc.text(`Дата создания: ${new Date(analysisData.created_at).toLocaleString('ru-RU')}`, margin, yPosition);
+    yPosition += lineHeight * 2;
+    
+    // Agent configurations for titles
+    const agentConfig = {
+        SalesAnalysisAgent: { icon: '📈', title: 'Аналитик продаж', description: 'Анализ прогнозов и динамики продаж' },
+        PayrollAnalysisAgent: { icon: '💰', title: 'Аналитик затрат', description: 'Анализ ФОТ и эффективности персонала' },
+        StaffingAgent: { icon: '👥', title: 'Оптимизация смен', description: 'Распределение персонала по часам' },
+        ReputationAgent: { icon: '⭐', title: 'Анализ репутации', description: 'Отзывы клиентов и проблемы сервиса' },
+        OptimizationAgent: { icon: '🎯', title: 'Консультант оптимизации', description: 'Конкретные шаги улучшения' },
+        NarrativeAgent: { icon: '📊', title: 'Бизнес-консультант', description: 'Итоговый отчет для управляющего' }
+    };
+    
+    // Agent results
+    Object.entries(analysisData.agent_results).forEach(([agentName, result]) => {
+        const config = agentConfig[agentName] || { icon: '🤖', title: agentName, description: 'AI агент' };
+        
+        // Check if we need a new page
+        if (yPosition > 250) {
+            doc.addPage();
+            yPosition = 20;
+        }
+        
+        // Agent title
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${config.icon} ${config.title}`, margin, yPosition);
+        yPosition += lineHeight;
+        
+        // Agent description
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text(config.description, margin, yPosition);
+        yPosition += lineHeight + 2;
+        
+        // Agent result text
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        
+        const resultText = result.error ? `Ошибка: ${result.message}` : result;
+        const lines = doc.splitTextToSize(resultText, maxWidth);
+        
+        // Check if result fits on current page
+        if (yPosition + lines.length * lineHeight > 280) {
+            doc.addPage();
+            yPosition = 20;
+        }
+        
+        doc.text(lines, margin, yPosition);
+        yPosition += lines.length * lineHeight + 10;
+    });
+    
+    // Footer with generation info
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+            `Сгенерировано AI-системой ${new Date().toLocaleString('ru-RU')} | Страница ${i} из ${pageCount}`,
+            margin,
+            doc.internal.pageSize.height - 10
+        );
+    }
+    
+        // Generate filename
+        const fileName = `AI-рекомендации_${departmentName.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        // Save PDF
+        doc.save(fileName);
+        console.log('✅ PDF saved successfully:', fileName);
+        
+    } catch (pdfError) {
+        console.error('❌ PDF generation error:', pdfError);
+        // Fallback to text file
+        console.log('📄 Falling back to text file download due to PDF error...');
+        generateSimplePDFText(analysisData, departmentName);
+        throw new Error(`PDF generation failed, downloaded as text file instead: ${pdfError.message}`);
+    }
+}
+
 // Setup agent collapse functionality
 function setupAgentCollapse() {
     document.querySelectorAll('.agent-result-header').forEach(header => {
@@ -487,25 +1006,36 @@ async function loadAIHistory() {
 // Load history item
 async function loadHistoryItem(analysisId) {
     try {
+        console.log('🔍 Loading analysis ID:', analysisId);
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/${analysisId}`);
         const data = await response.json();
         
+        console.log('📊 History data loaded:', data);
+        
         if (data.success) {
             currentAnalysisId = analysisId;
+            console.log('✅ Setting current analysis ID to:', analysisId);
+            
             hideAIPlaceholder();
-            displayAnalysisResults({
+            
+            const analysisResultsData = {
                 analysis_id: analysisId,
                 department_id: data.data.department_id,
+                department_name: data.data.department_name || data.data.department_id, // Add department name
                 period: {
                     start: data.data.date_start,
                     end: data.data.date_end
                 },
                 agent_results: data.data.agent_results,
                 created_at: data.data.created_at
-            });
+            };
+            
+            console.log('📈 Displaying analysis results:', analysisResultsData);
+            displayAnalysisResults(analysisResultsData);
             
             showNotification('История анализа загружена', 'success');
         } else {
+            console.error('❌ API returned error:', data.error);
             showNotification('Ошибка загрузки истории', 'error');
         }
         
