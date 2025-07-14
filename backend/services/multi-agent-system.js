@@ -16,6 +16,16 @@ class MultiAgentSystem {
     constructor() {
         this.anthropicClient = new AnthropicClient();
         
+        // Circuit breaker для защиты от перегрузок
+        this.circuitBreaker = {
+            failureCount: 0,
+            lastFailureTime: null,
+            state: 'CLOSED', // CLOSED, OPEN, HALF_OPEN
+            failureThreshold: 3, // Количество ошибок для открытия
+            recoveryTimeout: 300000, // 5 минут для восстановления
+            halfOpenMaxRequests: 1 // Максимум запросов в HALF_OPEN состоянии
+        };
+        
         // Конфигурация агентов
         this.agents = {
             SalesAnalysisAgent: {
@@ -99,10 +109,14 @@ class MultiAgentSystem {
             console.log('[MultiAgent] Запуск полного мультиагентного анализа...');
 
             const results = {};
-            const agentOrder = ['SalesAnalysisAgent', 'PayrollAnalysisAgent', 'StaffingAgent', 'ReputationAgent', 'OptimizationAgent', 'NarrativeAgent'];
+            
+            // Разделяем агентов на группы для более стабильного выполнения
+            const primaryAgents = ['SalesAnalysisAgent', 'PayrollAnalysisAgent', 'StaffingAgent', 'ReputationAgent'];
+            const secondaryAgents = ['OptimizationAgent', 'NarrativeAgent'];
 
-            // Последовательное выполнение агентов
-            for (const agentName of agentOrder) {
+            // Сначала выполняем основные агенты
+            console.log('[MultiAgent] 🚀 Запуск основных агентов (1-4)...');
+            for (const agentName of primaryAgents) {
                 console.log(`[MultiAgent] Запуск агента: ${agentName}`);
 
                 const agentResult = await this.runSingleAgent(agentName, mcpData, null, results);
@@ -118,17 +132,67 @@ class MultiAgentSystem {
                     };
                 }
 
-                // Небольшая пауза между запросами
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Адаптивная пауза между основными агентами с учетом предыдущих ошибок
+                let pauseDuration = this.calculateAdaptivePause(agentName, results);
+                
+                // Дополнительная пауза при обнаружении ошибок 529
+                if (agentResult.error && agentResult.error.status === 529) {
+                    pauseDuration = Math.max(pauseDuration, 60000); // Минимум 1 минута после 529 ошибки
+                    console.log(`[MultiAgent] ⚠️ Обнаружена ошибка 529! Увеличиваем паузу до ${pauseDuration/1000} секунд`);
+                }
+                
+                console.log(`[MultiAgent] ⏳ Адаптивная пауза ${pauseDuration/1000} секунд после агента ${agentName}...`);
+                await new Promise(resolve => setTimeout(resolve, pauseDuration));
+            }
+
+            // Дополнительная пауза перед зависимыми агентами с учетом предыдущих ошибок
+            const preSecondaryPause = this.calculatePreSecondaryPause(results);
+            console.log(`[MultiAgent] 🔄 Переход к зависимым агентам (5-6). Дополнительная пауза ${preSecondaryPause/1000} секунд...`);
+            await new Promise(resolve => setTimeout(resolve, preSecondaryPause));
+
+            // Теперь выполняем зависимые агенты с большими паузами
+            console.log('[MultiAgent] 🎯 Запуск зависимых агентов (OptimizationAgent, NarrativeAgent)...');
+            for (const agentName of secondaryAgents) {
+                console.log(`[MultiAgent] Запуск зависимого агента: ${agentName}`);
+
+                const agentResult = await this.runSingleAgent(agentName, mcpData, null, results);
+                
+                if (agentResult.success) {
+                    results[agentName] = agentResult.result;
+                    console.log(`[MultiAgent] ✅ Зависимый агент ${agentName} завершен успешно`);
+                } else {
+                    console.error(`[MultiAgent] ❌ Ошибка зависимого агента ${agentName}:`, agentResult.error);
+                    results[agentName] = {
+                        error: true,
+                        message: `Ошибка выполнения агента: ${agentResult.error.message || 'Неизвестная ошибка'}`
+                    };
+                }
+
+                // Увеличенная пауза между зависимыми агентами с учетом ошибок
+                if (agentName !== secondaryAgents[secondaryAgents.length - 1]) { // Не ждем после последнего
+                    let secondaryPause = 15000; // Базовая пауза 15 секунд
+                    
+                    // Если есть ошибка 529, увеличиваем паузу
+                    if (agentResult.error && agentResult.error.status === 529) {
+                        secondaryPause = 90000; // 1.5 минуты после 529 ошибки
+                        console.log(`[MultiAgent] ⚠️ Ошибка 529 в ${agentName}! Увеличиваем паузу до ${secondaryPause/1000} секунд`);
+                    }
+                    
+                    console.log(`[MultiAgent] ⏳ Пауза ${secondaryPause/1000} секунд перед следующим зависимым агентом...`);
+                    await new Promise(resolve => setTimeout(resolve, secondaryPause));
+                }
             }
 
             console.log('[MultiAgent] ✅ Полный анализ завершен');
 
+            const totalAgents = primaryAgents.length + secondaryAgents.length;
             return {
                 success: true,
                 results: results,
                 metadata: {
-                    total_agents: agentOrder.length,
+                    total_agents: totalAgents,
+                    primary_agents: primaryAgents.length,
+                    secondary_agents: secondaryAgents.length,
                     successful_agents: Object.keys(results).filter(key => !results[key].error).length,
                     failed_agents: Object.keys(results).filter(key => results[key].error).length,
                     completed_at: new Date().toISOString()
@@ -162,6 +226,20 @@ class MultiAgentSystem {
                 throw new Error(`Агент ${agentName} не найден`);
             }
 
+            // Проверка circuit breaker
+            const circuitState = this.checkCircuitBreaker();
+            if (circuitState === 'OPEN') {
+                console.log(`[MultiAgent] 🔴 Circuit breaker OPEN для ${agentName}. Пропускаем выполнение.`);
+                return {
+                    success: false,
+                    agent_name: agentName,
+                    error: {
+                        type: 'circuit_breaker_open',
+                        message: 'Circuit breaker открыт из-за частых ошибок 529'
+                    }
+                };
+            }
+
             // Получение промпта (кастомный или из БД, или дефолтный)
             const prompt = customPrompt || await this.getAgentPrompt(agentName) || agent.default_prompt;
 
@@ -171,13 +249,28 @@ class MultiAgentSystem {
             // Замена плейсхолдеров в промпте
             const processedPrompt = this.processPromptPlaceholders(prompt, agentData);
 
+            // Специальные настройки для проблемных агентов
+            const agentOptions = {};
+            if (agentName === 'StaffingAgent' || agentName === 'NarrativeAgent') {
+                agentOptions.maxRetries = 7; // Больше попыток для проблемных агентов
+                agentOptions.retryDelay = 10000; // Увеличенная базовая задержка (10 секунд)
+                console.log(`[MultiAgent] 🛠️  Применяем специальные настройки для ${agentName}: ${agentOptions.maxRetries} попыток, задержка ${agentOptions.retryDelay/1000}с`);
+            }
+
             // Запуск агента через Anthropic API
-            const result = await this.anthropicClient.analyzeWithAgent(agentName, processedPrompt, agentData);
+            const result = await this.anthropicClient.analyzeWithAgent(agentName, processedPrompt, agentData, agentOptions);
+
+            // Обновление circuit breaker на основе результата
+            this.updateCircuitBreaker(result);
 
             return result;
 
         } catch (error) {
             console.error(`[MultiAgent] Ошибка агента ${agentName}:`, error);
+            
+            // Обновление circuit breaker при ошибке
+            this.updateCircuitBreaker({ success: false, error: { status: 529 } });
+            
             return {
                 success: false,
                 agent_name: agentName,
@@ -294,6 +387,119 @@ class MultiAgentSystem {
     }
 
     /**
+     * Вычисляет адаптивную паузу между основными агентами
+     * @param {string} agentName - Название текущего агента
+     * @param {object} results - Результаты предыдущих агентов
+     * @returns {number} Пауза в миллисекундах
+     */
+    calculateAdaptivePause(agentName, results) {
+        let basePause = 8000; // Базовая пауза 8 секунд
+        
+        // Специальные паузы для проблемных агентов
+        const agentPauses = {
+            'SalesAnalysisAgent': 10000,  // 10 секунд
+            'PayrollAnalysisAgent': 15000, // 15 секунд
+            'StaffingAgent': 25000,       // 25 секунд (самый проблемный)
+            'ReputationAgent': 12000      // 12 секунд
+        };
+        
+        basePause = agentPauses[agentName] || basePause;
+        
+        // Увеличиваем паузу, если в предыдущих агентах были ошибки 529
+        const errorCount = Object.values(results).filter(result => 
+            result.error && result.error.status === 529
+        ).length;
+        
+        if (errorCount > 0) {
+            basePause += errorCount * 30000; // +30 секунд за каждую ошибку 529
+            console.log(`[MultiAgent] 📊 Обнаружено ${errorCount} ошибок 529, увеличиваем паузу на ${errorCount * 30}с`);
+        }
+        
+        return basePause;
+    }
+
+    /**
+     * Вычисляет паузу перед запуском вторичных агентов
+     * @param {object} results - Результаты первичных агентов
+     * @returns {number} Пауза в миллисекундах
+     */
+    calculatePreSecondaryPause(results) {
+        let basePause = 20000; // Базовая пауза 20 секунд
+        
+        // Подсчет ошибок 529 в первичных агентах
+        const error529Count = Object.values(results).filter(result => 
+            result.error && result.error.status === 529
+        ).length;
+        
+        // Подсчет общего количества ошибок
+        const totalErrorCount = Object.values(results).filter(result => result.error).length;
+        
+        // Увеличиваем паузу на основе ошибок
+        if (error529Count > 0) {
+            basePause += error529Count * 60000; // +1 минута за каждую ошибку 529
+            console.log(`[MultiAgent] 📊 ${error529Count} ошибок 529 в первичных агентах, увеличиваем паузу на ${error529Count}мин`);
+        }
+        
+        if (totalErrorCount > 2) {
+            basePause += 30000; // +30 секунд при многих ошибках
+            console.log(`[MultiAgent] 📊 Много ошибок (${totalErrorCount}), дополнительная пауза +30с`);
+        }
+        
+        return Math.min(basePause, 300000); // Максимум 5 минут
+    }
+
+    /**
+     * Проверка состояния circuit breaker
+     * @returns {string} Состояние: CLOSED, OPEN, HALF_OPEN
+     */
+    checkCircuitBreaker() {
+        const now = Date.now();
+        const { state, lastFailureTime, recoveryTimeout } = this.circuitBreaker;
+        
+        if (state === 'OPEN') {
+            if (now - lastFailureTime > recoveryTimeout) {
+                console.log('[MultiAgent] 🟡 Circuit breaker переходит в HALF_OPEN состояние');
+                this.circuitBreaker.state = 'HALF_OPEN';
+                return 'HALF_OPEN';
+            }
+            return 'OPEN';
+        }
+        
+        return state;
+    }
+
+    /**
+     * Обновление состояния circuit breaker
+     * @param {object} result - Результат выполнения агента
+     */
+    updateCircuitBreaker(result) {
+        const { state } = this.circuitBreaker;
+        
+        if (result.success) {
+            // Успешное выполнение - сбрасываем счетчик ошибок
+            if (state === 'HALF_OPEN') {
+                console.log('[MultiAgent] 🟢 Circuit breaker закрывается после успешного выполнения');
+                this.circuitBreaker.state = 'CLOSED';
+            }
+            this.circuitBreaker.failureCount = 0;
+        } else {
+            // Ошибка - увеличиваем счетчик
+            if (result.error && result.error.status === 529) {
+                this.circuitBreaker.failureCount++;
+                this.circuitBreaker.lastFailureTime = Date.now();
+                
+                console.log(`[MultiAgent] 📊 Circuit breaker: ${this.circuitBreaker.failureCount} ошибок 529`);
+                
+                // Открываем circuit breaker при превышении порога
+                if (this.circuitBreaker.failureCount >= this.circuitBreaker.failureThreshold) {
+                    console.log('[MultiAgent] 🔴 Circuit breaker ОТКРЫТ из-за частых ошибок 529');
+                    this.circuitBreaker.state = 'OPEN';
+                }
+            }
+        }
+    }
+
+    /**
      * Получение информации о всех агентах
      * @returns {object} Информация об агентах
      */
@@ -304,7 +510,12 @@ class MultiAgentSystem {
                 description: this.agents[name].description,
                 data_fields: this.agents[name].data_fields
             })),
-            total_agents: Object.keys(this.agents).length
+            total_agents: Object.keys(this.agents).length,
+            circuit_breaker: {
+                state: this.circuitBreaker.state,
+                failure_count: this.circuitBreaker.failureCount,
+                last_failure_time: this.circuitBreaker.lastFailureTime
+            }
         };
     }
 }
