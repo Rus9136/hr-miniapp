@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест вкладок AI-агентов</title>
+    <link rel="stylesheet" href="ai-recommendations.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-note {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест вкладок AI-агентов</h1>
+        
+        <div class="test-note">
+            <strong>Тестируемый функционал:</strong>
+            <ul>
+                <li>Переключение между вкладками "Результат анализа" и "Отправленный промпт"</li>
+                <li>Загрузка данных промпта при переключении</li>
+                <li>Копирование промпта в буфер обмена</li>
+                <li>Отображение информации о провайдере и времени выполнения</li>
+            </ul>
+        </div>
+
+        <div class="ai-agents-results">
+            <div class="ai-agent-result" data-agent="SalesAnalysisAgent">
+                <div class="agent-result-header">
+                    <div class="agent-header-left">
+                        <span class="agent-result-icon">📈</span>
+                        <div>
+                            <h4 class="agent-result-title">Аналитик продаж</h4>
+                            <p class="agent-result-description">Анализ прогнозов и динамики продаж</p>
+                        </div>
+                    </div>
+                    <span class="agent-collapse-icon">▼</span>
+                </div>
+                <div class="agent-result-content">
+                    <div class="agent-tabs">
+                        <div class="agent-tab-buttons">
+                            <button class="agent-tab-button active" data-tab="result" data-agent="SalesAnalysisAgent">
+                                📊 Результат анализа
+                            </button>
+                            <button class="agent-tab-button" data-tab="prompt" data-agent="SalesAnalysisAgent">
+                                📝 Отправленный промпт
+                            </button>
+                        </div>
+                        <div class="agent-tab-content">
+                            <div class="agent-tab-panel active" data-tab="result" data-agent="SalesAnalysisAgent">
+                                <div class="agent-result-text">
+                                    <strong>Анализ данных продаж:</strong>
+
+                                    1. Тренды и динамика выручки
+                                    - Доступен только прогноз на 15.07.2025: 1,286,000₸
+                                    - Исторические данные отсутствуют
+
+                                    2. Отклонения от плана
+                                    - Невозможно провести сравнительный анализ
+                                    - План установлен на уровне ~1.3 млн₸/день
+
+                                    3. Рекомендации:
+                                    - Внедрить детальный почасовой учет продаж
+                                    - Настроить сравнение план/факт в реальном времени
+                                </div>
+                            </div>
+                            <div class="agent-tab-panel" data-tab="prompt" data-agent="SalesAnalysisAgent">
+                                <div class="agent-prompt-content">
+                                    <div class="prompt-loading">
+                                        <span class="spinner"></span>
+                                        Загрузка промпта...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-agent-result" data-agent="PayrollAnalysisAgent">
+                <div class="agent-result-header">
+                    <div class="agent-header-left">
+                        <span class="agent-result-icon">💰</span>
+                        <div>
+                            <h4 class="agent-result-title">Аналитик затрат</h4>
+                            <p class="agent-result-description">Анализ ФОТ и эффективности персонала</p>
+                        </div>
+                    </div>
+                    <span class="agent-collapse-icon">▼</span>
+                </div>
+                <div class="agent-result-content">
+                    <div class="agent-tabs">
+                        <div class="agent-tab-buttons">
+                            <button class="agent-tab-button active" data-tab="result" data-agent="PayrollAnalysisAgent">
+                                📊 Результат анализа
+                            </button>
+                            <button class="agent-tab-button" data-tab="prompt" data-agent="PayrollAnalysisAgent">
+                                📝 Отправленный промпт
+                            </button>
+                        </div>
+                        <div class="agent-tab-content">
+                            <div class="agent-tab-panel active" data-tab="result" data-agent="PayrollAnalysisAgent">
+                                <div class="agent-result-text">
+                                    <strong>Анализ затрат на персонал:</strong>
+
+                                    1. Общий анализ:
+                                    - Суммарный ФОТ за день: 2,355,341 тенге
+                                    - Прогноз выручки: 1,286,000 тенге
+                                    - Доля ФОТ от выручки: 183% (!!)
+
+                                    2. Критические проблемы:
+                                    - Перерасход ФОТ почти в 6 раз выше нормы
+                                    - Большой разброс в оплате за одинаковые смены
+
+                                    3. Рекомендации:
+                                    - Снизить ФОТ до 385,800 тенге в день
+                                    - Унифицировать систему оплаты
+                                </div>
+                            </div>
+                            <div class="agent-tab-panel" data-tab="prompt" data-agent="PayrollAnalysisAgent">
+                                <div class="agent-prompt-content">
+                                    <div class="prompt-loading">
+                                        <span class="spinner"></span>
+                                        Загрузка промпта...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Константы для тестирования
+        const ADMIN_API_BASE_URL = 'http://localhost:3030';
+        const currentAnalysisId = 26; // Для тестирования используем ID 26
+        
+        // Функция для показа уведомлений
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                font-weight: 500;
+                z-index: 1000;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
+        }
+    </script>
+    <script src="ai-recommendations.js"></script>
+    <script>
+        // Инициализация после загрузки страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🧪 Инициализация теста вкладок AI-агентов');
+            
+            // Настройка функциональности collapse и tabs
+            setupAgentCollapse();
+            
+            console.log('✅ Тест готов к использованию');
+        });
+    </script>
+</body>
+</html>

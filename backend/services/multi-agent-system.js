@@ -111,10 +111,18 @@ class MultiAgentSystem {
                 name: 'ReputationAgent',
                 description: 'AI-аналитик репутации',
                 data_fields: ['reviews'],
-                default_prompt: `Ты — AI-аналитик репутации.
-Проанализируй свежие отзывы клиентов: выяви основные темы, проблемы, повторяющиеся жалобы и сильные стороны.
+                default_prompt: `Ты — AI-аналитик клиентской репутации.
 
-— Отзывы: {reviews}`
+Вот исходные данные:
+- Последние отзывы клиентов: {reviews}
+
+Тебе нужно:
+1. Проанализировать основные темы и настроения отзывов (положительные, нейтральные, отрицательные).
+2. Найти часто повторяющиеся жалобы и замечания.
+3. Отметить, что больше всего нравится клиентам.
+4. Дать советы по улучшению сервиса на основе обратной связи.
+
+Сделай выводы краткими и прикладными для управляющего.`
             },
 
             OptimizationAgent: {
@@ -225,13 +233,17 @@ class MultiAgentSystem {
             }
         }
         
-        // КРИТИЧЕСКОЕ сжатие отзывов (из-за ошибок 529)
+        // Обработка отзывов с правильным лимитом
         const reviewsData = extractData('reviews');
         if (reviewsData && Array.isArray(reviewsData)) {
-            compressed.reviews = reviewsData.slice(0, 10).map(item => ({
+            // Используем все доступные отзывы (не ограничиваем до 10)
+            compressed.reviews = reviewsData.map(item => ({
                 rating: item.rating || 0,
-                text: (item.comment || '').substring(0, 50) // УМЕНЬШЕНО до 50 символов
+                // Проверяем и text, и comment поля, увеличиваем лимит символов
+                text: (item.text || item.comment || '').substring(0, 300) // Увеличено до 300 символов
             }));
+            
+            console.log(`[MultiAgent] 📊 Обработано отзывов: ${compressed.reviews.length} из ${reviewsData.length} доступных`);
         }
         
         // КРИТИЧЕСКОЕ сжатие результатов агентов для NarrativeAgent

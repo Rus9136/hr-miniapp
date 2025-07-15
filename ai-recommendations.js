@@ -559,7 +559,7 @@ function displayAnalysisResults(analysisData) {
     setupAgentCollapse();
 }
 
-// Generate agent results HTML
+// Generate agent results HTML with tabs
 function generateAgentResultsHTML(agentResults) {
     const agentConfig = {
         SalesAnalysisAgent: { icon: '📈', title: 'Аналитик продаж', description: 'Анализ прогнозов и динамики продаж' },
@@ -590,7 +590,29 @@ function generateAgentResultsHTML(agentResults) {
                     <span class="agent-collapse-icon">▼</span>
                 </div>
                 <div class="agent-result-content">
-                    <div class="agent-result-text">${resultText}</div>
+                    <div class="agent-tabs">
+                        <div class="agent-tab-buttons">
+                            <button class="agent-tab-button active" data-tab="result" data-agent="${agentName}">
+                                📊 Результат анализа
+                            </button>
+                            <button class="agent-tab-button" data-tab="prompt" data-agent="${agentName}">
+                                📝 Отправленный промпт
+                            </button>
+                        </div>
+                        <div class="agent-tab-content">
+                            <div class="agent-tab-panel active" data-tab="result" data-agent="${agentName}">
+                                <div class="agent-result-text">${resultText}</div>
+                            </div>
+                            <div class="agent-tab-panel" data-tab="prompt" data-agent="${agentName}">
+                                <div class="agent-prompt-content">
+                                    <div class="prompt-loading">
+                                        <span class="spinner"></span>
+                                        Загрузка промпта...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -970,12 +992,208 @@ async function generatePDFReport(analysisData, departmentName) {
     }
 }
 
-// Setup agent collapse functionality
+// Setup agent collapse functionality and tabs
 function setupAgentCollapse() {
     document.querySelectorAll('.agent-result-header').forEach(header => {
         header.addEventListener('click', () => {
             const agentResult = header.closest('.ai-agent-result');
             agentResult.classList.toggle('collapsed');
+        });
+    });
+    
+    // Setup tab functionality
+    setupAgentTabs();
+}
+
+// Setup agent tabs functionality
+function setupAgentTabs() {
+    document.querySelectorAll('.agent-tab-button').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent collapse toggle
+            const agentName = button.dataset.agent;
+            const tabType = button.dataset.tab;
+            
+            // Update tab buttons
+            const agentContainer = button.closest('.ai-agent-result');
+            agentContainer.querySelectorAll('.agent-tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            button.classList.add('active');
+            
+            // Update tab panels
+            agentContainer.querySelectorAll('.agent-tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            const targetPanel = agentContainer.querySelector(`.agent-tab-panel[data-tab="${tabType}"]`);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+            
+            // Load prompt data if needed
+            if (tabType === 'prompt' && currentAnalysisId) {
+                loadAgentPrompt(agentName, currentAnalysisId);
+            }
+        });
+    });
+}
+
+// Load agent prompt data
+async function loadAgentPrompt(agentName, analysisId) {
+    const promptContent = document.querySelector(`.agent-tab-panel[data-tab="prompt"][data-agent="${agentName}"] .agent-prompt-content`);
+    
+    if (!promptContent) return;
+    
+    // Check if already loaded
+    if (promptContent.querySelector('.prompt-details')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/prompts/${analysisId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Проверяем, что agents существует и является массивом
+            const agents = data.data.agents || [];
+            console.log('🔍 Available agents:', agents.map(a => a.name || 'unnamed'));
+            console.log('🔍 Looking for agent:', agentName);
+            
+            const agent = agents.find(a => a.name === agentName);
+            
+            if (agent && agent.prompt) {
+                const prompt = agent.prompt;
+                const requestTime = new Date(prompt.request_timestamp).toLocaleString('ru-RU');
+                const responseTime = prompt.response_timestamp ? new Date(prompt.response_timestamp).toLocaleString('ru-RU') : 'Не завершен';
+                
+                promptContent.innerHTML = `
+                    <div class="prompt-details">
+                        <div class="prompt-info">
+                            <div class="prompt-info-item">
+                                <strong>Агент:</strong> ${agent.title}
+                            </div>
+                            <div class="prompt-info-item">
+                                <strong>Провайдер:</strong> ${prompt.provider.toUpperCase()}
+                            </div>
+                            <div class="prompt-info-item">
+                                <strong>Время запроса:</strong> ${requestTime}
+                            </div>
+                            <div class="prompt-info-item">
+                                <strong>Время ответа:</strong> ${responseTime}
+                            </div>
+                            ${prompt.response_time_seconds ? `
+                                <div class="prompt-info-item">
+                                    <strong>Время выполнения:</strong> ${Math.round(prompt.response_time_seconds * 100) / 100} сек
+                                </div>
+                            ` : ''}
+                            ${prompt.tokens_used ? `
+                                <div class="prompt-info-item">
+                                    <strong>Использовано токенов:</strong> ${prompt.tokens_used}
+                                </div>
+                            ` : ''}
+                            <div class="prompt-info-item">
+                                <strong>Статус:</strong> 
+                                <span class="prompt-status ${prompt.success ? 'success' : 'error'}">
+                                    ${prompt.success ? '✅ Успешно' : '❌ Ошибка'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="prompt-text-container">
+                            <div class="prompt-text-header">
+                                <h5>Отправленный промпт:</h5>
+                                <button class="copy-prompt-btn" data-prompt="${encodeURIComponent(prompt.full_prompt)}">
+                                    📋 Скопировать промпт
+                                </button>
+                            </div>
+                            <pre class="prompt-text">${prompt.full_prompt}</pre>
+                        </div>
+                        
+                        ${prompt.system_prompt ? `
+                            <div class="system-prompt-container">
+                                <div class="system-prompt-header">
+                                    <h5>Системный промпт:</h5>
+                                    <button class="copy-system-prompt-btn" data-prompt="${encodeURIComponent(prompt.system_prompt)}">
+                                        📋 Скопировать системный промпт
+                                    </button>
+                                </div>
+                                <pre class="system-prompt-text">${prompt.system_prompt}</pre>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                // Setup copy buttons
+                setupCopyButtons(promptContent);
+                
+            } else {
+                console.warn('🚨 Agent not found or no prompt:', { agentName, agent, hasPrompt: agent?.prompt });
+                promptContent.innerHTML = `
+                    <div class="prompt-error">
+                        <span class="error-icon">⚠️</span>
+                        <div class="error-message">Промпт для агента "${agentName}" не найден</div>
+                        <div class="error-details">Доступные агенты: ${agents.map(a => a.name || 'unnamed').join(', ')}</div>
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error(data.error || 'Ошибка загрузки промпта');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading agent prompt:', error);
+        promptContent.innerHTML = `
+            <div class="prompt-error">
+                <span class="error-icon">❌</span>
+                <div class="error-message">Ошибка загрузки промпта: ${error.message}</div>
+            </div>
+        `;
+    }
+}
+
+// Setup copy buttons for prompts
+function setupCopyButtons(container) {
+    container.querySelectorAll('.copy-prompt-btn, .copy-system-prompt-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const promptText = decodeURIComponent(button.dataset.prompt);
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(promptText).then(() => {
+                    showNotification('Промпт скопирован в буфер обмена', 'success');
+                    
+                    // Visual feedback
+                    const originalText = button.textContent;
+                    button.textContent = '✅ Скопировано';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('❌ Error copying to clipboard:', err);
+                    showNotification('Ошибка копирования в буфер обмена', 'error');
+                });
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = promptText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    showNotification('Промпт скопирован в буфер обмена', 'success');
+                    
+                    const originalText = button.textContent;
+                    button.textContent = '✅ Скопировано';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000);
+                } catch (err) {
+                    console.error('❌ Error copying to clipboard:', err);
+                    showNotification('Ошибка копирования в буфер обмена', 'error');
+                }
+                
+                document.body.removeChild(textArea);
+            }
         });
     });
 }

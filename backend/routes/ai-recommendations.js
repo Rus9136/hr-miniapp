@@ -158,7 +158,7 @@ router.get('/history', async (req, res) => {
 
 /**
  * GET /api/admin/ai-recommendations/prompts/:analysisId
- * Получение залогированных промптов для анализа
+ * Получение залогированных промптов для анализа в формате для вкладок
  */
 router.get('/prompts/:analysisId', async (req, res) => {
     try {
@@ -183,18 +183,134 @@ router.get('/prompts/:analysisId', async (req, res) => {
 
         // Получаем также информацию об анализе
         const analysisQuery = `
-            SELECT id, department_id, date_start, date_end, provider, created_at
+            SELECT id, department_id, date_start, date_end, provider, created_at, agent_results
             FROM ai_recommendations 
             WHERE id = $1
         `;
         const analysisResult = await pool.query(analysisQuery, [analysisId]);
 
+        if (analysisResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Анализ не найден'
+            });
+        }
+
+        const analysis = analysisResult.rows[0];
+        const agentResults = analysis.agent_results || {};
+
+        console.log(`[AI-Recommendations] Agent results type: ${typeof agentResults}`);
+        console.log(`[AI-Recommendations] Agent results keys: ${Object.keys(agentResults)}`);
+
+        // Группируем промпты по агентам
+        const agentPrompts = {};
+        result.rows.forEach(row => {
+            agentPrompts[row.agent_name] = {
+                id: row.id,
+                agent_name: row.agent_name,
+                provider: row.provider,
+                full_prompt: row.full_prompt,
+                system_prompt: row.system_prompt,
+                response_text: row.response_text,
+                success: row.success,
+                tokens_used: row.tokens_used,
+                request_timestamp: row.request_timestamp,
+                response_timestamp: row.response_timestamp,
+                response_time_seconds: row.response_time_seconds
+            };
+        });
+
+        console.log(`[AI-Recommendations] Agent prompts keys: ${Object.keys(agentPrompts)}`);
+
+        // Конфигурация агентов для UI
+        const agentConfig = {
+            SalesAnalysisAgent: { icon: '📈', title: 'Аналитик продаж', description: 'Анализ прогнозов и динамики продаж' },
+            PayrollAnalysisAgent: { icon: '💰', title: 'Аналитик затрат', description: 'Анализ ФОТ и эффективности персонала' },
+            StaffingAgent: { icon: '👥', title: 'Оптимизация смен', description: 'Распределение персонала по часам' },
+            ReputationAgent: { icon: '⭐', title: 'Анализ репутации', description: 'Отзывы клиентов и проблемы сервиса' },
+            OptimizationAgent: { icon: '🎯', title: 'Консультант оптимизации', description: 'Конкретные шаги улучшения' },
+            NarrativeAgent: { icon: '📊', title: 'Бизнес-консультант', description: 'Итоговый отчет для управляющего' }
+        };
+
+        // Формируем данные для каждого агента
+        let agents = [];
+        
+        try {
+            // Проверяем, что agentResults это объект и не пустой
+            if (agentResults && typeof agentResults === 'object' && Object.keys(agentResults).length > 0) {
+                agents = Object.entries(agentResults).map(([agentName, result]) => {
+                    const config = agentConfig[agentName] || { icon: '🤖', title: agentName, description: 'AI агент' };
+                    const prompt = agentPrompts[agentName];
+                    const isError = result && result.error || false;
+                    const resultText = isError ? (result.message || 'Ошибка выполнения агента') : result;
+
+                    return {
+                        id: agentName,
+                        name: agentName,
+                        title: config.title,
+                        icon: config.icon,
+                        description: config.description,
+                        result: resultText,
+                        error: isError,
+                        prompt: prompt ? {
+                            full_prompt: prompt.full_prompt,
+                            system_prompt: prompt.system_prompt,
+                            provider: prompt.provider,
+                            success: prompt.success,
+                            tokens_used: prompt.tokens_used,
+                            request_timestamp: prompt.request_timestamp,
+                            response_timestamp: prompt.response_timestamp,
+                            response_time_seconds: prompt.response_time_seconds
+                        } : null
+                    };
+                });
+            } else {
+                console.warn('[AI-Recommendations] Agent results is empty or invalid, creating from prompts');
+                // Если agentResults пустой, создаем агентов на основе промптов
+                agents = Object.entries(agentPrompts).map(([agentName, prompt]) => {
+                    const config = agentConfig[agentName] || { icon: '🤖', title: agentName, description: 'AI агент' };
+                    
+                    return {
+                        id: agentName,
+                        name: agentName,
+                        title: config.title,
+                        icon: config.icon,
+                        description: config.description,
+                        result: prompt.response_text || 'Результат анализа недоступен',
+                        error: !prompt.success,
+                        prompt: {
+                            full_prompt: prompt.full_prompt,
+                            system_prompt: prompt.system_prompt,
+                            provider: prompt.provider,
+                            success: prompt.success,
+                            tokens_used: prompt.tokens_used,
+                            request_timestamp: prompt.request_timestamp,
+                            response_timestamp: prompt.response_timestamp,
+                            response_time_seconds: prompt.response_time_seconds
+                        }
+                    };
+                });
+            }
+        } catch (error) {
+            console.error('[AI-Recommendations] Error creating agents array:', error);
+            agents = [];
+        }
+
+        console.log(`[AI-Recommendations] Final agents count: ${agents.length}`);
+
         res.json({
             success: true,
             data: {
-                analysis: analysisResult.rows[0] || null,
-                prompts: result.rows,
-                total: result.rows.length,
+                analysis: {
+                    id: analysis.id,
+                    department_id: analysis.department_id,
+                    date_start: analysis.date_start,
+                    date_end: analysis.date_end,
+                    provider: analysis.provider,
+                    created_at: analysis.created_at
+                },
+                agents: agents,
+                total: agents.length,
                 pagination: {
                     limit: parseInt(limit),
                     offset: parseInt(offset)

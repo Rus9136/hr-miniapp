@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест функциональности AI-агентов</title>
+    <link rel="stylesheet" href="ai-recommendations.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-status {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1976d2;
+        }
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .test-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .test-btn.primary {
+            background: #007bff;
+            color: white;
+        }
+        .test-btn.primary:hover {
+            background: #0056b3;
+        }
+        .test-btn.success {
+            background: #28a745;
+            color: white;
+        }
+        .test-btn.success:hover {
+            background: #1e7e34;
+        }
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        .test-log {
+            font-family: monospace;
+            font-size: 12px;
+            background: #000;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="test-header">
+            <h1>🧪 Тест функциональности AI-агентов</h1>
+            <p>Проверка работы вкладок "Результат анализа" и "Отправленный промпт"</p>
+        </div>
+        
+        <div class="test-status">
+            <strong>Статус:</strong> <span id="test-status">Готово к тестированию</span>
+        </div>
+        
+        <div class="test-controls">
+            <button class="test-btn primary" onclick="loadAnalysisData()">
+                📊 Загрузить данные анализа
+            </button>
+            <button class="test-btn success" onclick="testAllTabs()">
+                🔍 Тест всех вкладок
+            </button>
+            <button class="test-btn" onclick="clearResults()">
+                🗑️ Очистить
+            </button>
+        </div>
+        
+        <div class="test-results">
+            <h4>Результаты теста:</h4>
+            <div class="test-log" id="test-log">Лог тестирования появится здесь...</div>
+        </div>
+        
+        <div id="ai-results-container" class="ai-results-container">
+            <!-- Результаты анализа появятся здесь -->
+        </div>
+    </div>
+
+    <script>
+        // Константы для тестирования
+        const ADMIN_API_BASE_URL = 'http://localhost:3030';
+        const TEST_ANALYSIS_ID = 26;
+        
+        let testLog = document.getElementById('test-log');
+        let testStatus = document.getElementById('test-status');
+        let resultsContainer = document.getElementById('ai-results-container');
+        
+        // Глобальные переменные для функций из ai-recommendations.js
+        let currentAnalysisId = TEST_ANALYSIS_ID;
+        let agentPrompts = {};
+        
+        // Функция для логирования
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            testLog.textContent += `[${timestamp}] ${message}\n`;
+            testLog.scrollTop = testLog.scrollHeight;
+            console.log(message);
+        }
+        
+        // Функция для показа уведомлений
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 4px;
+                color: white;
+                font-weight: 500;
+                z-index: 1000;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
+            `;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
+        }
+        
+        // Загрузка данных анализа
+        async function loadAnalysisData() {
+            try {
+                testStatus.textContent = 'Загрузка данных анализа...';
+                log('🔄 Начинаем загрузку данных анализа ID: ' + TEST_ANALYSIS_ID);
+                
+                const response = await fetch(`${ADMIN_API_BASE_URL}/api/admin/ai-recommendations/prompts/${TEST_ANALYSIS_ID}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Ошибка API');
+                }
+                
+                log('✅ Данные успешно загружены');
+                log(`📊 Найдено агентов: ${data.data.agents.length}`);
+                
+                // Отображаем результаты
+                displayAnalysisResults(data.data.agents);
+                
+                testStatus.textContent = 'Данные загружены успешно';
+                showNotification('Данные анализа загружены', 'success');
+                
+            } catch (error) {
+                log('❌ Ошибка загрузки: ' + error.message);
+                testStatus.textContent = 'Ошибка загрузки данных';
+                showNotification('Ошибка загрузки данных', 'error');
+            }
+        }
+        
+        // Отображение результатов анализа
+        function displayAnalysisResults(agents) {
+            if (!agents || agents.length === 0) {
+                resultsContainer.innerHTML = '<p>Нет данных для отображения</p>';
+                return;
+            }
+            
+            const html = agents.map(agent => `
+                <div class="ai-agent-result" data-agent="${agent.name}">
+                    <div class="agent-result-header">
+                        <div class="agent-header-left">
+                            <span class="agent-result-icon">${agent.icon}</span>
+                            <div>
+                                <h4 class="agent-result-title">${agent.title}</h4>
+                                <p class="agent-result-description">${agent.description}</p>
+                            </div>
+                        </div>
+                        <span class="agent-collapse-icon">▼</span>
+                    </div>
+                    <div class="agent-result-content">
+                        <div class="agent-tabs">
+                            <div class="agent-tab-buttons">
+                                <button class="agent-tab-button active" data-tab="result" data-agent="${agent.name}">
+                                    📊 Результат анализа
+                                </button>
+                                <button class="agent-tab-button" data-tab="prompt" data-agent="${agent.name}">
+                                    📝 Отправленный промпт
+                                </button>
+                            </div>
+                            <div class="agent-tab-content">
+                                <div class="agent-tab-panel active" data-tab="result" data-agent="${agent.name}">
+                                    <div class="agent-result-text">${agent.result}</div>
+                                </div>
+                                <div class="agent-tab-panel" data-tab="prompt" data-agent="${agent.name}">
+                                    <div class="agent-prompt-content">
+                                        <div class="prompt-loading">
+                                            <span class="spinner"></span>
+                                            Загрузка промпта...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            resultsContainer.innerHTML = html;
+            
+            // Инициализация функциональности
+            setupAgentCollapse();
+            setupAgentTabs();
+            
+            log('🎨 Интерфейс отображен, инициализация завершена');
+        }
+        
+        // Тест всех вкладок
+        async function testAllTabs() {
+            log('🔍 Начинаем тест всех вкладок...');
+            testStatus.textContent = 'Тестирование вкладок...';
+            
+            const tabButtons = document.querySelectorAll('.agent-tab-button[data-tab="prompt"]');
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < tabButtons.length; i++) {
+                const button = tabButtons[i];
+                const agentName = button.getAttribute('data-agent');
+                
+                log(`🔄 Тестируем вкладку промпта для агента: ${agentName}`);
+                
+                try {
+                    // Симулируем клик по кнопке
+                    button.click();
+                    
+                    // Ждем немного для загрузки
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Проверяем результат
+                    const promptPanel = document.querySelector(`.agent-tab-panel[data-tab="prompt"][data-agent="${agentName}"]`);
+                    const errorElement = promptPanel.querySelector('.prompt-error');
+                    
+                    if (errorElement) {
+                        log(`❌ Ошибка для агента ${agentName}: ${errorElement.textContent}`);
+                        errorCount++;
+                    } else {
+                        log(`✅ Успешно загружен промпт для агента ${agentName}`);
+                        successCount++;
+                    }
+                    
+                } catch (error) {
+                    log(`❌ Исключение для агента ${agentName}: ${error.message}`);
+                    errorCount++;
+                }
+            }
+            
+            log(`📊 Тест завершен. Успешно: ${successCount}, Ошибок: ${errorCount}`);
+            
+            if (errorCount === 0) {
+                testStatus.textContent = 'Все тесты пройдены успешно!';
+                showNotification('Все тесты пройдены успешно!', 'success');
+            } else {
+                testStatus.textContent = `Тест завершен с ${errorCount} ошибками`;
+                showNotification(`${errorCount} ошибок в тестах`, 'error');
+            }
+        }
+        
+        // Очистка результатов
+        function clearResults() {
+            testLog.textContent = '';
+            resultsContainer.innerHTML = '';
+            testStatus.textContent = 'Готово к тестированию';
+            log('🧹 Результаты очищены');
+        }
+        
+        // Заглушки для функций из ai-recommendations.js
+        function setupAgentCollapse() {
+            document.querySelectorAll('.agent-result-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const agentResult = header.closest('.ai-agent-result');
+                    agentResult.classList.toggle('collapsed');
+                });
+            });
+        }
+        
+        function setupAgentTabs() {
+            document.querySelectorAll('.agent-tab-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabType = this.getAttribute('data-tab');
+                    const agentName = this.getAttribute('data-agent');
+                    
+                    log(`🔄 Переключение на вкладку "${tabType}" для агента "${agentName}"`);
+                    
+                    // Переключаем активность кнопок
+                    const tabButtons = document.querySelectorAll(`.agent-tab-button[data-agent="${agentName}"]`);
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Переключаем панели
+                    const tabPanels = document.querySelectorAll(`.agent-tab-panel[data-agent="${agentName}"]`);
+                    tabPanels.forEach(panel => panel.classList.remove('active'));
+                    
+                    const activePanel = document.querySelector(`.agent-tab-panel[data-tab="${tabType}"][data-agent="${agentName}"]`);
+                    if (activePanel) {
+                        activePanel.classList.add('active');
+                        
+                        // Загружаем промпт при переключении на вкладку промпта
+                        if (tabType === 'prompt') {
+                            loadAgentPrompt(agentName);
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Загрузка промпта агента
+        async function loadAgentPrompt(agentName) {
+            try {
+                log(`📥 Загрузка промпта для агента: ${agentName}`);
+                
+                const response = await fetch(`${ADMIN_API_BASE_URL}/api/admin/ai-recommendations/prompts/${currentAnalysisId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Ошибка API');
+                }
+                
+                const agents = data.data.agents;
+                const agent = agents.find(a => a.name === agentName);
+                
+                if (!agent) {
+                    throw new Error(`Агент "${agentName}" не найден`);
+                }
+                
+                const promptPanel = document.querySelector(`.agent-tab-panel[data-tab="prompt"][data-agent="${agentName}"]`);
+                const promptContent = promptPanel.querySelector('.agent-prompt-content');
+                
+                if (agent.prompt) {
+                    promptContent.innerHTML = generatePromptHTML(agent.prompt);
+                    log(`✅ Промпт для агента ${agentName} загружен успешно`);
+                } else {
+                    promptContent.innerHTML = `
+                        <div class="prompt-error">
+                            <div class="error-icon">⚠️</div>
+                            <div class="error-message">Промпт для агента "${agentName}" не найден</div>
+                        </div>
+                    `;
+                    log(`⚠️ Промпт для агента ${agentName} не найден`);
+                }
+                
+            } catch (error) {
+                log(`❌ Ошибка загрузки промпта для ${agentName}: ${error.message}`);
+                
+                const promptPanel = document.querySelector(`.agent-tab-panel[data-tab="prompt"][data-agent="${agentName}"]`);
+                const promptContent = promptPanel.querySelector('.agent-prompt-content');
+                
+                promptContent.innerHTML = `
+                    <div class="prompt-error">
+                        <div class="error-icon">❌</div>
+                        <div class="error-message">Ошибка загрузки промпта: ${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Генерация HTML для промпта
+        function generatePromptHTML(prompt) {
+            const formatTimestamp = (timestamp) => {
+                if (!timestamp) return 'Неизвестно';
+                return new Date(timestamp).toLocaleString('ru-RU');
+            };
+            
+            return `
+                <div class="prompt-details">
+                    <div class="prompt-info">
+                        <div class="prompt-info-item">
+                            <strong>Агент:</strong> ${prompt.agent_name || 'Неизвестно'}
+                        </div>
+                        <div class="prompt-info-item">
+                            <strong>Провайдер:</strong> ${prompt.provider || 'Неизвестно'}
+                        </div>
+                        <div class="prompt-info-item">
+                            <strong>Статус:</strong> 
+                            <span class="prompt-status ${prompt.success ? 'success' : 'error'}">
+                                ${prompt.success ? '✅ Успешно' : '❌ Ошибка'}
+                            </span>
+                        </div>
+                        <div class="prompt-info-item">
+                            <strong>Время запроса:</strong> ${formatTimestamp(prompt.request_timestamp)}
+                        </div>
+                        <div class="prompt-info-item">
+                            <strong>Время ответа:</strong> ${formatTimestamp(prompt.response_timestamp)}
+                        </div>
+                        <div class="prompt-info-item">
+                            <strong>Время выполнения:</strong> ${prompt.response_time_seconds || 0} сек
+                        </div>
+                    </div>
+                    
+                    <div class="prompt-text-container">
+                        <div class="prompt-text-header">
+                            <h5>Основной промпт:</h5>
+                            <button class="copy-prompt-btn" onclick="copyToClipboard('${prompt.full_prompt}', this)">
+                                📋 Копировать
+                            </button>
+                        </div>
+                        <pre class="prompt-text">${prompt.full_prompt || 'Промпт не найден'}</pre>
+                    </div>
+                    
+                    ${prompt.system_prompt ? `
+                        <div class="system-prompt-container">
+                            <div class="system-prompt-header">
+                                <h5>Системный промпт:</h5>
+                                <button class="copy-system-prompt-btn" onclick="copyToClipboard('${prompt.system_prompt}', this)">
+                                    📋 Копировать
+                                </button>
+                            </div>
+                            <pre class="system-prompt-text">${prompt.system_prompt}</pre>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Копирование в буфер обмена
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = '✅ Скопировано';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+                log('📋 Промпт скопирован в буфер обмена');
+            }).catch(err => {
+                log('❌ Ошибка копирования: ' + err.message);
+            });
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 Тест-страница инициализирована');
+            log('📋 Доступные команды:');
+            log('  - "Загрузить данные анализа" - загружает данные анализа ID 26');
+            log('  - "Тест всех вкладок" - проверяет работу всех вкладок промптов');
+            log('  - "Очистить" - очищает все результаты');
+            log('');
+            log('🎯 Готово к тестированию!');
+        });
+    </script>
+</body>
+</html>
