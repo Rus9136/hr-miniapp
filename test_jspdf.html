@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>jsPDF Test</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>jsPDF Test Page</h1>
+    <button id="test-pdf" onclick="testPDF()">Test PDF Generation</button>
+    <div id="output"></div>
+
+    <script>
+        function log(msg) {
+            console.log(msg);
+            document.getElementById('output').innerHTML += '<p>' + msg + '</p>';
+        }
+
+        // Test different jsPDF loading methods
+        async function testPDF() {
+            log('🔍 Testing jsPDF availability...');
+            
+            // Check what's available
+            log('typeof window.jsPDF: ' + typeof window.jsPDF);
+            log('typeof window.jspdf: ' + typeof window.jspdf);
+            log('window.jsPDF: ' + window.jsPDF);
+            
+            if (window.jsPDF) {
+                log('window.jsPDF keys: ' + Object.keys(window.jsPDF));
+            }
+            
+            // Try to create PDF
+            try {
+                let jsPDFConstructor;
+                
+                if (typeof window.jsPDF === 'function') {
+                    jsPDFConstructor = window.jsPDF;
+                    log('✅ Using window.jsPDF as constructor');
+                } else if (window.jsPDF && typeof window.jsPDF.jsPDF === 'function') {
+                    jsPDFConstructor = window.jsPDF.jsPDF;
+                    log('✅ Using window.jsPDF.jsPDF as constructor');
+                } else if (typeof window.jspdf === 'function') {
+                    jsPDFConstructor = window.jspdf;
+                    log('✅ Using window.jspdf as constructor');
+                } else {
+                    throw new Error('No jsPDF constructor found');
+                }
+                
+                const doc = new jsPDFConstructor();
+                doc.text('Hello World!', 10, 10);
+                doc.save('test.pdf');
+                
+                log('✅ PDF generated successfully!');
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+        
+        // Load jsPDF
+        log('Loading jsPDF...');
+    </script>
+    
+    <!-- Load jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" 
+            onload="log('📄 jsPDF loaded: ' + typeof window.jsPDF)"
+            onerror="log('❌ Failed to load jsPDF')"></script>
+</body>
+</html>

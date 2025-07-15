@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="style.css?v=planned-darker-v9.2&ts=20250619-darker-yellow">
     <link rel="stylesheet" href="admin.css?v=ai-recommendation-v11.0&ts=20250702-2000&webhook=added">
-    <link rel="stylesheet" href="ai-recommendations.css?v=PDF-v3.0&ts=20250713-1505&feature=pdf-export">
+    <link rel="stylesheet" href="ai-recommendations.css?v=OPENAI-FIX-v1.0&ts=20250715-1700">
     <link rel="stylesheet" href="telegram.css?v=planned-darker-v8.8&ts=20250619-darker-yellow">
     <link rel="stylesheet" href="styles/ios-styles.css?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true">
     <link rel="stylesheet" href="telegram-mobile-fix.css?v=6.1&ts=20250619-darker-yellow">
@@ -746,6 +746,11 @@
                                 <input type="date" id="ai-date-from" class="search-input" style="width: 150px; margin-right: 10px;" title="Дата начала периода">
                                 <input type="date" id="ai-date-to" class="search-input" style="width: 150px; margin-right: 10px;" title="Дата конца периода">
                                 <input type="number" id="ai-reviews-count" class="search-input" style="width: 100px; margin-right: 10px;" placeholder="50" min="1" max="200" value="50" title="Количество отзывов">
+                                <select id="ai-provider-select" class="search-input" style="width: 150px; margin-right: 10px;" title="AI-провайдер">
+                                    <option value="claude">Claude (Anthropic)</option>
+                                    <option value="openai">OpenAI GPT-4</option>
+                                    <option value="gemini" disabled>Google Gemini (скоро)</option>
+                                </select>
                                 <button id="ai-process-btn" class="btn btn--primary btn--sm">
                                     <span class="btn-text">🤖 Запустить анализ</span>
                                     <span class="spinner" style="display: none;">⏳</span>
@@ -1386,6 +1391,6 @@
     <script src="telegram.js?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true"></script>
     <script src="app.js?v=admin-auth-fix-v10.4&ts=20250701-1955&admin-fix=true"></script>
     <script src="admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init"></script>
-    <script src="ai-recommendations.js?v=PDF-v3.0&ts=20250713-1505&feature=pdf-export"></script>
+    <script src="ai-recommendations.js?v=OPENAI-FIX-v1.0&ts=20250715-1700"></script>
 </body>
 </html>

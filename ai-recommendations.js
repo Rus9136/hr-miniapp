@@ -18,9 +18,10 @@ async function initAIRecommendationSection() {
     // Set up event handlers
     setupAIEventHandlers();
     
-    // Load history and prompts
+    // Load history, prompts and providers
     await loadAIHistory();
     await loadAIPrompts();
+    await loadAIProviders();
     
     console.log('✅ AI Recommendation section initialized');
 }
@@ -174,6 +175,7 @@ async function runAIAnalysis() {
     const dateFromInput = document.getElementById('ai-date-from');
     const dateToInput = document.getElementById('ai-date-to');
     const reviewsCountInput = document.getElementById('ai-reviews-count');
+    const providerSelect = document.getElementById('ai-provider-select');
     const processBtn = document.getElementById('ai-process-btn');
     const btnText = processBtn?.querySelector('.btn-text');
     const spinner = processBtn?.querySelector('.spinner');
@@ -212,11 +214,14 @@ async function runAIAnalysis() {
     showAnalysisProgress();
     
     try {
+        const selectedProvider = providerSelect?.value || 'claude';
+        
         const requestData = {
             department_id: departmentFilter.value,
             date_start: dateFromInput.value,
             date_end: dateToInput.value,
-            reviews_count: parseInt(reviewsCountInput?.value || '50')
+            reviews_count: parseInt(reviewsCountInput?.value || '50'),
+            provider: selectedProvider
         };
         
         console.log('🚀 Starting AI analysis:', requestData);
@@ -227,7 +232,7 @@ async function runAIAnalysis() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestData),
-            signal: AbortSignal.timeout(180000) // 3 минуты таймаут
+            signal: AbortSignal.timeout(300000) // 5 минут таймаут для совместимости с OpenAI
         });
         
         let result;
@@ -263,6 +268,14 @@ async function runAIAnalysis() {
             // Display results
             displayAnalysisResults(result.data);
             
+            // Add provider information to results
+            if (result.data.provider) {
+                setTimeout(() => {
+                    const resultsContainer = document.getElementById('ai-results-container');
+                    addProviderInfoToResults(result.data.provider, resultsContainer);
+                }, 100);
+            }
+            
             // Refresh history
             await loadAIHistory();
             
@@ -274,13 +287,13 @@ async function runAIAnalysis() {
     } catch (error) {
         console.error('❌ AI analysis error:', error);
         
-        if (error.message.includes('504') || error.message.includes('Таймаут')) {
-            updateProgressStep('warning', `Таймаут запроса. Анализ может выполняться в фоне...`);
-            showNotification(`${error.message}`, 'warning');
+        if (error.name === 'TimeoutError' || error.message.includes('signal timed out') || error.message.includes('504') || error.message.includes('Таймаут')) {
+            updateProgressStep('warning', `⏰ Превышен таймаут клиента (5 мин). Анализ может продолжаться на сервере...`);
+            showNotification(`OpenAI анализ занимает больше времени. Проверьте результаты через 1-2 минуты в истории анализов.`, 'warning');
             
-            // Запускаем проверку результатов каждые 10 секунд, до 5 попыток (50 секунд)
+            // Запускаем проверку результатов каждые 15 секунд, до 8 попыток (2 минуты)
             let checkAttempts = 0;
-            const maxAttempts = 5;
+            const maxAttempts = 8;
             
             const checkForResults = async () => {
                 checkAttempts++;
@@ -299,7 +312,7 @@ async function runAIAnalysis() {
                         const now = new Date();
                         const timeDiff = (now - analysisDate) / 1000; // в секундах
                         
-                        if (timeDiff < 120) { // Анализ создан менее 2 минут назад
+                        if (timeDiff < 600) { // Анализ создан менее 10 минут назад
                             const analysisId = latestAnalysis.getAttribute('data-analysis-id');
                             console.log('✅ Найден свежий анализ, загружаем результаты...', analysisId);
                             
@@ -314,7 +327,7 @@ async function runAIAnalysis() {
                     // Если результаты не найдены и это не последняя попытка
                     if (checkAttempts < maxAttempts) {
                         updateProgressStep('warning', `Проверка результатов... (${checkAttempts}/${maxAttempts})`);
-                        setTimeout(checkForResults, 10000); // Повторить через 10 секунд
+                        setTimeout(checkForResults, 15000); // Повторить через 15 секунд
                     } else {
                         updateProgressStep('error', 'Таймаут: анализ не завершен. Проверьте историю позже.');
                         showNotification('Анализ займет больше времени. Проверьте историю анализов через несколько минут.', 'info');
@@ -327,8 +340,8 @@ async function runAIAnalysis() {
                 }
             };
             
-            // Начинаем проверку через 10 секунд после таймаута
-            setTimeout(checkForResults, 10000);
+            // Начинаем проверку через 15 секунд после таймаута
+            setTimeout(checkForResults, 15000);
         } else {
             updateProgressStep('error', `Ошибка: ${error.message}`);
             showNotification(`Ошибка анализа: ${error.message}`, 'error');
@@ -430,7 +443,7 @@ async function displayAnalysisById(analysisId) {
     console.log('🔍 Loading analysis by ID:', analysisId);
     
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/${analysisId}`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/analysis/${analysisId}`);
         if (!response.ok) {
             throw new Error(`Failed to load analysis: ${response.status}`);
         }
@@ -1007,7 +1020,7 @@ async function loadAIHistory() {
 async function loadHistoryItem(analysisId) {
     try {
         console.log('🔍 Loading analysis ID:', analysisId);
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/${analysisId}`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/analysis/${analysisId}`);
         const data = await response.json();
         
         console.log('📊 History data loaded:', data);
@@ -1251,6 +1264,103 @@ async function rerunAgent(agentName, newPrompt) {
     } catch (error) {
         console.error('❌ Error rerunning agent:', error);
         showNotification(`Ошибка перезапуска агента: ${error.message}`, 'error');
+    }
+}
+
+// Load available AI providers and update the select
+async function loadAIProviders() {
+    console.log('🔍 Loading AI providers...');
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/providers`);
+        if (!response.ok) {
+            console.warn('⚠️ Failed to load providers, using defaults');
+            return;
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            console.warn('⚠️ Providers API returned error:', data.error);
+            return;
+        }
+        
+        const providerSelect = document.getElementById('ai-provider-select');
+        if (!providerSelect) return;
+        
+        // Clear existing options
+        providerSelect.innerHTML = '';
+        
+        // Add available providers
+        const providers = data.data.availability;
+        for (const [providerName, info] of Object.entries(providers)) {
+            const option = document.createElement('option');
+            option.value = providerName;
+            
+            // Set display name and status
+            const displayNames = {
+                'claude': 'Claude (Anthropic)',
+                'openai': 'OpenAI GPT-4',
+                'gemini': 'Google Gemini'
+            };
+            
+            const displayName = displayNames[providerName] || providerName;
+            const status = info.available ? '' : ' (недоступен)';
+            option.textContent = displayName + status;
+            
+            // Disable unavailable providers
+            if (!info.available) {
+                option.disabled = true;
+                option.title = `Недоступен: ${info.error || 'Не настроен'}`;
+            }
+            
+            // Set default selection
+            if (providerName === data.data.summary.default_provider && info.available) {
+                option.selected = true;
+            }
+            
+            providerSelect.appendChild(option);
+        }
+        
+        console.log(`✅ Loaded ${Object.keys(providers).length} AI providers, ${data.data.summary.available_providers} available`);
+        
+        // Show provider status in console for debugging
+        for (const [name, info] of Object.entries(providers)) {
+            const status = info.available ? '✅' : '❌';
+            console.log(`${status} ${name}: ${info.available ? 'доступен' : info.error}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading AI providers:', error);
+        console.log('📋 Using fallback provider options');
+    }
+}
+
+// Add provider information to analysis display
+function addProviderInfoToResults(provider, analysisContainer) {
+    if (!analysisContainer || !provider) return;
+    
+    // Add provider badge to the analysis header
+    const header = analysisContainer.querySelector('.analysis-header');
+    if (header && !header.querySelector('.provider-badge')) {
+        const providerBadge = document.createElement('span');
+        providerBadge.className = 'provider-badge';
+        providerBadge.style.cssText = `
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+            font-weight: 500;
+        `;
+        
+        const providerNames = {
+            'claude': '🤖 Claude',
+            'openai': '🧠 OpenAI',
+            'gemini': '💎 Gemini'
+        };
+        
+        providerBadge.textContent = providerNames[provider] || provider;
+        header.appendChild(providerBadge);
     }
 }
 

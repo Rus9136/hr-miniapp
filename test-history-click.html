@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест клика по истории анализа</title>
+    <script>
+        // Симуляция API base URL
+        const ADMIN_API_BASE_URL = 'http://localhost:3030/api';
+        
+        // Функция загрузки анализа из истории (точно как в ai-recommendations.js)
+        async function loadHistoryItem(analysisId) {
+            try {
+                console.log('🔍 Loading analysis ID:', analysisId);
+                const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/analysis/${analysisId}`);
+                const data = await response.json();
+                
+                console.log('📊 History data loaded:', data);
+                
+                if (data.success) {
+                    alert('✅ Анализ успешно загружен! ID: ' + analysisId);
+                    console.log('✅ Analysis data:', data.data);
+                    
+                    // Показываем основную информацию
+                    document.getElementById('result').innerHTML = `
+                        <h3>Анализ #${analysisId}</h3>
+                        <p><strong>Подразделение:</strong> ${data.data.department_id}</p>
+                        <p><strong>Период:</strong> ${data.data.date_start} - ${data.data.date_end}</p>
+                        <p><strong>Провайдер:</strong> ${data.data.provider}</p>
+                        <p><strong>Создан:</strong> ${data.data.created_at}</p>
+                        <h4>MCP Response:</h4>
+                        <pre>${JSON.stringify(data.data.mcp_response, null, 2)}</pre>
+                    `;
+                } else {
+                    console.error('❌ API returned error:', data.error);
+                    alert('❌ Ошибка: ' + data.error);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error loading history item:', error);
+                alert('❌ Ошибка загрузки: ' + error.message);
+            }
+        }
+        
+        // Функция тестирования
+        function testHistoryClick() {
+            const analysisId = document.getElementById('analysisId').value;
+            loadHistoryItem(analysisId);
+        }
+    </script>
+</head>
+<body>
+    <h1>Тест загрузки анализа из истории</h1>
+    
+    <div>
+        <label for="analysisId">ID анализа:</label>
+        <input type="number" id="analysisId" value="19" />
+        <button onclick="testHistoryClick()">Загрузить анализ</button>
+    </div>
+    
+    <div id="result" style="margin-top: 20px; max-height: 300px; overflow-y: auto;"></div>
+    
+    <p>Открой консоль разработчика (F12) для просмотра логов.</p>
+</body>
+</html>

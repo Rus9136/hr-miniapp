@@ -1,9 +1,20 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const { Pool } = require('pg');
 require('dotenv').config();
 
+// PostgreSQL connection для логирования
+const pool = new Pool({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+});
+
 class AnthropicClient {
-    constructor() {
-        this.apiKey = process.env.ANTHROPIC_API_KEY;
+    constructor(customApiKey = null) {
+        // Поддержка кастомного ключа или дефолтного из env
+        this.apiKey = customApiKey || process.env.ANTHROPIC_API_KEY;
         
         if (!this.apiKey) {
             throw new Error('ANTHROPIC_API_KEY не найден в переменных окружения');
@@ -14,8 +25,55 @@ class AnthropicClient {
         });
 
         this.defaultModel = 'claude-3-5-sonnet-20241022';
-        this.maxTokens = 4000;
+        this.maxTokens = 2000; // Уже оптимизировано ранее
         this.temperature = 0.7;
+        
+        // Логирование для отладки множественных ключей
+        const keyPreview = this.apiKey.substring(0, 20) + '...';
+        console.log(`[Anthropic-Client] Инициализирован с ключом: ${keyPreview}`);
+    }
+
+    /**
+     * Логирование промпта в базу данных
+     * @param {string} agentName - Название агента
+     * @param {string} fullPrompt - Полный промпт
+     * @param {string} systemPrompt - Системный промпт
+     * @param {string} response - Ответ от Claude
+     * @param {object} metadata - Метаданные ответа
+     * @param {number} analysisId - ID анализа
+     */
+    async logPrompt(agentName, fullPrompt, systemPrompt = '', response = '', metadata = {}, analysisId = null) {
+        try {
+            const query = `
+                INSERT INTO ai_prompt_logs (
+                    analysis_id, agent_name, provider, full_prompt, prompt_length,
+                    system_prompt, response_text, response_length, success, tokens_used,
+                    request_timestamp, response_timestamp
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                RETURNING id
+            `;
+            
+            const values = [
+                analysisId,
+                agentName,
+                'claude',
+                fullPrompt,
+                fullPrompt.length,
+                systemPrompt,
+                response,
+                response.length,
+                !!response,
+                metadata.usage?.input_tokens + metadata.usage?.output_tokens || 0,
+                new Date(),
+                response ? new Date() : null
+            ];
+            
+            const result = await pool.query(query, values);
+            console.log(`[Anthropic-Client] 📝 Промпт залогирован в БД с ID: ${result.rows[0].id}`);
+            return result.rows[0].id;
+        } catch (error) {
+            console.error(`[Anthropic-Client] ❌ Ошибка логирования промпта:`, error.message);
+        }
     }
 
     /**
@@ -188,9 +246,9 @@ class AnthropicClient {
         try {
             console.log(`[Anthropic-Client] Запуск агента "${agentName}"`);
 
-            // Формирование полного промпта с данными
-            const dataString = JSON.stringify(data, null, 2);
-            const fullPrompt = `${prompt}\n\nДанные для анализа:\n${dataString}`;
+            // Промпт уже содержит данные, обработанные через плейсхолдеры
+            // НЕ дублируем данные в конце промпта
+            const fullPrompt = prompt;
 
             // Системный промпт для контекста
             const systemPrompt = `Ты - AI-аналитик ресторанного бизнеса. Твоя роль: ${agentName}. 
@@ -204,6 +262,11 @@ class AnthropicClient {
 
             if (result.success) {
                 console.log(`[Anthropic-Client] ✅ Агент "${agentName}" завершил анализ`);
+                
+                // Логируем промпт и ответ в базу данных
+                const analysisId = options.analysisId || null;
+                await this.logPrompt(agentName, fullPrompt, systemPrompt, result.content, result.metadata, analysisId);
+                
                 return {
                     success: true,
                     agent_name: agentName,
@@ -211,7 +274,7 @@ class AnthropicClient {
                     metadata: {
                         ...result.metadata,
                         agent_name: agentName,
-                        data_size: dataString.length,
+                        data_size: JSON.stringify(data).length,
                         prompt_size: prompt.length
                     }
                 };
@@ -305,14 +368,14 @@ class AnthropicClient {
      * @returns {number} Задержка в миллисекундах
      */
     calculateRetryDelay(attempt, baseDelay, errorStatus) {
-        // Для ошибки 529 (Overloaded) используем агрессивные задержки с прогрессией
+        // Для ошибки 529 (Overloaded) используем экстремально агрессивные задержки
         if (errorStatus === 529) {
-            // Более агрессивные задержки: 15s, 45s, 90s, 180s, 300s
-            const delays = [15000, 45000, 90000, 180000, 300000];
-            const delay = delays[attempt - 1] || 300000;
+            // УДВОЕННЫЕ задержки: 30s, 90s, 180s, 360s, 600s (10 минут максимум)
+            const delays = [30000, 90000, 180000, 360000, 600000];
+            const delay = delays[attempt - 1] || 600000;
             
-            // Добавляем большой jitter для распределения нагрузки
-            const jitter = Math.random() * 10000; // До 10 секунд случайности
+            // Увеличенный jitter для лучшего распределения нагрузки
+            const jitter = Math.random() * 15000; // До 15 секунд случайности
             return delay + jitter;
         }
 

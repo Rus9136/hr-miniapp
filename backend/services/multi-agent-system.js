@@ -1,4 +1,5 @@
 const AnthropicClient = require('./anthropic-client');
+const { EngineDispatcher } = require('../engines');
 const { Pool } = require('pg');
 
 require('dotenv').config();
@@ -14,7 +15,46 @@ const pool = new Pool({
 
 class MultiAgentSystem {
     constructor() {
-        this.anthropicClient = new AnthropicClient();
+        // Создаем клиенты с 5 разными API ключами для полной изоляции лимитов
+        this.apiClients = {
+            // Основной клиент для легких агентов
+            default: new AnthropicClient(),
+            
+            // Специальный клиент для PayrollAnalysisAgent
+            PayrollAnalysisAgent: new AnthropicClient(process.env.ANTHROPIC_API_KEY_PAYROLL),
+            
+            // Специальный клиент для StaffingAgent
+            StaffingAgent: new AnthropicClient(process.env.ANTHROPIC_API_KEY_STAFFING),
+            
+            // Специальный клиент для NarrativeAgent (самые тяжелые промпты!)
+            NarrativeAgent: process.env.ANTHROPIC_API_KEY_NARRATIVE ? 
+                new AnthropicClient(process.env.ANTHROPIC_API_KEY_NARRATIVE) : null,
+            
+            // Специальный клиент для ReputationAgent
+            ReputationAgent: process.env.ANTHROPIC_API_KEY_REPUTATION ? 
+                new AnthropicClient(process.env.ANTHROPIC_API_KEY_REPUTATION) : null
+        };
+        
+        // Для обратной совместимости сохраняем ссылку на дефолтный клиент
+        this.anthropicClient = this.apiClients.default;
+        
+        // Инициализация диспетчера движков для мультипровайдерной поддержки
+        this.engineDispatcher = new EngineDispatcher();
+        
+        console.log('[MultiAgent] 🔑 Инициализирована система с 5 API ключами для полной изоляции лимитов');
+        console.log('[MultiAgent] - Ключ DEFAULT: SalesAnalysisAgent, OptimizationAgent');
+        console.log('[MultiAgent] - Ключ PAYROLL: PayrollAnalysisAgent');
+        console.log('[MultiAgent] - Ключ STAFFING: StaffingAgent');
+        console.log('[MultiAgent] - Ключ NARRATIVE: NarrativeAgent (до 460k символов!)');
+        console.log('[MultiAgent] - Ключ REPUTATION: ReputationAgent');
+        
+        // Предупреждение если ключи не настроены
+        if (!this.apiClients.NarrativeAgent) {
+            console.warn('[MultiAgent] ⚠️  ANTHROPIC_API_KEY_NARRATIVE не настроен! NarrativeAgent будет использовать основной ключ');
+        }
+        if (!this.apiClients.ReputationAgent) {
+            console.warn('[MultiAgent] ⚠️  ANTHROPIC_API_KEY_REPUTATION не настроен! ReputationAgent будет использовать основной ключ');
+        }
         
         // Circuit breaker для защиты от перегрузок
         this.circuitBreaker = {
@@ -100,13 +140,129 @@ class MultiAgentSystem {
     }
 
     /**
+     * Сжимает данные MCP для экономии токенов
+     * @param {object} data - Исходные данные
+     * @returns {object} Сжатые данные
+     */
+    compressDataForTokens(data) {
+        const compressed = {};
+        
+        // Функция для извлечения данных из MCP структуры
+        const extractData = (field) => {
+            if (data[field]) {
+                // Проверяем, есть ли вложенное поле .data
+                if (typeof data[field] === 'object' && data[field].data !== undefined) {
+                    return data[field].data;
+                } else {
+                    // Если нет поля .data, используем значение напрямую
+                    return data[field];
+                }
+            }
+            return null;
+        };
+        
+        // Сжимаем прогнозы (оставляем только ключевые поля)
+        const forecastData = extractData('forecast');
+        if (forecastData && Array.isArray(forecastData)) {
+            compressed.forecast = forecastData.slice(0, 10).map(item => ({
+                date: item.date,
+                // Исправление: MCP API возвращает predicted_sales, а не plan/fact
+                plan: item.predicted_sales ? Math.round(item.predicted_sales / 1000) + 'k' : 'N/A',
+                fact: item.actual_sales ? Math.round(item.actual_sales / 1000) + 'k' : 'N/A'
+            }));
+        }
+        
+        // Сжимаем данные план/факт
+        const planVsFactData = extractData('plan_vs_fact');
+        if (planVsFactData && Array.isArray(planVsFactData)) {
+            compressed.plan_vs_fact = planVsFactData.slice(0, 10).map(item => ({
+                date: item.date,
+                plan: item.plan ? Math.round(item.plan / 1000) + 'k' : 'N/A',
+                fact: item.fact ? Math.round(item.fact / 1000) + 'k' : 'N/A',
+                deviation: item.deviation || 0
+            }));
+        }
+        
+        // Сжимаем данные по ФОТ
+        const payrollData = extractData('payroll');
+        if (payrollData && Array.isArray(payrollData)) {
+            compressed.payroll = payrollData.slice(0, 20).map(item => ({
+                name: item.employee_name ? item.employee_name.split(' ')[0] : 'N/A',
+                shifts: item.shifts || 0,
+                payroll: Math.round((item.total_payroll || 0) / 1000) + 'k'
+            }));
+        }
+        
+        // Сжимаем почасовые продажи
+        const hourlySalesData = extractData('hourly_sales');
+        if (hourlySalesData && (Array.isArray(hourlySalesData) || (hourlySalesData.weekdays && hourlySalesData.weekends))) {
+            compressed.hourly_sales = [];
+            
+            // Обработка нового формата с weekdays/weekends
+            if (hourlySalesData.weekdays && Array.isArray(hourlySalesData.weekdays)) {
+                compressed.hourly_sales.push(...hourlySalesData.weekdays.slice(0, 12).map(item => ({
+                    h: item.hour,
+                    type: 'weekday',
+                    sales: item.sales ? Math.round(item.sales / 1000) + 'k' : '0k'
+                })));
+            }
+            
+            if (hourlySalesData.weekends && Array.isArray(hourlySalesData.weekends)) {
+                compressed.hourly_sales.push(...hourlySalesData.weekends.slice(0, 12).map(item => ({
+                    h: item.hour,
+                    type: 'weekend',
+                    sales: item.sales ? Math.round(item.sales / 1000) + 'k' : '0k'
+                })));
+            }
+            
+            // Обработка старого формата (fallback)
+            if (Array.isArray(hourlySalesData)) {
+                compressed.hourly_sales = hourlySalesData.slice(0, 24).map(item => ({
+                    h: item.hour,
+                    wd: Math.round((item.weekday_avg || 0) / 1000) + 'k',
+                    we: Math.round((item.weekend_avg || 0) / 1000) + 'k'
+                }));
+            }
+        }
+        
+        // КРИТИЧЕСКОЕ сжатие отзывов (из-за ошибок 529)
+        const reviewsData = extractData('reviews');
+        if (reviewsData && Array.isArray(reviewsData)) {
+            compressed.reviews = reviewsData.slice(0, 10).map(item => ({
+                rating: item.rating || 0,
+                text: (item.comment || '').substring(0, 50) // УМЕНЬШЕНО до 50 символов
+            }));
+        }
+        
+        // КРИТИЧЕСКОЕ сжатие результатов агентов для NarrativeAgent
+        if (data.agent_results) {
+            compressed.agent_results = {};
+            for (const [agentName, result] of Object.entries(data.agent_results)) {
+                if (typeof result === 'string') {
+                    // Обрезаем результаты агентов до 500 символов каждый
+                    compressed.agent_results[agentName] = result.substring(0, 500) + '...';
+                } else {
+                    compressed.agent_results[agentName] = result;
+                }
+            }
+        }
+        
+        console.log(`[MultiAgent] 📦 Сжатие данных: ${JSON.stringify(data).length} → ${JSON.stringify(compressed).length} символов`);
+        return compressed;
+    }
+
+    /**
      * Запуск полного мультиагентного анализа
      * @param {object} mcpData - Данные от MCP API
+     * @param {object} options - Дополнительные параметры (включая provider)
      * @returns {object} Результаты всех агентов
      */
-    async runAnalysis(mcpData) {
+    async runAnalysis(mcpData, options = {}) {
+        const { provider = 'claude', analysisId = null } = options;
+        // Сжимаем данные для экономии токенов
+        const compressedData = this.compressDataForTokens(mcpData);
         try {
-            console.log('[MultiAgent] Запуск полного мультиагентного анализа...');
+            console.log(`[MultiAgent] Запуск полного мультиагентного анализа с провайдером: ${provider}...`);
 
             const results = {};
             
@@ -119,7 +275,7 @@ class MultiAgentSystem {
             for (const agentName of primaryAgents) {
                 console.log(`[MultiAgent] Запуск агента: ${agentName}`);
 
-                const agentResult = await this.runSingleAgent(agentName, mcpData, null, results);
+                const agentResult = await this.runSingleAgent(agentName, compressedData, null, results, { provider, analysisId });
                 
                 if (agentResult.success) {
                     results[agentName] = agentResult.result;
@@ -135,10 +291,10 @@ class MultiAgentSystem {
                 // Адаптивная пауза между основными агентами с учетом предыдущих ошибок
                 let pauseDuration = this.calculateAdaptivePause(agentName, results);
                 
-                // Дополнительная пауза при обнаружении ошибок 529
+                // Экстремальная пауза при обнаружении ошибок 529
                 if (agentResult.error && agentResult.error.status === 529) {
-                    pauseDuration = Math.max(pauseDuration, 60000); // Минимум 1 минута после 529 ошибки
-                    console.log(`[MultiAgent] ⚠️ Обнаружена ошибка 529! Увеличиваем паузу до ${pauseDuration/1000} секунд`);
+                    pauseDuration = Math.max(pauseDuration, 180000); // Минимум 3 минуты после 529 ошибки
+                    console.log(`[MultiAgent] 🚨 КРИТИЧЕСКАЯ ошибка 529! Увеличиваем паузу до ${pauseDuration/1000} секунд`);
                 }
                 
                 console.log(`[MultiAgent] ⏳ Адаптивная пауза ${pauseDuration/1000} секунд после агента ${agentName}...`);
@@ -155,7 +311,7 @@ class MultiAgentSystem {
             for (const agentName of secondaryAgents) {
                 console.log(`[MultiAgent] Запуск зависимого агента: ${agentName}`);
 
-                const agentResult = await this.runSingleAgent(agentName, mcpData, null, results);
+                const agentResult = await this.runSingleAgent(agentName, compressedData, null, results, { provider, analysisId });
                 
                 if (agentResult.success) {
                     results[agentName] = agentResult.result;
@@ -170,12 +326,12 @@ class MultiAgentSystem {
 
                 // Увеличенная пауза между зависимыми агентами с учетом ошибок
                 if (agentName !== secondaryAgents[secondaryAgents.length - 1]) { // Не ждем после последнего
-                    let secondaryPause = 15000; // Базовая пауза 15 секунд
+                    let secondaryPause = 60000; // Увеличена базовая пауза до 60 секунд
                     
-                    // Если есть ошибка 529, увеличиваем паузу
+                    // Если есть ошибка 529, ЗНАЧИТЕЛЬНО увеличиваем паузу
                     if (agentResult.error && agentResult.error.status === 529) {
-                        secondaryPause = 90000; // 1.5 минуты после 529 ошибки
-                        console.log(`[MultiAgent] ⚠️ Ошибка 529 в ${agentName}! Увеличиваем паузу до ${secondaryPause/1000} секунд`);
+                        secondaryPause = 300000; // 5 минут после 529 ошибки для зависимых агентов
+                        console.log(`[MultiAgent] 🚨 КРИТИЧЕСКАЯ ошибка 529 в зависимом агенте ${agentName}! Увеличиваем паузу до ${secondaryPause/1000} секунд`);
                     }
                     
                     console.log(`[MultiAgent] ⏳ Пауза ${secondaryPause/1000} секунд перед следующим зависимым агентом...`);
@@ -217,9 +373,11 @@ class MultiAgentSystem {
      * @param {object} mcpData - Данные от MCP
      * @param {string} customPrompt - Кастомный промпт (опционально)
      * @param {object} previousResults - Результаты предыдущих агентов
+     * @param {object} options - Дополнительные параметры (включая provider)
      * @returns {object} Результат агента
      */
-    async runSingleAgent(agentName, mcpData, customPrompt = null, previousResults = {}) {
+    async runSingleAgent(agentName, mcpData, customPrompt = null, previousResults = {}, options = {}) {
+        const { provider = 'claude', analysisId = null } = options;
         try {
             const agent = this.agents[agentName];
             if (!agent) {
@@ -250,15 +408,26 @@ class MultiAgentSystem {
             const processedPrompt = this.processPromptPlaceholders(prompt, agentData);
 
             // Специальные настройки для проблемных агентов
-            const agentOptions = {};
+            const agentOptions = { analysisId };
             if (agentName === 'StaffingAgent' || agentName === 'NarrativeAgent') {
                 agentOptions.maxRetries = 7; // Больше попыток для проблемных агентов
                 agentOptions.retryDelay = 10000; // Увеличенная базовая задержка (10 секунд)
                 console.log(`[MultiAgent] 🛠️  Применяем специальные настройки для ${agentName}: ${agentOptions.maxRetries} попыток, задержка ${agentOptions.retryDelay/1000}с`);
             }
 
-            // Запуск агента через Anthropic API
-            const result = await this.anthropicClient.analyzeWithAgent(agentName, processedPrompt, agentData, agentOptions);
+            // Выбираем движок в зависимости от провайдера
+            let result;
+            if (provider === 'claude') {
+                // Используем существующую логику Claude с множественными ключами (обратная совместимость)
+                const apiClient = this.apiClients[agentName] || this.apiClients.default;
+                console.log(`[MultiAgent] 🔑 Claude: Используем ${this.apiClients[agentName] ? 'специальный' : 'основной'} API ключ для ${agentName}`);
+                result = await apiClient.analyzeWithAgent(agentName, processedPrompt, agentData, agentOptions);
+            } else {
+                // Используем новые движки для других провайдеров
+                console.log(`[MultiAgent] 🚀 Используем ${provider} движок для агента ${agentName}`);
+                const engine = this.engineDispatcher.getEngine(provider);
+                result = await engine.analyzeWithAgent(agentName, processedPrompt, agentData, agentOptions);
+            }
 
             // Обновление circuit breaker на основе результата
             this.updateCircuitBreaker(result);
@@ -300,9 +469,23 @@ class MultiAgentSystem {
                 agentData.all_data = mcpData;
                 agentData.agent_results = previousResults;
             } else if (mcpData[field]) {
-                agentData[field] = mcpData[field].data || mcpData[field];
+                // Исправление: правильно извлекаем данные из MCP структуры
+                // Проверяем, есть ли вложенное поле .data
+                if (typeof mcpData[field] === 'object' && mcpData[field].data !== undefined) {
+                    agentData[field] = mcpData[field].data;
+                } else {
+                    // Если нет поля .data, используем значение напрямую
+                    agentData[field] = mcpData[field];
+                }
+            } else {
+                // НЕ устанавливаем null для отсутствующих полей - это может вызвать проблемы
+                console.warn(`[MultiAgent] Поле ${field} отсутствует в MCP данных для агента ${agent.name}`);
             }
         }
+
+        console.log(`[MultiAgent] Подготовленные данные для агента ${agent.name}:`, 
+            Object.keys(agentData).map(key => `${key}: ${Array.isArray(agentData[key]) ? `массив(${agentData[key].length})` : typeof agentData[key]}`).join(', ')
+        );
 
         return agentData;
     }
@@ -315,6 +498,7 @@ class MultiAgentSystem {
      */
     processPromptPlaceholders(prompt, data) {
         let processedPrompt = prompt;
+        const replacements = [];
 
         // Замена плейсхолдеров {field_name} на JSON данные
         for (const [key, value] of Object.entries(data)) {
@@ -322,7 +506,41 @@ class MultiAgentSystem {
             if (processedPrompt.includes(placeholder)) {
                 const jsonValue = JSON.stringify(value, null, 2);
                 processedPrompt = processedPrompt.replace(placeholder, jsonValue);
+                replacements.push({
+                    placeholder,
+                    dataType: Array.isArray(value) ? `array[${value.length}]` : typeof value,
+                    size: JSON.stringify(value).length
+                });
             }
+        }
+
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Замена оставшихся плейсхолдеров на сообщение об отсутствии данных
+        const remainingPlaceholders = processedPrompt.match(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/g);
+        if (remainingPlaceholders && remainingPlaceholders.length > 0) {
+            console.warn(`[MultiAgent] ⚠️ Найдены незамененные плейсхолдеры: ${remainingPlaceholders.join(', ')}`);
+            
+            // Заменяем каждый незамененный плейсхолдер на сообщение об отсутствии данных
+            for (const placeholder of remainingPlaceholders) {
+                const fieldName = placeholder.slice(1, -1); // Убираем фигурные скобки
+                const noDataMessage = `[Данные "${fieldName}" отсутствуют в MCP API]`;
+                processedPrompt = processedPrompt.replace(placeholder, noDataMessage);
+                console.log(`[MultiAgent] 🔄 Замена отсутствующих данных: ${placeholder} → ${noDataMessage}`);
+            }
+        }
+
+        // Логирование для отладки
+        if (replacements.length > 0) {
+            console.log(`[MultiAgent] 🔄 Заменено ${replacements.length} плейсхолдеров:`, 
+                replacements.map(r => `${r.placeholder} → ${r.dataType} (${r.size} символов)`).join(', ')
+            );
+        }
+
+        // Финальная проверка на оставшиеся плейсхолдеры
+        const finalCheck = processedPrompt.match(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/g);
+        if (finalCheck && finalCheck.length > 0) {
+            console.error(`[MultiAgent] ❌ КРИТИЧЕСКАЯ ОШИБКА: Остались незамененные плейсхолдеры:`, finalCheck);
+        } else {
+            console.log(`[MultiAgent] ✅ Все плейсхолдеры успешно обработаны`);
         }
 
         return processedPrompt;
@@ -393,14 +611,14 @@ class MultiAgentSystem {
      * @returns {number} Пауза в миллисекундах
      */
     calculateAdaptivePause(agentName, results) {
-        let basePause = 8000; // Базовая пауза 8 секунд
+        let basePause = 20000; // Уменьшена базовая пауза до 20 секунд (благодаря множественным ключам)
         
-        // Специальные паузы для проблемных агентов
+        // Оптимизированные паузы с учетом изолированных API ключей
         const agentPauses = {
-            'SalesAnalysisAgent': 10000,  // 10 секунд
-            'PayrollAnalysisAgent': 15000, // 15 секунд
-            'StaffingAgent': 25000,       // 25 секунд (самый проблемный)
-            'ReputationAgent': 12000      // 12 секунд
+            'SalesAnalysisAgent': 30000,     // 30 секунд (основной ключ)
+            'PayrollAnalysisAgent': 40000,   // 40 секунд (отдельный ключ PAYROLL)
+            'StaffingAgent': 40000,          // 40 секунд (отдельный ключ STAFFING)
+            'ReputationAgent': 30000         // 30 секунд (основной ключ)
         };
         
         basePause = agentPauses[agentName] || basePause;
@@ -411,8 +629,11 @@ class MultiAgentSystem {
         ).length;
         
         if (errorCount > 0) {
-            basePause += errorCount * 30000; // +30 секунд за каждую ошибку 529
-            console.log(`[MultiAgent] 📊 Обнаружено ${errorCount} ошибок 529, увеличиваем паузу на ${errorCount * 30}с`);
+            // ЭКСПОНЕНЦИАЛЬНОЕ увеличение: 1 ошибка = +120с, 2 = +240с, 3+ = +480с
+            const multiplier = Math.min(errorCount, 3);
+            const additionalPause = [120000, 240000, 480000][multiplier - 1] || 480000;
+            basePause += additionalPause;
+            console.log(`[MultiAgent] 🚨 КРИТИЧЕСКОЕ накопление ${errorCount} ошибок 529! Экстремальное увеличение паузы на ${additionalPause/1000}с`);
         }
         
         return basePause;
@@ -424,7 +645,7 @@ class MultiAgentSystem {
      * @returns {number} Пауза в миллисекундах
      */
     calculatePreSecondaryPause(results) {
-        let basePause = 20000; // Базовая пауза 20 секунд
+        let basePause = 60000; // Оптимизирована базовая пауза до 1 минуты (благодаря множественным ключам)
         
         // Подсчет ошибок 529 в первичных агентах
         const error529Count = Object.values(results).filter(result => 
@@ -434,18 +655,21 @@ class MultiAgentSystem {
         // Подсчет общего количества ошибок
         const totalErrorCount = Object.values(results).filter(result => result.error).length;
         
-        // Увеличиваем паузу на основе ошибок
+        // КРИТИЧЕСКОЕ увеличение паузы при ошибках 529
         if (error529Count > 0) {
-            basePause += error529Count * 60000; // +1 минута за каждую ошибку 529
-            console.log(`[MultiAgent] 📊 ${error529Count} ошибок 529 в первичных агентах, увеличиваем паузу на ${error529Count}мин`);
+            // Экспоненциальное увеличение: 1 = +300с, 2 = +600с, 3+ = +900с (15 минут!)
+            const multiplier = Math.min(error529Count, 3);
+            const additionalPause = [300000, 600000, 900000][multiplier - 1] || 900000;
+            basePause += additionalPause;
+            console.log(`[MultiAgent] 🚨 КРИТИЧЕСКИХ ${error529Count} ошибок 529! Экстремальная пауза +${additionalPause/60000} минут перед зависимыми агентами`);
         }
         
         if (totalErrorCount > 2) {
-            basePause += 30000; // +30 секунд при многих ошибках
-            console.log(`[MultiAgent] 📊 Много ошибок (${totalErrorCount}), дополнительная пауза +30с`);
+            basePause += 120000; // +2 минуты при многих ошибках
+            console.log(`[MultiAgent] ⚠️ Критическое количество ошибок (${totalErrorCount}), дополнительная пауза +2 минуты`);
         }
         
-        return Math.min(basePause, 300000); // Максимум 5 минут
+        return Math.min(basePause, 1200000); // Максимум 20 минут для критических случаев
     }
 
     /**
@@ -518,6 +742,54 @@ class MultiAgentSystem {
             }
         };
     }
+
+    /**
+     * Быстрый режим анализа (только 2 агента для тестирования лимитов)
+     */
+    async runFastAnalysis(mcpData) {
+        console.log('[MultiAgent] 🚀 БЫСТРЫЙ РЕЖИМ: только 2 агента');
+        
+        const compressedData = this.compressDataForTokens(mcpData);
+        const results = {};
+        
+        // Только самые важные агенты
+        const fastAgents = ['SalesAnalysisAgent', 'ReputationAgent'];
+        
+        for (const agentName of fastAgents) {
+            console.log(`[MultiAgent] ⚡ Быстрый агент: ${agentName}`);
+            
+            const agentResult = await this.runSingleAgent(agentName, compressedData, null, results);
+            
+            if (agentResult.success) {
+                results[agentName] = agentResult.result;
+                console.log(`[MultiAgent] ✅ ${agentName} завершен`);
+            } else {
+                console.error(`[MultiAgent] ❌ ${agentName} ошибка:`, agentResult.error);
+                results[agentName] = {
+                    error: true,
+                    message: agentResult.error.message
+                };
+            }
+            
+            // Пауза 60 секунд между агентами
+            if (agentName !== fastAgents[fastAgents.length - 1]) {
+                console.log('[MultiAgent] ⏳ Быстрая пауза 60 секунд...');
+                await new Promise(resolve => setTimeout(resolve, 60000));
+            }
+        }
+        
+        return {
+            success: true,
+            results: results,
+            metadata: {
+                mode: 'fast',
+                total_agents: 2,
+                successful_agents: Object.keys(results).filter(key => !results[key].error).length,
+                failed_agents: Object.keys(results).filter(key => results[key].error).length
+            }
+        };
+    }
+
 }
 
 module.exports = MultiAgentSystem;

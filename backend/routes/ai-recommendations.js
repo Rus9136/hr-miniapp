@@ -21,7 +21,7 @@ const pool = new Pool({
  */
 router.post('/analyze', async (req, res) => {
     try {
-        const { department_id, date_start, date_end, reviews_count = 50 } = req.body;
+        const { department_id, date_start, date_end, reviews_count = 50, provider = 'claude' } = req.body;
 
         // Валидация входных данных
         if (!department_id || !date_start || !date_end) {
@@ -31,7 +31,16 @@ router.post('/analyze', async (req, res) => {
             });
         }
 
-        console.log(`[AI-Recommendations] Запуск анализа для подразделения ${department_id}, период: ${date_start} - ${date_end}`);
+        // Валидация провайдера AI
+        const supportedProviders = ['claude', 'openai', 'gemini'];
+        if (!supportedProviders.includes(provider)) {
+            return res.status(400).json({
+                success: false,
+                error: `Неподдерживаемый AI-провайдер: ${provider}. Доступные: ${supportedProviders.join(', ')}`
+            });
+        }
+
+        console.log(`[AI-Recommendations] Запуск анализа для подразделения ${department_id}, период: ${date_start} - ${date_end}, провайдер: ${provider}`);
 
         // 1. Получение данных от MCP API
         const mcpClient = new MCPClient();
@@ -45,9 +54,21 @@ router.post('/analyze', async (req, res) => {
             });
         }
 
-        // 2. Запуск мультиагентного анализа
+        // 2. Создание записи анализа в БД для получения ID
+        const initialAnalysis = await createAnalysisRecord(
+            department_id,
+            date_start,
+            date_end,
+            mcpData.data,
+            provider
+        );
+
+        // 3. Запуск мультиагентного анализа с выбранным провайдером
         const multiAgentSystem = new MultiAgentSystem();
-        const analysisResult = await multiAgentSystem.runAnalysis(mcpData.data);
+        const analysisResult = await multiAgentSystem.runAnalysis(mcpData.data, { 
+            provider,
+            analysisId: initialAnalysis.analysis_id 
+        });
 
         if (!analysisResult.success) {
             return res.status(500).json({
@@ -57,23 +78,22 @@ router.post('/analyze', async (req, res) => {
             });
         }
 
-        // 3. Сохранение результатов в БД
-        const saveResult = await saveAnalysisResults(
-            department_id,
-            date_start,
-            date_end,
-            mcpData.data,
+        // 4. Обновление результатов анализа в БД
+        console.log('[AI-Recommendations] 🔍 Результаты анализа для сохранения:', JSON.stringify(analysisResult.results, null, 2));
+        const saveResult = await updateAnalysisResults(
+            initialAnalysis.analysis_id,
             analysisResult.results
         );
 
         res.json({
             success: true,
             data: {
-                analysis_id: saveResult.analysis_id,
+                analysis_id: initialAnalysis.analysis_id,
                 department_id,
                 period: { start: date_start, end: date_end },
                 mcp_data: mcpData.data,
                 agent_results: analysisResult.results,
+                provider: provider,
                 created_at: new Date().toISOString()
             }
         });
@@ -97,8 +117,18 @@ router.get('/history', async (req, res) => {
         const { limit = 20, offset = 0 } = req.query;
 
         const query = `
-            SELECT id, department_id, date_start, date_end, created_at,
-                   jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_name') as department_name
+            SELECT id, department_id, date_start, date_end, created_at, provider,
+                   CONCAT(
+                       jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_name'),
+                       ' (',
+                       CASE provider
+                           WHEN 'claude' THEN 'CLAUDE'
+                           WHEN 'openai' THEN 'CHAT GPT'
+                           WHEN 'gemini' THEN 'GEMINI'
+                           ELSE UPPER(provider)
+                       END,
+                       ')'
+                   ) as department_name
             FROM ai_recommendations 
             ORDER BY created_at DESC 
             LIMIT $1 OFFSET $2
@@ -127,8 +157,102 @@ router.get('/history', async (req, res) => {
 });
 
 /**
- * GET/PUT /api/admin/ai-recommendations/prompts
- * Работа с промптами агентов
+ * GET /api/admin/ai-recommendations/prompts/:analysisId
+ * Получение залогированных промптов для анализа
+ */
+router.get('/prompts/:analysisId', async (req, res) => {
+    try {
+        const { analysisId } = req.params;
+        const { limit = 50, offset = 0 } = req.query;
+        
+        console.log(`[AI-Recommendations] Запрос логов промптов для анализа ID: ${analysisId}`);
+
+        const query = `
+            SELECT 
+                id, agent_name, provider, full_prompt, prompt_length,
+                system_prompt, response_text, response_length, success, tokens_used,
+                request_timestamp, response_timestamp,
+                EXTRACT(EPOCH FROM (response_timestamp - request_timestamp)) as response_time_seconds
+            FROM ai_prompt_logs 
+            WHERE analysis_id = $1
+            ORDER BY request_timestamp ASC
+            LIMIT $2 OFFSET $3
+        `;
+
+        const result = await pool.query(query, [analysisId, limit, offset]);
+
+        // Получаем также информацию об анализе
+        const analysisQuery = `
+            SELECT id, department_id, date_start, date_end, provider, created_at
+            FROM ai_recommendations 
+            WHERE id = $1
+        `;
+        const analysisResult = await pool.query(analysisQuery, [analysisId]);
+
+        res.json({
+            success: true,
+            data: {
+                analysis: analysisResult.rows[0] || null,
+                prompts: result.rows,
+                total: result.rows.length,
+                pagination: {
+                    limit: parseInt(limit),
+                    offset: parseInt(offset)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('[AI-Recommendations] Ошибка получения промптов:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка получения залогированных промптов',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/ai-recommendations/providers
+ * Получение информации о доступных AI провайдерах
+ */
+router.get('/providers', async (req, res) => {
+    try {
+        const { EngineDispatcher } = require('../engines');
+        const dispatcher = new EngineDispatcher();
+        
+        // Получение информации о провайдерах
+        const providersInfo = dispatcher.getProvidersInfo();
+        
+        // Проверка доступности всех провайдеров
+        const validation = await dispatcher.validateAllProviders();
+        
+        res.json({
+            success: true,
+            data: {
+                ...providersInfo,
+                availability: validation.results,
+                summary: {
+                    total_providers: validation.total_providers,
+                    available_providers: validation.available_providers,
+                    default_provider: validation.default_provider
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('[AI-Recommendations] Ошибка получения информации о провайдерах:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка получения информации о провайдерах',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/ai-recommendations/prompts
+ * Получение промптов агентов
  */
 router.get('/prompts', async (req, res) => {
     try {
@@ -266,31 +390,122 @@ router.post('/rerun-agent', async (req, res) => {
 });
 
 /**
- * Сохранение результатов анализа в БД
+ * Создание записи анализа в БД для получения ID
  */
-async function saveAnalysisResults(department_id, date_start, date_end, mcpResponse, agentResults) {
-    const query = `
-        INSERT INTO ai_recommendations (department_id, date_start, date_end, mcp_response, agent_results, created_at)
-        VALUES ($1, $2, $3, $4, $5, NOW())
-        RETURNING id
-    `;
-
-    const result = await pool.query(query, [
-        department_id,
-        date_start,
-        date_end,
-        JSON.stringify(mcpResponse),
-        JSON.stringify(agentResults)
-    ]);
-
-    return { analysis_id: result.rows[0].id };
+async function createAnalysisRecord(department_id, date_start, date_end, mcpResponse, provider = 'claude') {
+    try {
+        const query = `
+            INSERT INTO ai_recommendations (department_id, date_start, date_end, mcp_response, agent_results, provider, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id
+        `;
+        
+        const values = [
+            department_id,
+            date_start,
+            date_end,
+            JSON.stringify(mcpResponse),
+            JSON.stringify({}), // Пустые результаты агентов пока
+            provider
+        ];
+        
+        const result = await pool.query(query, values);
+        return { analysis_id: result.rows[0].id };
+        
+    } catch (error) {
+        console.error('[AI-Recommendations] Ошибка создания записи анализа:', error);
+        throw error;
+    }
 }
 
 /**
- * GET /api/admin/ai-recommendations/:id
+ * Обновление результатов анализа в БД
+ */
+async function updateAnalysisResults(analysisId, agentResults) {
+    try {
+        console.log(`[AI-Recommendations] 💾 Сохранение результатов для анализа ID ${analysisId}`);
+        console.log(`[AI-Recommendations] 📋 Данные для сохранения (тип: ${typeof agentResults}):`, agentResults);
+        
+        const query = `
+            UPDATE ai_recommendations 
+            SET agent_results = $1
+            WHERE id = $2
+        `;
+        
+        const values = [
+            JSON.stringify(agentResults),
+            analysisId
+        ];
+        
+        const result = await pool.query(query, values);
+        console.log(`[AI-Recommendations] ✅ Результат обновления: ${result.rowCount} строк обновлено`);
+        return { analysis_id: analysisId };
+        
+    } catch (error) {
+        console.error('[AI-Recommendations] Ошибка обновления результатов анализа:', error);
+        throw error;
+    }
+}
+
+/**
+ * Сохранение результатов анализа в БД (устаревшая функция)
+ */
+async function saveAnalysisResults(department_id, date_start, date_end, mcpResponse, agentResults, provider = 'claude') {
+    // Проверяем, есть ли колонка provider в таблице
+    let query, values;
+    
+    try {
+        // Пытаемся использовать новый формат с provider
+        query = `
+            INSERT INTO ai_recommendations (department_id, date_start, date_end, mcp_response, agent_results, provider, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id
+        `;
+        
+        values = [
+            department_id,
+            date_start,
+            date_end,
+            JSON.stringify(mcpResponse),
+            JSON.stringify(agentResults),
+            provider
+        ];
+        
+        const result = await pool.query(query, values);
+        return { analysis_id: result.rows[0].id };
+        
+    } catch (error) {
+        // Если колонка provider не существует, используем старый формат
+        if (error.message.includes('provider') && error.message.includes('does not exist')) {
+            console.log('[AI-Recommendations] Колонка provider не найдена, используем старый формат БД');
+            
+            query = `
+                INSERT INTO ai_recommendations (department_id, date_start, date_end, mcp_response, agent_results, created_at)
+                VALUES ($1, $2, $3, $4, $5, NOW())
+                RETURNING id
+            `;
+            
+            values = [
+                department_id,
+                date_start,
+                date_end,
+                JSON.stringify(mcpResponse),
+                JSON.stringify(agentResults)
+            ];
+            
+            const result = await pool.query(query, values);
+            return { analysis_id: result.rows[0].id };
+        } else {
+            throw error;
+        }
+    }
+}
+
+/**
+ * GET /api/admin/ai-recommendations/analysis/:id
  * Получение детального анализа по ID
  */
-router.get('/:id', async (req, res) => {
+router.get('/analysis/:id', async (req, res) => {
     try {
         const { id } = req.params;
 

@@ -40,6 +40,9 @@ URL:      https://madlen.space/
 ├── README.md          # Для разработчиков
 ├── PROJECT_STATE.md   # История развития проекта
 ├── CHANGELOG.md       # История версий
+├── MULTIPROVIDER_AI_SYSTEM_DOCS.md  # 🆕 Документация мультипровайдерной AI системы
+├── add-provider-column.sql  # 🆕 SQL миграция для поддержки провайдеров
+├── test-final-validation.js  # 🆕 Тест валидации AI системы
 └── docs/
     ├── API.md         # Документация API
     ├── DEPLOYMENT.md  # Инструкции по деплою
@@ -65,6 +68,7 @@ node test_night_shift_fix.js # Тест ночных смен
 # AI система тестирование
 node test_ai_direct.js      # Прямое тестирование AI анализа
 node test_ai_full.js        # Полное тестирование AI системы
+node test-final-validation.js  # 🆕 Полная валидация мультипровайдерной системы
 ```
 
 ## ⚠️ КРИТИЧЕСКИ ВАЖНО: Работа с Docker volumes
@@ -113,7 +117,7 @@ node test_ai_full.js        # Полное тестирование AI сист�
 - `GET /api/admin/time-records` - обработанные записи времени
 - `POST /api/admin/recalculate-time-records` - пересчет рабочего времени
 
-### 🤖 AI-рекомендации (добавлено 2025-07-13)
+### 🤖 AI-рекомендации (обновлено 2025-07-15)
 - `POST /api/admin/ai-recommendations/analyze` - запуск мультиагентного анализа подразделения
 - `GET /api/admin/ai-recommendations/history` - история выполненных анализов
 - `GET /api/admin/ai-recommendations/:id` - получение детального анализа по ID
@@ -121,14 +125,21 @@ node test_ai_full.js        # Полное тестирование AI сист�
 - `PUT /api/admin/ai-recommendations/prompts` - обновление промптов агентов
 - `POST /api/admin/ai-recommendations/rerun-agent` - перезапуск отдельного агента
 - `POST /api/admin/ai-webhook-proxy` - отправка результатов на webhook
+- `GET /api/admin/ai-recommendations/providers` - ✅ **НОВОЕ**: информация о доступных AI провайдерах
 
-#### AI анализ подразделений
+#### 🆕 Мультипровайдерная AI архитектура (версия 2.0)
 **Endpoint:** `POST /api/admin/ai-recommendations/analyze`
 **Параметры:**
 - `department_id` (UUID) - идентификатор подразделения (поле id_iiko)
 - `date_start` (YYYY-MM-DD) - начало периода анализа
 - `date_end` (YYYY-MM-DD) - конец периода анализа 
 - `reviews_count` (число) - количество отзывов для анализа (по умолчанию 50)
+- `provider` (строка) - ✅ **НОВОЕ**: AI провайдер ("claude", "openai", "gemini")
+
+**Поддерживаемые AI провайдеры:**
+1. **Claude (Anthropic)** ✅ - основной провайдер, 5 изолированных API ключей
+2. **OpenAI GPT-4o** ✅ - альтернативный провайдер, готов к использованию
+3. **Google Gemini** ⏳ - запланирован к реализации
 
 **Мультиагентная система (6 AI агентов):**
 1. **SalesAnalysisAgent** 📈 - анализ прогнозов и динамики продаж
@@ -140,7 +151,8 @@ node test_ai_full.js        # Полное тестирование AI сист�
 
 **Интеграция с внешними API:**
 - **MCP API** (https://mcp.madlen.space/api/v1) - получение данных подразделений
-- **Anthropic Claude API** - выполнение AI анализа
+- **Anthropic Claude API** - основной AI провайдер (5 ключей)
+- **OpenAI API** - альтернативный AI провайдер (GPT-4o)
 - **Reviews API** - получение отзывов клиентов
 
 ### 🆕 Отчеты по ФОТ (добавлено 2025-07-03)
@@ -542,31 +554,50 @@ docker-compose up -d --build
 - **Тёмная тема** - учитывать контрастность цветов
 - **Специальные CSS правила** - использовать `telegram-mobile-fix.css`
 
-## 🤖 AI-рекомендации: Конфигурация и использование
+## 🤖 AI-рекомендации: Мультипровайдерная система (версия 2.0)
 
-### Переменные окружения
+### 🆕 Переменные окружения
 ```bash
 # .env.production (обязательно для Docker)
-ANTHROPIC_API_KEY=sk-ant-api03-...  # API ключ для Claude
+# Claude Configuration (основной провайдер)
+ANTHROPIC_API_KEY=sk-ant-api03-...  # Основной API ключ для Claude
+ANTHROPIC_API_KEY_PAYROLL=sk-ant-api03-...  # Ключ для PayrollAnalysisAgent
+ANTHROPIC_API_KEY_STAFFING=sk-ant-api03-...  # Ключ для StaffingAgent  
+ANTHROPIC_API_KEY_NARRATIVE=sk-ant-api03-...  # Ключ для NarrativeAgent
+ANTHROPIC_API_KEY_REPUTATION=sk-ant-api03-...  # Ключ для ReputationAgent
+
+# OpenAI Configuration (альтернативный провайдер)
+OPENAI_API_KEY=sk-proj-...  # API ключ для OpenAI GPT-4o
+OPENAI_MODEL=gpt-4o  # Модель по умолчанию
+AI_DEFAULT_PROVIDER=claude  # Провайдер по умолчанию
+
+# MCP API
 MCP_API_BASE_URL=https://mcp.madlen.space/api/v1  # Базовый URL MCP API
 ```
 
-### Структура файлов AI системы
+### 🏗️ Структура файлов мультипровайдерной AI системы
 ```
 backend/
+├── engines/                     # 🆕 Мультипровайдерная архитектура
+│   ├── base-engine.js           # Базовый интерфейс для всех провайдеров
+│   ├── claude-engine.js         # Claude (Anthropic) движок
+│   ├── openai-engine.js         # OpenAI GPT-4 движок  
+│   ├── gemini-engine.js         # Google Gemini (заглушка)
+│   ├── engine-dispatcher.js     # Диспетчер выбора провайдеров
+│   └── index.js                 # Централизованный экспорт
 ├── routes/
 │   └── ai-recommendations.js    # REST API для AI системы
 ├── services/
 │   ├── anthropic-client.js      # Клиент для Claude API
 │   ├── mcp-client.js            # Клиент для MCP API
-│   └── multi-agent-system.js    # Мультиагентная система
+│   └── multi-agent-system.js    # Обновленная мультиагентная система
 frontend/
-├── ai-recommendations.js        # Frontend логика AI секции
+├── ai-recommendations.js        # Обновленная Frontend логика AI секции
 ├── ai-recommendations.css       # Стили для AI интерфейса
-└── index.html                   # UI компоненты AI раздела
+└── index.html                   # UI компоненты с выбором провайдера
 ```
 
-### База данных
+### 🗄️ База данных (обновлена)
 ```sql
 -- Таблицы для AI системы
 CREATE TABLE ai_recommendations (
@@ -574,8 +605,9 @@ CREATE TABLE ai_recommendations (
     department_id UUID NOT NULL,
     date_start DATE NOT NULL,
     date_end DATE NOT NULL,
+    provider VARCHAR(50) DEFAULT 'claude',  -- 🆕 Новая колонка
     mcp_response JSONB,
-    agent_results JSONB,
+    agent_results JSONB,  -- 📋 Хранит отчеты в разрезе агентов
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -586,22 +618,70 @@ CREATE TABLE ai_prompts (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE ai_prompt_logs (
+    id SERIAL PRIMARY KEY,
+    analysis_id INTEGER REFERENCES ai_recommendations(id),
+    agent_name VARCHAR(100) NOT NULL,
+    provider VARCHAR(50),
+    full_prompt TEXT,
+    system_prompt TEXT,
+    response_text TEXT,
+    success BOOLEAN DEFAULT FALSE,
+    error_message TEXT,
+    tokens_used INTEGER,
+    request_timestamp TIMESTAMP DEFAULT NOW(),
+    response_timestamp TIMESTAMP
+);
 ```
 
-### Использование AI раздела
-1. Вход в админ-панель: пароль `admin12qw`
-2. Выбор раздела "AI рекомендация"
-3. Выбор подразделения и дат (максимум 30 дней)
-4. Запуск анализа (занимает 1-2 минуты)
-5. Просмотр результатов каждого агента
-6. Отправка на webhook (опционально)
-7. Редактирование промптов агентов
+### 📊 Структура хранения результатов анализа
+Результаты агентов хранятся в поле `agent_results` типа JSONB в виде объекта:
+```json
+{
+  "SalesAnalysisAgent": "Текстовый отчет по анализу продаж...",
+  "PayrollAnalysisAgent": "Текстовый отчет по анализу ФОТ...",
+  "StaffingAgent": "Текстовый отчет по оптимизации персонала...",
+  "ReputationAgent": "Текстовый отчет по анализу отзывов...",
+  "OptimizationAgent": "Текстовый отчет с рекомендациями...",
+  "NarrativeAgent": "Итоговый бизнес-отчет для управляющего..."
+}
+```
 
-### Известные ограничения
-- **Таймаут**: анализ может занимать до 2 минут, nginx может выдать 504
+### 🎯 Использование мультипровайдерной AI системы
+1. **Вход в админ-панель**: пароль `admin12qw`
+2. **Выбор раздела**: "AI рекомендация"
+3. **🆕 Выбор AI провайдера**: Claude, OpenAI или Gemini (dropdown)
+4. **Выбор подразделения и дат**: максимум 30 дней
+5. **Запуск анализа**: занимает 3-4 минуты для полного завершения
+6. **Просмотр результатов**: каждого агента отдельно
+7. **История анализов**: отображает название подразделения с провайдером (например: "Кофейня/Бакыт-Н2/АУП (CLAUDE)")
+8. **Дополнительные функции**:
+   - Отправка на webhook (опционально)
+   - Редактирование промптов агентов
+   - Экспорт в PDF
+   - Повторный анализ отдельного агента
+   - Просмотр логов промптов для диагностики
+
+### 📊 Производительность провайдеров
+- **Claude (Anthropic)**: ~6.7 секунд среднее время, стабильный
+- **OpenAI GPT-4o**: ~9.4 секунды среднее время, современная модель
+- **Google Gemini**: Планируется к реализации
+
+### 🆕 Новые возможности версии 2.0
+- **Выбор провайдера**: Динамический выбор через UI
+- **Fallback система**: Автоматическое переключение при недоступности
+- **Производительность**: Сравнение времени ответа провайдеров
+- **Совместимость**: Единые промпты для всех провайдеров
+- **Мониторинг**: Отслеживание использования провайдеров
+
+### ⚠️ Известные ограничения
+- **Таймаут**: анализ занимает 3-4 минуты, nginx может выдать 504
 - **Reviews API**: некоторые подразделения могут не иметь отзывов
 - **MCP API**: требует актуальные данные подразделений с id_iiko
-- **Anthropic API**: требует валидный API ключ и квоты
+- **Claude API**: 5 ключей для изоляции лимитов агентов
+- **OpenAI API**: один ключ, ограничения по RPM/TPM
+- **Сохранение результатов**: результаты сохраняются только после завершения всех 6 агентов
 
 ## ⚠️ Важные замечания
 1. **Не создавайте SESSION_LOG файлы** - обновляйте этот файл
@@ -610,3 +690,6 @@ CREATE TABLE ai_prompts (
 4. **Внешний API** - часто возвращает пустые массивы, есть fallback
 5. **НИКОГДА не используйте docker-compose down -v** - удаляет всю БД!
 6. **AI система требует .env.production** - для Docker deployment ✅
+7. **🆕 Мультипровайдерная AI система готова** - поддержка Claude + OpenAI ✅
+8. **Выполнена SQL миграция** - добавлена колонка provider в ai_recommendations ✅
+9. **🆕 История анализов** - показывает провайдера в названии подразделения ✅
