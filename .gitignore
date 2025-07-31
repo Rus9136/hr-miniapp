@@ -9,3 +9,30 @@ yarn-error.log*
 test_env/
 __pycache__/
 *.pyc
+
+# Environment files - критически важно для безопасности
+.env.production
+.env.local
+.env.development
+.env.test
+*.env
+
+# API Keys and secrets - предотвращение утечек
+*API_KEY*
+*api_key*
+*secret*
+*token*
+
+# Session logs - могут содержать секреты
+SESSION_LOG*.md
+
+# Temporary git files
+.git/refs/original/
+
+# Backup files
+/tmp/git-backup/
+*.backup
+*.bak
+
+# Documentation with potential secrets
+МНОЖЕСТВЕННЫЕ_API_КЛЮЧИ_РЕШЕНИЕ.md
