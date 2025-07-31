@@ -43,6 +43,17 @@ URL:      https://madlen.space/
 ├── MULTIPROVIDER_AI_SYSTEM_DOCS.md  # 🆕 Документация мультипровайдерной AI системы
 ├── add-provider-column.sql  # 🆕 SQL миграция для поддержки провайдеров
 ├── test-final-validation.js  # 🆕 Тест валидации AI системы
+├── .claude/           # 🆕 Claude Code конфигурация
+│   └── agents/        # 🆕 Специализированные субагенты
+│       ├── README.md  # Документация системы агентов
+│       ├── code-reviewer.md
+│       ├── security-auditor.md
+│       ├── database-migration-manager.md
+│       ├── ai-system-optimizer.md
+│       ├── docker-deployment-manager.md
+│       ├── api-testing-specialist.md
+│       ├── documentation-maintainer.md
+│       └── performance-monitor.md
 └── docs/
     ├── API.md         # Документация API
     ├── DEPLOYMENT.md  # Инструкции по деплою
@@ -700,3 +711,130 @@ CREATE TABLE ai_prompt_logs (
 7. **🆕 Мультипровайдерная AI система готова** - поддержка Claude + OpenAI ✅
 8. **Выполнена SQL миграция** - добавлена колонка provider в ai_recommendations ✅
 9. **🆕 История анализов** - показывает провайдера в названии подразделения ✅
+
+## 🤖 Claude Code Agents - Система специализированных субагентов
+
+### 📋 Доступные агенты
+В папке `.claude/agents/` созданы **8 специализированных субагентов** для автоматизации разработки:
+
+1. **🔍 Code Reviewer** (`code-reviewer.md`) - Ревью кода Node.js/Express/PostgreSQL
+2. **🛡️ Security Auditor** (`security-auditor.md`) - Аудит безопасности API и защита ПДн
+3. **🗄️ Database Migration Manager** (`database-migration-manager.md`) - Управление миграциями PostgreSQL
+4. **🤖 AI System Optimizer** (`ai-system-optimizer.md`) - Оптимизация мультиагентной AI системы
+5. **🐳 Docker Deployment Manager** (`docker-deployment-manager.md`) - Управление Docker развертыванием
+6. **🧪 API Testing Specialist** (`api-testing-specialist.md`) - Автоматизация тестирования REST API
+7. **📚 Documentation Maintainer** (`documentation-maintainer.md`) - Поддержание актуальной документации
+8. **📊 Performance Monitor** (`performance-monitor.md`) - Мониторинг производительности системы
+
+### 🚀 Примеры использования агентов
+
+#### Code Review
+```bash
+# Ревью конкретного файла
+/code-review backend/routes/ai-recommendations.js
+
+# Ревью с фокусом на безопасность
+/code-review --security frontend/admin.js
+
+# Ревью производительности
+/code-review --performance backend/database.js
+```
+
+#### Security Audit
+```bash
+# Полный аудит безопасности
+/security-audit --full-scan
+
+# Аудит API endpoints
+/security-audit --api-endpoints /api/admin/*
+
+# Проверка защиты персональных данных
+/security-audit --data-protection employees
+```
+
+#### Database Migrations
+```bash
+# Планирование миграции
+/db-migrate --plan add_ai_provider_column
+
+# Анализ производительности БД
+/db-migrate --analyze performance_issues
+
+# Откат миграции
+/db-migrate --rollback 015_last_migration
+```
+
+#### AI System Optimization
+```bash
+# Анализ промптов
+/ai-optimize --prompt-analysis SalesAnalysisAgent
+
+# Снижение затрат
+/ai-optimize --cost-reduction claude
+
+# Настройка производительности
+/ai-optimize --performance-tuning all-agents
+```
+
+#### Docker Deployment
+```bash
+# Развертывание в продакшн
+/docker-deploy --production madlen.space
+
+# Оптимизация размера контейнеров
+/docker-deploy --optimize container-size
+
+# Откат к предыдущей версии
+/docker-deploy --rollback previous-version
+```
+
+#### API Testing
+```bash
+# Функциональное тестирование
+/api-test --functional /api/login
+
+# Нагрузочное тестирование
+/api-test --performance --load=50rps
+
+# Тестирование безопасности
+/api-test --security --scan-endpoints
+```
+
+#### Documentation Maintenance
+```bash
+# Обновление API документации
+/docs-update --api-changes backend/routes/
+
+# Проверка сломанных ссылок
+/docs-update --validate broken-links
+
+# Генерация справочника API
+/docs-update --generate api-reference
+```
+
+#### Performance Monitoring
+```bash
+# Анализ узких мест
+/perf-monitor --analyze-bottlenecks
+
+# Оптимизация базы данных
+/perf-monitor --database-optimization
+
+# Анализ затрат AI системы
+/perf-monitor --ai-cost-analysis
+```
+
+### 🎯 Особенности агентов
+
+Каждый агент содержит:
+- **Глубокие знания о HR проекте** (архитектура, API, специфика)
+- **Контекст системы** (Telegram интеграция, AI мультипровайдеры, ПДн)
+- **Готовые процедуры** для типовых задач
+- **Шаблоны отчетов** для стандартизированных результатов
+- **Примеры кода** специфичные для проекта
+
+### 📚 Документация агентов
+Полная документация системы агентов доступна в `.claude/agents/README.md`
+
+### ✅ Готовность к использованию
+Все агенты полностью настроены и готовы к использованию. Они знают специфику HR Time Tracking системы и могут сразу приступить к работе без дополнительной настройки.
