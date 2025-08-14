@@ -917,6 +917,17 @@
                         <!-- Шапка графика -->
                         <div class="schedule-header-form">
                             <input type="hidden" id="schedule-card-id">
+                            
+                            <!-- Информация об организации (только для просмотра) -->
+                            <div class="form-row" id="schedule-organization-info" style="display: none;">
+                                <div class="form-group">
+                                    <label>Организация</label>
+                                    <div class="alert alert-info" id="schedule-card-organization" style="margin: 0; padding: 8px 12px;">
+                                        Информация об организации загружается...
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="schedule-card-name">Название графика</label>
@@ -992,6 +1003,10 @@
                     <div class="section-header">
                         <h2>Графики работы из 1С</h2>
                         <div class="section-controls">
+                            <!-- Фильтр по организации -->
+                            <select id="schedules-organization-filter" class="form-control mr-3" style="max-width: 200px; display: inline-block;">
+                                <option value="">Все организации</option>
+                            </select>
                             <input type="text" 
                                    id="schedules-search" 
                                    class="search-input" 
@@ -1005,6 +1020,7 @@
                             <thead>
                                 <tr>
                                     <th>Название графика</th>
+                                    <th>Организация</th>
                                     <th>Действия</th>
                                 </tr>
                             </thead>

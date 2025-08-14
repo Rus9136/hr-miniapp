@@ -1,5 +1,175 @@
 // Admin Panel JavaScript
 
+// Searchable Dropdown Component
+class SearchableDropdown {
+    constructor(container, options = {}) {
+        this.container = typeof container === 'string' ? document.getElementById(container) : container;
+        this.options = {
+            placeholder: options.placeholder || 'Выберите...',
+            searchPlaceholder: options.searchPlaceholder || 'Поиск...',
+            noResultsText: options.noResultsText || 'Ничего не найдено',
+            loadingText: options.loadingText || 'Загрузка...',
+            maxItems: options.maxItems || 1000,
+            ...options
+        };
+        
+        this.data = [];
+        this.filteredData = [];
+        this.selectedValue = null;
+        this.selectedText = '';
+        this.isOpen = false;
+        this.isLoading = false;
+        
+        this.init();
+    }
+    
+    init() {
+        this.container.innerHTML = `
+            <div class="searchable-dropdown">
+                <input type="text" readonly placeholder="${this.options.placeholder}" />
+                <div class="dropdown-arrow">▼</div>
+                <div class="dropdown-list">
+                    <div class="dropdown-loading">${this.options.loadingText}</div>
+                </div>
+            </div>
+        `;
+        
+        this.dropdown = this.container.querySelector('.searchable-dropdown');
+        this.input = this.container.querySelector('input');
+        this.arrow = this.container.querySelector('.dropdown-arrow');
+        this.list = this.container.querySelector('.dropdown-list');
+        
+        this.bindEvents();
+    }
+    
+    bindEvents() {
+        // Toggle dropdown
+        this.input.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggle();
+        });
+        
+        // Search functionality
+        this.input.addEventListener('input', () => {
+            this.filter();
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            this.close();
+        });
+        
+        // Prevent closing when clicking inside dropdown
+        this.dropdown.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+    
+    open() {
+        if (this.isLoading) return;
+        
+        this.isOpen = true;
+        this.dropdown.classList.add('open');
+        this.input.removeAttribute('readonly');
+        this.input.placeholder = this.options.searchPlaceholder;
+        this.input.focus();
+        
+        this.filter();
+    }
+    
+    close() {
+        this.isOpen = false;
+        this.dropdown.classList.remove('open');
+        this.input.setAttribute('readonly', 'true');
+        this.input.placeholder = this.selectedText || this.options.placeholder;
+        this.input.value = this.selectedText;
+    }
+    
+    filter() {
+        const query = this.input.value.toLowerCase();
+        this.filteredData = this.data.filter(item => 
+            item.text.toLowerCase().includes(query)
+        );
+        
+        this.renderItems();
+    }
+    
+    renderItems() {
+        if (this.filteredData.length === 0) {
+            this.list.innerHTML = `<div class="dropdown-item no-results">${this.options.noResultsText}</div>`;
+            return;
+        }
+        
+        const itemsToShow = this.filteredData.slice(0, this.options.maxItems);
+        this.list.innerHTML = itemsToShow.map(item => 
+            `<div class="dropdown-item" data-value="${item.value}">${item.text}</div>`
+        ).join('');
+        
+        // Bind click events for items
+        this.list.querySelectorAll('.dropdown-item[data-value]').forEach(item => {
+            item.addEventListener('click', () => {
+                this.select(item.dataset.value, item.textContent);
+            });
+        });
+    }
+    
+    select(value, text) {
+        this.selectedValue = value;
+        this.selectedText = text;
+        this.input.value = text;
+        this.close();
+        
+        // Trigger change event
+        this.container.dispatchEvent(new CustomEvent('change', {
+            detail: { value, text }
+        }));
+    }
+    
+    setData(data) {
+        this.data = data.map(item => ({
+            value: item.value,
+            text: item.text
+        }));
+        this.filteredData = [...this.data];
+        
+        if (this.isOpen) {
+            this.renderItems();
+        }
+        
+        this.isLoading = false;
+    }
+    
+    setLoading(loading = true) {
+        this.isLoading = loading;
+        if (loading) {
+            this.list.innerHTML = `<div class="dropdown-loading">${this.options.loadingText}</div>`;
+        }
+    }
+    
+    getValue() {
+        return this.selectedValue;
+    }
+    
+    getText() {
+        return this.selectedText;
+    }
+    
+    clear() {
+        this.selectedValue = null;
+        this.selectedText = '';
+        this.input.value = '';
+        this.input.placeholder = this.options.placeholder;
+    }
+}
+
 // Use API_BASE_URL from app.js if available, otherwise define it
 const ADMIN_API_BASE_URL = window.API_BASE_URL || (
     window.location.hostname === 'localhost' 
@@ -17,6 +187,105 @@ let employeesData = [];
 let departmentsData = [];
 let positionsData = [];
 let organizationsData = [];
+let organizationsCache = null; // Кэш организаций для избежания множественных запросов
+
+// Organization Dropdown Manager
+class OrganizationDropdownManager {
+    static cache = null;
+    static loading = false;
+    static dropdowns = new Map();
+    
+    static async getOrganizations() {
+        if (this.cache) {
+            return this.cache;
+        }
+        
+        if (this.loading) {
+            // Ждем завершения текущей загрузки
+            return new Promise((resolve) => {
+                const checkCache = () => {
+                    if (this.cache) {
+                        resolve(this.cache);
+                    } else {
+                        setTimeout(checkCache, 100);
+                    }
+                };
+                checkCache();
+            });
+        }
+        
+        this.loading = true;
+        
+        try {
+            console.log('Loading organizations...');
+            const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const organizations = await response.json();
+            
+            this.cache = organizations.map(org => ({
+                value: org.object_bin,
+                text: `${org.object_company} (${org.object_bin})`
+            }));
+            
+            console.log('Organizations cached:', this.cache.length);
+            return this.cache;
+            
+        } catch (error) {
+            console.error('Error loading organizations:', error);
+            throw error;
+        } finally {
+            this.loading = false;
+        }
+    }
+    
+    static async createDropdown(containerId, options = {}) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            console.warn(`Container ${containerId} not found`);
+            return null;
+        }
+        
+        const dropdown = new SearchableDropdown(container, {
+            placeholder: 'Выберите организацию...',
+            searchPlaceholder: 'Поиск по названию или БИН...',
+            maxItems: 500, // Показывать максимум 500 элементов одновременно
+            ...options
+        });
+        
+        // Показываем состояние загрузки
+        dropdown.setLoading(true);
+        
+        try {
+            const organizations = await this.getOrganizations();
+            dropdown.setData(organizations);
+            this.dropdowns.set(containerId, dropdown);
+            
+            console.log(`Organization dropdown created for ${containerId} with ${organizations.length} items`);
+            return dropdown;
+            
+        } catch (error) {
+            console.error(`Failed to create organization dropdown for ${containerId}:`, error);
+            dropdown.setData([{
+                value: '',
+                text: 'Ошибка загрузки организаций'
+            }]);
+            return dropdown;
+        }
+    }
+    
+    static getDropdown(containerId) {
+        return this.dropdowns.get(containerId);
+    }
+    
+    static clearCache() {
+        this.cache = null;
+        console.log('Organizations cache cleared');
+    }
+}
 
 // Store event handlers to avoid duplicates
 let menuClickHandler = null;
@@ -688,6 +957,44 @@ async function loadOrganizationsForUpload() {
         });
         
         console.log('Upload organizations dropdown populated with', organizations.length, 'items');
+        
+        // Если организаций много (>200), показываем предупреждение
+        if (organizations.length > 200) {
+            console.warn('Large number of organizations detected. Consider using searchable dropdown.');
+            
+            // Добавляем поиск к обычному select
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Поиск организации...';
+            searchInput.className = 'form-control mb-2';
+            searchInput.id = 'upload-org-search';
+            
+            select.parentNode.insertBefore(searchInput, select);
+            
+            // Сохраняем все опции
+            const allOptions = Array.from(select.options);
+            
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                
+                // Очищаем select кроме первой опции
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Добавляем подходящие опции
+                const filteredOptions = allOptions.slice(1).filter(option => 
+                    option.textContent.toLowerCase().includes(query)
+                );
+                
+                // Показываем максимум 100 результатов
+                filteredOptions.slice(0, 100).forEach(option => {
+                    select.appendChild(option.cloneNode(true));
+                });
+                
+                console.log(`Filtered to ${Math.min(filteredOptions.length, 100)} organizations`);
+            });
+        }
         
     } catch (error) {
         console.error('Error loading organizations for upload:', error);
@@ -1407,13 +1714,17 @@ function initSchedulesSection() {
 // Load schedules from 1C
 async function loadSchedules() {
     const tbody = document.getElementById('schedules-tbody');
-    tbody.innerHTML = '<tr><td colspan="2" class="loading">Загрузка данных...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" class="loading">Загрузка данных...</td></tr>';
     
     try {
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list`);
         if (!response.ok) throw new Error('Failed to load schedules');
         
         schedulesData = await response.json();
+        
+        // Загружаем также организации для фильтра
+        await loadScheduleOrganizations();
+        
         displaySchedules(schedulesData);
         document.getElementById('schedules-total').textContent = schedulesData.length;
         
@@ -1429,25 +1740,26 @@ async function loadSchedules() {
 function displaySchedules(schedules) {
     const tbody = document.getElementById('schedules-tbody');
     const searchValue = document.getElementById('schedules-search')?.value.toLowerCase() || '';
+    const orgFilter = document.getElementById('schedules-organization-filter')?.value || '';
     
-    // Filter schedules based on search
-    const filteredSchedules = searchValue 
-        ? schedules.filter(schedule => 
-            schedule.schedule_name.toLowerCase().includes(searchValue)
-          )
-        : schedules;
+    // Filter schedules based on search and organization
+    const filteredSchedules = schedules.filter(schedule => {
+        const matchesSearch = !searchValue || schedule.schedule_name.toLowerCase().includes(searchValue);
+        const matchesOrg = !orgFilter || (schedule.organization_bin && schedule.organization_bin === orgFilter);
+        return matchesSearch && matchesOrg;
+    });
     
     // Update filtered count
     const totalSpan = document.getElementById('schedules-total');
     if (totalSpan) {
         totalSpan.textContent = filteredSchedules.length;
-        if (searchValue && filteredSchedules.length !== schedules.length) {
+        if ((searchValue || orgFilter) && filteredSchedules.length !== schedules.length) {
             totalSpan.innerHTML = `${filteredSchedules.length} <span style="color: #6c757d;">(из ${schedules.length})</span>`;
         }
     }
     
     if (filteredSchedules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="2" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
     
@@ -1456,11 +1768,44 @@ function displaySchedules(schedules) {
             <tr>
                 <td>${schedule.schedule_name}</td>
                 <td>
+                    <small class="text-muted">
+                        ${schedule.organization_name || 'Не указано'}
+                        ${schedule.organization_bin ? `<br><small>(${schedule.organization_bin})</small>` : ''}
+                    </small>
+                </td>
+                <td>
                     <button class="btn btn--sm btn--primary" onclick="openScheduleCard('${schedule.schedule_code}')">Открыть</button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+// Load organizations for schedules filter
+async function loadScheduleOrganizations() {
+    try {
+        const organizations = await OrganizationDropdownManager.getOrganizations();
+        const select = document.getElementById('schedules-organization-filter');
+        
+        if (select) {
+            select.innerHTML = '<option value="">Все организации</option>';
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.value;
+                option.textContent = org.text;
+                select.appendChild(option);
+            });
+            
+            // Add change event listener
+            select.addEventListener('change', () => {
+                displaySchedules(schedulesData);
+            });
+            
+            console.log('Schedule organizations filter populated with', organizations.length, 'options');
+        }
+    } catch (error) {
+        console.error('Error loading organizations for schedules filter:', error);
+    }
 }
 
 // Initialize search functionality for schedules
@@ -1578,6 +1923,22 @@ async function loadScheduleCard1C(scheduleCode) {
         }
         
         const firstSchedule = schedules[0];
+        
+        // Show organization info
+        const orgInfoSection = document.getElementById('schedule-organization-info');
+        const orgElement = document.getElementById('schedule-card-organization');
+        if (orgInfoSection && orgElement) {
+            if (firstSchedule.organization_name || firstSchedule.organization_bin) {
+                orgElement.innerHTML = `
+                    <strong>${firstSchedule.organization_name || 'Название не указано'}</strong>
+                    ${firstSchedule.organization_bin ? `<br><small>БИН: ${firstSchedule.organization_bin}</small>` : ''}
+                `;
+                orgInfoSection.style.display = 'block';
+            } else {
+                orgElement.innerHTML = '<em>Информация об организации недоступна</em>';
+                orgInfoSection.style.display = 'block';
+            }
+        }
         
         // Populate schedule name and times
         const nameElement = document.getElementById('schedule-card-name');
@@ -3426,6 +3787,28 @@ async function loadAIOrganizations() {
         }
     } catch (error) {
         console.error('Error loading organizations for AI recommendation:', error);
+        
+        // Показываем пользователю более понятную ошибку
+        const select = document.getElementById('ai-organization-filter');
+        if (select) {
+            select.innerHTML = '<option value="">❌ Ошибка загрузки организаций</option>';
+            
+            // Добавляем кнопку повторной попытки
+            let retryBtn = document.getElementById('ai-orgs-retry');
+            if (!retryBtn) {
+                retryBtn = document.createElement('button');
+                retryBtn.id = 'ai-orgs-retry';
+                retryBtn.type = 'button';
+                retryBtn.className = 'btn btn-sm btn-outline-warning ml-2';
+                retryBtn.textContent = '🔄 Повторить';
+                retryBtn.onclick = () => {
+                    // Очищаем кэш и повторяем загрузку
+                    OrganizationDropdownManager.clearCache();
+                    loadAIOrganizations();
+                };
+                select.parentNode.appendChild(retryBtn);
+            }
+        }
     }
 }
 
@@ -3610,3 +3993,90 @@ async function processAIRecommendation() {
 
 // AI recommendation functions will be loaded from ai-recommendations.js
 // Remove these exports as they cause reference errors
+
+// Utility function to add search to large selects
+function addSearchToSelect(selectId, threshold = 50) {
+    const select = document.getElementById(selectId);
+    if (!select || select.options.length <= threshold) return;
+    
+    console.log(`Adding search to ${selectId} with ${select.options.length} options`);
+    
+    // Создаем поле поиска
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = `Поиск в ${select.options.length} элементах...`;
+    searchInput.className = 'form-control mb-1';
+    searchInput.style.fontSize = '12px';
+    
+    // Вставляем поле поиска перед селектом
+    select.parentNode.insertBefore(searchInput, select);
+    
+    // Сохраняем все опции
+    const allOptions = Array.from(select.options);
+    const firstOption = allOptions[0]; // Сохраняем первую опцию (обычно "Выберите...")
+    
+    // Добавляем функциональность поиска
+    searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        
+        // Очищаем select
+        select.innerHTML = '';
+        
+        // Добавляем первую опцию обратно
+        if (firstOption) {
+            select.appendChild(firstOption.cloneNode(true));
+        }
+        
+        if (!query) {
+            // Если поиск пуст, показываем все опции (кроме первой)
+            allOptions.slice(1).forEach(option => {
+                select.appendChild(option.cloneNode(true));
+            });
+        } else {
+            // Фильтруем и показываем подходящие опции (максимум 100)
+            const filteredOptions = allOptions.slice(1).filter(option => 
+                option.textContent.toLowerCase().includes(query)
+            );
+            
+            filteredOptions.slice(0, 100).forEach(option => {
+                select.appendChild(option.cloneNode(true));
+            });
+            
+            // Показываем количество найденных результатов
+            if (filteredOptions.length === 0) {
+                const noResults = document.createElement('option');
+                noResults.textContent = 'Ничего не найдено';
+                noResults.disabled = true;
+                select.appendChild(noResults);
+            } else if (filteredOptions.length > 100) {
+                const moreResults = document.createElement('option');
+                moreResults.textContent = `... и еще ${filteredOptions.length - 100} результатов`;
+                moreResults.disabled = true;
+                select.appendChild(moreResults);
+            }
+        }
+    });
+    
+    return searchInput;
+}
+
+// Auto-enhance selects with many options
+document.addEventListener('DOMContentLoaded', () => {
+    // Находим все селекты с большим количеством опций и добавляем к ним поиск
+    setTimeout(() => {
+        document.querySelectorAll('select').forEach(select => {
+            if (select.options.length > 50 && !select.previousElementSibling?.matches('input[type="text"]')) {
+                addSearchToSelect(select.id, 50);
+            }
+        });
+    }, 3000); // Ждем 3 секунды после загрузки DOM для загрузки данных
+});
+
+// Global error handlers
+window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+});

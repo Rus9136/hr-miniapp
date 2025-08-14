@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database_pg');
 const apiSync = require('../utils/apiSync_pg');
+const bodyParser = require('body-parser');
+
+// Create special parser for large 1C imports
+const largeJsonParser = bodyParser.json({ limit: '100mb' });
 
 // Get all employees with department and position info
 router.get('/admin/employees', (req, res) => {
@@ -1530,7 +1534,7 @@ function extractWorkTimesFromScheduleName(scheduleName) {
 }
 
 // Import work schedules data from 1C
-router.post('/admin/schedules/import-1c', async (req, res) => {
+router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
     try {
         const { ДатаВыгрузки, КоличествоГрафиков, Графики } = req.body;
         
@@ -1675,29 +1679,46 @@ router.get('/admin/schedules/1c', async (req, res) => {
         
         let query = `
             SELECT 
-                schedule_name,
-                schedule_code,
-                work_date,
-                work_month,
-                time_type,
-                work_hours,
-                work_start_time,
-                work_end_time,
-                created_at,
-                updated_at
-            FROM work_schedules_1c
+                ws.schedule_name,
+                ws.schedule_code,
+                ws.work_date,
+                ws.work_month,
+                ws.time_type,
+                ws.work_hours,
+                ws.work_start_time,
+                ws.work_end_time,
+                ws.created_at,
+                ws.updated_at,
+                -- Добавляем информацию об организации
+                (SELECT d.object_company 
+                 FROM employee_schedule_assignments esa 
+                 JOIN employees e ON esa.employee_id = e.id 
+                 JOIN departments d ON e.object_code = d.object_code 
+                 WHERE esa.schedule_code = ws.schedule_code 
+                 GROUP BY d.object_company 
+                 ORDER BY COUNT(*) DESC 
+                 LIMIT 1) as organization_name,
+                (SELECT d.object_bin 
+                 FROM employee_schedule_assignments esa 
+                 JOIN employees e ON esa.employee_id = e.id 
+                 JOIN departments d ON e.object_code = d.object_code 
+                 WHERE esa.schedule_code = ws.schedule_code 
+                 GROUP BY d.object_bin 
+                 ORDER BY COUNT(*) DESC 
+                 LIMIT 1) as organization_bin
+            FROM work_schedules_1c ws
             WHERE 1=1
         `;
         
         const params = [];
         
         if (scheduleCode) {
-            query += ` AND schedule_code = $${params.length + 1}`;
+            query += ` AND ws.schedule_code = $${params.length + 1}`;
             params.push(scheduleCode);
         }
         
         if (scheduleName) {
-            query += ` AND schedule_name ILIKE $${params.length + 1}`;
+            query += ` AND ws.schedule_name ILIKE $${params.length + 1}`;
             params.push(`%${scheduleName}%`);
         }
         
@@ -1707,16 +1728,16 @@ router.get('/admin/schedules/1c', async (req, res) => {
         }
         
         if (dateTo) {
-            query += ` AND work_date <= $${params.length + 1}`;
+            query += ` AND ws.work_date <= $${params.length + 1}`;
             params.push(dateTo);
         }
         
         if (month) {
-            query += ` AND work_month = $${params.length + 1}`;
+            query += ` AND ws.work_month = $${params.length + 1}`;
             params.push(month);
         }
         
-        query += ` ORDER BY schedule_name, work_date LIMIT 1000`;
+        query += ` ORDER BY ws.schedule_name, ws.work_date LIMIT 1000`;
         
         const schedules = await db.queryRows(query, params);
         
@@ -1751,16 +1772,33 @@ router.get('/admin/schedules/1c/list', async (req, res) => {
     try {
         const schedules = await db.queryRows(`
             SELECT DISTINCT 
-                schedule_name,
-                schedule_code,
-                COUNT(*) as work_days_count,
-                MIN(work_date) as start_date,
-                MAX(work_date) as end_date,
-                AVG(work_hours) as avg_hours,
-                MAX(created_at) as last_updated
-            FROM work_schedules_1c
-            GROUP BY schedule_name, schedule_code
-            ORDER BY schedule_name
+                ws.schedule_name,
+                ws.schedule_code,
+                COUNT(ws.*) as work_days_count,
+                MIN(ws.work_date) as start_date,
+                MAX(ws.work_date) as end_date,
+                AVG(ws.work_hours) as avg_hours,
+                MAX(ws.created_at) as last_updated,
+                -- Получаем наиболее часто встречающуюся организацию для этого графика
+                (SELECT d.object_company 
+                 FROM employee_schedule_assignments esa 
+                 JOIN employees e ON esa.employee_id = e.id 
+                 JOIN departments d ON e.object_code = d.object_code 
+                 WHERE esa.schedule_code = ws.schedule_code 
+                 GROUP BY d.object_company 
+                 ORDER BY COUNT(*) DESC 
+                 LIMIT 1) as organization_name,
+                (SELECT d.object_bin 
+                 FROM employee_schedule_assignments esa 
+                 JOIN employees e ON esa.employee_id = e.id 
+                 JOIN departments d ON e.object_code = d.object_code 
+                 WHERE esa.schedule_code = ws.schedule_code 
+                 GROUP BY d.object_bin 
+                 ORDER BY COUNT(*) DESC 
+                 LIMIT 1) as organization_bin
+            FROM work_schedules_1c ws
+            GROUP BY ws.schedule_name, ws.schedule_code
+            ORDER BY ws.schedule_name
         `);
         
         res.json(schedules);

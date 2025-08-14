@@ -1,5 +1,95 @@
 /* Admin Panel Styles */
 
+/* Searchable Dropdown Component */
+.searchable-dropdown {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.searchable-dropdown input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+}
+
+.searchable-dropdown input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.searchable-dropdown .dropdown-arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #666;
+    transition: transform 0.2s;
+}
+
+.searchable-dropdown.open .dropdown-arrow {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.searchable-dropdown .dropdown-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.searchable-dropdown.open .dropdown-list {
+    display: block;
+}
+
+.searchable-dropdown .dropdown-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    transition: background-color 0.1s;
+}
+
+.searchable-dropdown .dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.searchable-dropdown .dropdown-item.selected {
+    background-color: #007bff;
+    color: white;
+}
+
+.searchable-dropdown .dropdown-item.no-results {
+    color: #999;
+    font-style: italic;
+    cursor: default;
+}
+
+.searchable-dropdown .dropdown-item.no-results:hover {
+    background-color: transparent;
+}
+
+.searchable-dropdown .dropdown-loading {
+    padding: 10px 12px;
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+}
+
 /* Layout */
 .admin-layout {
     display: flex;
