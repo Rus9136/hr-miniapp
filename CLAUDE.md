@@ -57,7 +57,14 @@ URL:      https://madlen.space/
 └── docs/
     ├── API.md         # Документация API
     ├── DEPLOYMENT.md  # Инструкции по деплою
-    └── TROUBLESHOOTING.md # Решение проблем
+    ├── TROUBLESHOOTING.md # Решение проблем
+    └── 🆕 Интеграция с 1С (полный пакет документации):
+        ├── API_1C_INTEGRATION.md        # Полная документация (910 строк)
+        ├── API_1C_QUICK_REFERENCE.md    # Быстрая справка
+        ├── 1C_INTEGRATION_EXAMPLES.bsl  # Примеры кода на BSL (485 строк)
+        ├── 1C_INTEGRATION_DIAGRAM.md    # Визуальные диаграммы
+        ├── 1C_INTEGRATION_SUMMARY.md    # Краткая сводка
+        └── README.md                    # Центральная документация
 ```
 
 ## 🛠️ Основные команды

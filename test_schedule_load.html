@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест загрузки графика</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; background: #f8f9fa; }
+        .test-container { max-width: 800px; margin: 0 auto; }
+        .mock-schedule-card { border: 1px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 8px; background: white; }
+        .result-section { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Тест загрузки карточки графика 1С</h1>
+        
+        <div class="mock-schedule-card">
+            <h3>Тестовая карточка графика</h3>
+            
+            <!-- Имитируем элементы из админ-панели -->
+            <div class="form-row" id="schedule-organization-info" style="display: none;">
+                <div class="form-group">
+                    <label>Организация</label>
+                    <div class="alert alert-info" id="schedule-card-organization" style="margin: 0; padding: 8px 12px;">
+                        Информация об организации загружается...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="schedule-card-name">Название графика</label>
+                    <input type="text" id="schedule-card-name" class="form-control" placeholder="Название графика">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="schedule-card-check-in">Время начала</label>
+                    <input type="time" id="schedule-card-check-in" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="schedule-card-check-out">Время окончания</label>
+                    <input type="time" id="schedule-card-check-out" class="form-control">
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-controls">
+            <h3>Тестовые кнопки</h3>
+            <button id="test-api-direct" class="btn btn-primary">1. Тестировать API напрямую</button>
+            <button id="test-load-function" class="btn btn-success ml-2">2. Тестировать loadScheduleCard1C()</button>
+            <button id="test-different-schedule" class="btn btn-info ml-2">3. Тестировать другой график</button>
+        </div>
+        
+        <div id="test-results" class="result-section" style="display: none;"></div>
+    </div>
+
+    <script>
+        const ADMIN_API_BASE_URL = 'https://madlen.space/api';
+        const TEST_SCHEDULE_CODE = '76c06530-1aad-11f0-90de-3cecef8cc60b'; // 05:00-17:00/MG 1 смена
+        const TEST_SCHEDULE_CODE_2 = '73e692d3-15c8-11f0-90de-3cecef8cc60b'; // 06:00-18:00/MG 1 смена
+        
+        // Загружаем admin.js
+        const script = document.createElement('script');
+        script.src = 'admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init';
+        document.head.appendChild(script);
+        
+        function showResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = `result-section ${type}`;
+            resultsDiv.innerHTML = message;
+        }
+        
+        script.onload = function() {
+            console.log('✅ Admin.js загружен');
+            
+            // Тест 1: Прямой вызов API
+            document.getElementById('test-api-direct').onclick = async () => {
+                showResult('🔄 Тестируем API напрямую...', 'info');
+                
+                try {
+                    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c?scheduleCode=${TEST_SCHEDULE_CODE}`);
+                    const data = await response.json();
+                    
+                    if (data.schedules && data.schedules.length > 0) {
+                        const schedule = data.schedules[0];
+                        showResult(`
+                            <strong>✅ API работает успешно!</strong><br>
+                            Название: ${schedule.schedule_name}<br>
+                            Организация: ${schedule.organization_name || 'Не указана'}<br>
+                            БИН: ${schedule.organization_bin || 'Не указан'}<br>
+                            Время: ${schedule.work_start_time} - ${schedule.work_end_time}<br>
+                            Всего записей: ${data.schedules.length}
+                        `, 'success');
+                    } else {
+                        showResult('❌ API вернул пустые данные', 'error');
+                    }
+                } catch (error) {
+                    showResult(`❌ Ошибка API: ${error.message}`, 'error');
+                }
+            };
+            
+            // Тест 2: Функция loadScheduleCard1C
+            document.getElementById('test-load-function').onclick = async () => {
+                showResult('🔄 Тестируем loadScheduleCard1C()...', 'info');
+                
+                if (typeof loadScheduleCard1C !== 'function') {
+                    showResult('❌ Функция loadScheduleCard1C не найдена в admin.js', 'error');
+                    return;
+                }
+                
+                try {
+                    await loadScheduleCard1C(TEST_SCHEDULE_CODE);
+                    
+                    // Проверяем, что поля заполнились
+                    const nameField = document.getElementById('schedule-card-name');
+                    const orgInfo = document.getElementById('schedule-card-organization');
+                    const orgSection = document.getElementById('schedule-organization-info');
+                    
+                    let result = '<strong>✅ Функция выполнена успешно!</strong><br>';
+                    result += `Название графика: ${nameField?.value || 'НЕ ЗАПОЛНЕНО'}<br>`;
+                    result += `Организация видима: ${orgSection?.style.display !== 'none' ? 'ДА' : 'НЕТ'}<br>`;
+                    result += `Информация об организации: ${orgInfo?.innerHTML || 'НЕ ЗАПОЛНЕНО'}<br>`;
+                    
+                    showResult(result, 'success');
+                } catch (error) {
+                    showResult(`❌ Ошибка в loadScheduleCard1C: ${error.message}`, 'error');
+                }
+            };
+            
+            // Тест 3: Другой график
+            document.getElementById('test-different-schedule').onclick = async () => {
+                showResult('🔄 Тестируем другой график...', 'info');
+                
+                try {
+                    await loadScheduleCard1C(TEST_SCHEDULE_CODE_2);
+                    
+                    const nameField = document.getElementById('schedule-card-name');
+                    const checkInField = document.getElementById('schedule-card-check-in');
+                    const checkOutField = document.getElementById('schedule-card-check-out');
+                    
+                    let result = '<strong>✅ Второй график загружен!</strong><br>';
+                    result += `Название: ${nameField?.value || 'НЕ ЗАПОЛНЕНО'}<br>`;
+                    result += `Время входа: ${checkInField?.value || 'НЕ ЗАПОЛНЕНО'}<br>`;
+                    result += `Время выхода: ${checkOutField?.value || 'НЕ ЗАПОЛНЕНО'}<br>`;
+                    
+                    showResult(result, 'success');
+                } catch (error) {
+                    showResult(`❌ Ошибка: ${error.message}`, 'error');
+                }
+            };
+        };
+        
+        script.onerror = function() {
+            showResult('❌ Ошибка загрузки admin.js', 'error');
+        };
+    </script>
+</body>
+</html>

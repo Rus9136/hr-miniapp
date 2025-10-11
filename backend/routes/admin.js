@@ -1677,6 +1677,7 @@ router.get('/admin/schedules/1c', async (req, res) => {
     try {
         const { scheduleCode, scheduleName, dateFrom, dateTo, month } = req.query;
         
+        // First, try a simple query without subqueries
         let query = `
             SELECT 
                 ws.schedule_name,
@@ -1688,24 +1689,7 @@ router.get('/admin/schedules/1c', async (req, res) => {
                 ws.work_start_time,
                 ws.work_end_time,
                 ws.created_at,
-                ws.updated_at,
-                -- Добавляем информацию об организации
-                (SELECT d.object_company 
-                 FROM employee_schedule_assignments esa 
-                 JOIN employees e ON esa.employee_id = e.id 
-                 JOIN departments d ON e.object_code = d.object_code 
-                 WHERE esa.schedule_code = ws.schedule_code 
-                 GROUP BY d.object_company 
-                 ORDER BY COUNT(*) DESC 
-                 LIMIT 1) as organization_name,
-                (SELECT d.object_bin 
-                 FROM employee_schedule_assignments esa 
-                 JOIN employees e ON esa.employee_id = e.id 
-                 JOIN departments d ON e.object_code = d.object_code 
-                 WHERE esa.schedule_code = ws.schedule_code 
-                 GROUP BY d.object_bin 
-                 ORDER BY COUNT(*) DESC 
-                 LIMIT 1) as organization_bin
+                ws.updated_at
             FROM work_schedules_1c ws
             WHERE 1=1
         `;
@@ -1723,7 +1707,7 @@ router.get('/admin/schedules/1c', async (req, res) => {
         }
         
         if (dateFrom) {
-            query += ` AND work_date >= $${params.length + 1}`;
+            query += ` AND ws.work_date >= $${params.length + 1}`;
             params.push(dateFrom);
         }
         
@@ -1739,10 +1723,42 @@ router.get('/admin/schedules/1c', async (req, res) => {
         
         query += ` ORDER BY ws.schedule_name, ws.work_date LIMIT 1000`;
         
+        console.log('Executing query:', query);
+        console.log('With params:', params);
+        
         const schedules = await db.queryRows(query, params);
         
-        // Get summary statistics
-        const statsQuery = `
+        // Add organization info separately if we have schedules
+        if (schedules.length > 0 && scheduleCode) {
+            try {
+                const orgQuery = `
+                    SELECT 
+                        d.object_company as organization_name,
+                        d.object_bin as organization_bin
+                    FROM employee_schedule_assignments esa 
+                    JOIN employees e ON esa.employee_id = e.id 
+                    JOIN departments d ON e.object_code = d.object_code 
+                    WHERE esa.schedule_code = $1 
+                    GROUP BY d.object_company, d.object_bin 
+                    ORDER BY COUNT(*) DESC 
+                    LIMIT 1
+                `;
+                
+                const orgInfo = await db.queryRow(orgQuery, [scheduleCode]);
+                
+                // Add organization info to all schedule records
+                schedules.forEach(schedule => {
+                    schedule.organization_name = orgInfo?.organization_name || null;
+                    schedule.organization_bin = orgInfo?.organization_bin || null;
+                });
+            } catch (orgError) {
+                console.error('Error getting organization info:', orgError);
+                // Continue without organization info
+            }
+        }
+        
+        // Get summary statistics - build a simplified stats query
+        let statsQuery = `
             SELECT 
                 COUNT(DISTINCT schedule_code) as total_schedules,
                 COUNT(*) as total_work_days,
@@ -1750,10 +1766,42 @@ router.get('/admin/schedules/1c', async (req, res) => {
                 MAX(work_date) as latest_date,
                 SUM(work_hours) as total_hours
             FROM work_schedules_1c
-            ${params.length > 0 ? 'WHERE ' + query.split('WHERE ')[1].split(' ORDER BY')[0] : ''}
         `;
         
-        const stats = await db.queryRow(statsQuery, params);
+        // Build WHERE conditions for stats query (without subqueries)
+        const statsParams = [];
+        let whereConditions = [];
+        
+        if (scheduleCode) {
+            whereConditions.push(`schedule_code = $${statsParams.length + 1}`);
+            statsParams.push(scheduleCode);
+        }
+        
+        if (scheduleName) {
+            whereConditions.push(`schedule_name ILIKE $${statsParams.length + 1}`);
+            statsParams.push(`%${scheduleName}%`);
+        }
+        
+        if (dateFrom) {
+            whereConditions.push(`work_date >= $${statsParams.length + 1}`);
+            statsParams.push(dateFrom);
+        }
+        
+        if (dateTo) {
+            whereConditions.push(`work_date <= $${statsParams.length + 1}`);
+            statsParams.push(dateTo);
+        }
+        
+        if (month) {
+            whereConditions.push(`work_month = $${statsParams.length + 1}`);
+            statsParams.push(month);
+        }
+        
+        if (whereConditions.length > 0) {
+            statsQuery += ' WHERE ' + whereConditions.join(' AND ');
+        }
+        
+        const stats = await db.queryRow(statsQuery, statsParams);
         
         res.json({
             schedules,

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест UI организаций</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="admin.css?v=ai-recommendation-v11.0&ts=20250702-2000&webhook=added">
+    <style>
+        body { padding: 20px; background: #f8f9fa; }
+        .test-section { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; border: 1px solid #dee2e6; }
+        .result { margin-top: 15px; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест UI организаций в админ-панели</h1>
+        
+        <div class="test-section">
+            <h3>1. Проверка API endpoints</h3>
+            <button id="test-schedules-api" class="btn btn-primary">Тестировать API графиков</button>
+            <button id="test-organizations-api" class="btn btn-secondary ml-2">Тестировать API организаций</button>
+            <div id="api-results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. Создание SearchableDropdown</h3>
+            <label for="org-dropdown">Выберите организацию:</label>
+            <div id="org-dropdown-container"></div>
+            <button id="create-dropdown" class="btn btn-success mt-2">Создать выпадающий список</button>
+            <div id="dropdown-results"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. Имитация админ-панели "Шаблоны графиков"</h3>
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="filter-organization">Фильтр по организации:</label>
+                    <select id="filter-organization" class="form-control">
+                        <option value="">Все организации</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <button id="load-schedules" class="btn btn-info mt-4">Загрузить графики</button>
+                </div>
+            </div>
+            <div id="schedules-list" class="mt-3"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. Проверка отображения организации в карточке графика</h3>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Тестовый график: 09:00-18:00/MG 1 смена</h5>
+                    <div id="organization-info-display">
+                        <strong>Организация:</strong> <span class="text-muted">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_API_BASE_URL = 'https://madlen.space/api';
+        
+        // Загружаем admin.js
+        const script = document.createElement('script');
+        script.src = 'admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init';
+        document.head.appendChild(script);
+        
+        script.onload = function() {
+            console.log('✅ Admin.js загружен успешно');
+            
+            // Тест 1: API endpoints
+            document.getElementById('test-schedules-api').onclick = async () => {
+                const resultsDiv = document.getElementById('api-results');
+                resultsDiv.innerHTML = '<div class="info">Загрузка API графиков...</div>';
+                
+                try {
+                    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list`);
+                    const data = await response.json();
+                    
+                    if (data.length > 0 && data[0].organization_name) {
+                        resultsDiv.innerHTML = `
+                            <div class="success">
+                                ✅ API графиков работает! Найдено ${data.length} графиков<br>
+                                Пример: "${data[0].schedule_name}" - ${data[0].organization_name}
+                            </div>
+                        `;
+                    } else {
+                        resultsDiv.innerHTML = `
+                            <div class="error">
+                                ❌ API работает, но поле organization_name отсутствует
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Ошибка API: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            
+            document.getElementById('test-organizations-api').onclick = async () => {
+                const resultsDiv = document.getElementById('api-results');
+                resultsDiv.innerHTML = '<div class="info">Загрузка API организаций...</div>';
+                
+                try {
+                    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+                    const data = await response.json();
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="success">
+                            ✅ API организаций работает! Найдено ${data.length} организаций<br>
+                            Примеры: ${data.slice(0, 3).map(o => o.object_company).join(', ')}
+                        </div>
+                    `;
+                } catch (error) {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Ошибка API: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            
+            // Тест 2: SearchableDropdown
+            document.getElementById('create-dropdown').onclick = async () => {
+                const resultsDiv = document.getElementById('dropdown-results');
+                resultsDiv.innerHTML = '<div class="info">Создание выпадающего списка...</div>';
+                
+                try {
+                    if (typeof OrganizationDropdownManager !== 'undefined') {
+                        const dropdown = await OrganizationDropdownManager.createDropdown('org-dropdown-container', {
+                            placeholder: 'Поиск организации...'
+                        });
+                        
+                        // Добавляем обработчик изменений
+                        document.getElementById('org-dropdown-container').addEventListener('change', (e) => {
+                            resultsDiv.innerHTML = `
+                                <div class="success">
+                                    ✅ Dropdown создан! Выбрано: ${e.detail.text} (${e.detail.value})
+                                </div>
+                            `;
+                        });
+                        
+                        resultsDiv.innerHTML = `
+                            <div class="success">
+                                ✅ SearchableDropdown создан успешно!
+                            </div>
+                        `;
+                    } else {
+                        resultsDiv.innerHTML = `
+                            <div class="error">
+                                ❌ OrganizationDropdownManager не найден в admin.js
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Ошибка создания dropdown: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            
+            // Тест 3: Загрузка графиков с фильтром
+            document.getElementById('load-schedules').onclick = async () => {
+                const listDiv = document.getElementById('schedules-list');
+                listDiv.innerHTML = '<div class="info">Загрузка графиков...</div>';
+                
+                try {
+                    const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list`);
+                    const schedules = await response.json();
+                    
+                    // Заполняем фильтр организаций
+                    const orgFilter = document.getElementById('filter-organization');
+                    const organizations = [...new Set(schedules.map(s => s.organization_name).filter(Boolean))];
+                    
+                    organizations.forEach(org => {
+                        const option = document.createElement('option');
+                        option.value = org;
+                        option.textContent = org;
+                        orgFilter.appendChild(option);
+                    });
+                    
+                    // Отображаем первые 5 графиков
+                    const html = schedules.slice(0, 5).map(s => `
+                        <div class="card mb-2">
+                            <div class="card-body">
+                                <h6 class="card-title">${s.schedule_name}</h6>
+                                <small class="text-muted">
+                                    Организация: <strong>${s.organization_name || 'Не указана'}</strong>
+                                    | БИН: ${s.organization_bin || 'Не указан'}
+                                </small>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    listDiv.innerHTML = `
+                        <div class="success mb-3">✅ Загружено ${schedules.length} графиков</div>
+                        ${html}
+                    `;
+                } catch (error) {
+                    listDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Ошибка загрузки: ${error.message}
+                        </div>
+                    `;
+                }
+            };
+        };
+        
+        script.onerror = function() {
+            console.error('❌ Ошибка загрузки admin.js');
+        };
+    </script>
+</body>
+</html>
