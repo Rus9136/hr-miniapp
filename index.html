@@ -484,6 +484,7 @@
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
                         <li><a href="#" data-section="reports" class="menu-item">Отчеты</a></li>
+                        <li><a href="#" data-section="off-schedule-report" class="menu-item">Вне графика</a></li>
                         <li><a href="#" data-section="ai-recommendation" class="menu-item">AI-рекомендация</a></li>
                         <li><a href="#" data-section="payroll-report" class="menu-item">Отчет по ФОТ</a></li>
                     </ul>
@@ -502,6 +503,7 @@
                     <h3 class="section-title">Загрузка данных</h3>
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="upload" class="menu-item">Импорт данных</a></li>
+                        <li><a href="#" data-section="cron-scheduler" class="menu-item">Автозагрузка табеля</a></li>
                     </ul>
                 </div>
             </aside>
@@ -730,7 +732,54 @@
                         </table>
                     </div>
                 </section>
-                
+
+                <!-- Секция: Отчет по сотрудникам вне графика -->
+                <section id="off-schedule-report-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Отчет по сотрудникам вне графика</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <input type="date" id="off-schedule-date" class="form-control" style="margin-right: 10px;">
+                                <select id="off-schedule-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                    <option value="">Все организации</option>
+                                </select>
+                                <button id="load-off-schedule-report-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Сформировать отчет</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                                <button id="clear-off-schedule-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            </div>
+                            <span class="total-count">Найдено: <span id="off-schedule-total">0</span> сотрудников</span>
+                        </div>
+                    </div>
+                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
+                        <p style="margin: 0; color: #1976D2; font-size: 14px;">
+                            📋 <strong>Описание отчета:</strong> Показывает сотрудников, которые пришли на работу в день, когда по их графику был выходной.
+                        </p>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table" id="off-schedule-report-table">
+                            <thead>
+                                <tr>
+                                    <th>Дата</th>
+                                    <th>Сотрудник</th>
+                                    <th>Табельный номер</th>
+                                    <th>Организация</th>
+                                    <th>Подразделение</th>
+                                    <th>График работы</th>
+                                    <th>Значение графика</th>
+                                    <th>Время входа</th>
+                                </tr>
+                            </thead>
+                            <tbody id="off-schedule-report-body">
+                                <tr>
+                                    <td colspan="8" class="text-center">Выберите дату и нажмите "Сформировать отчет"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <!-- Секция: AI-рекомендация -->
                 <section id="ai-recommendation-section" class="content-section">
                     <div class="section-header">
@@ -844,7 +893,33 @@
                     <div class="section-header">
                         <h2>Загрузка данных</h2>
                     </div>
-                    
+
+                    <!-- Информация о CRON автозагрузке -->
+                    <div class="upload-block" style="background: #f8f9fa; border-left: 4px solid #28a745;">
+                        <h3>⏰ Автоматическая загрузка (CRON)</h3>
+                        <div class="cron-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top: 16px;">
+                            <div class="cron-info-item">
+                                <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">Последний запуск:</label>
+                                <span id="cron-last-run" style="color: #212529; font-size: 14px;">—</span>
+                            </div>
+                            <div class="cron-info-item">
+                                <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">Следующий запуск:</label>
+                                <span id="cron-next-run" style="color: #212529; font-size: 14px;">—</span>
+                            </div>
+                            <div class="cron-info-item">
+                                <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">Записано событий:</label>
+                                <span id="cron-events-count" style="color: #28a745; font-weight: 600; font-size: 14px;">—</span>
+                            </div>
+                            <div class="cron-info-item">
+                                <label style="font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">Статус:</label>
+                                <span id="cron-status-badge" class="badge" style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px;">—</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; text-align: right;">
+                            <a href="#" data-section="cron-scheduler" class="menu-item" style="color: #007bff; text-decoration: none; font-size: 14px;">→ Подробнее в разделе "Автозагрузка табеля"</a>
+                        </div>
+                    </div>
+
                     <!-- Синхронизация справочников -->
                     <div class="upload-block">
                         <h3>Синхронизация справочников</h3>
@@ -918,12 +993,14 @@
                         <div class="schedule-header-form">
                             <input type="hidden" id="schedule-card-id">
                             
-                            <!-- Информация об организации (только для просмотра) -->
+                            <!-- Информация об организациях (только для просмотра) -->
                             <div class="form-row" id="schedule-organization-info" style="display: none;">
-                                <div class="form-group">
-                                    <label>Организация</label>
-                                    <div class="alert alert-info" id="schedule-card-organization" style="margin: 0; padding: 8px 12px;">
-                                        Информация об организации загружается...
+                                <div class="form-group" style="width: 100%;">
+                                    <label>Организации</label>
+                                    <div id="schedule-card-organization" style="margin: 0; padding: 8px 12px;">
+                                        <div class="alert alert-info" style="margin: 0;">
+                                            Информация об организациях загружается...
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1058,7 +1135,112 @@
                         </table>
                     </div>
                 </section>
-                
+
+                <!-- Секция: Автозагрузка табеля (CRON) -->
+                <section id="cron-scheduler-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Автоматическая загрузка табеля</h2>
+                        <div class="section-controls">
+                            <button id="cron-manual-run-btn" class="btn btn--primary">
+                                <span class="btn-text">⚡ Запустить сейчас</span>
+                                <span class="spinner" style="display: none;">⏳</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Статус планировщика -->
+                    <div class="upload-block">
+                        <h3>Статус планировщика</h3>
+                        <div id="cron-status-container">
+                            <div class="status-grid">
+                                <div class="status-item">
+                                    <label>Статус:</label>
+                                    <span id="cron-enabled-status" class="badge">—</span>
+                                </div>
+                                <div class="status-item">
+                                    <label>Расписание:</label>
+                                    <span id="cron-schedule">—</span>
+                                </div>
+                                <div class="status-item">
+                                    <label>Период загрузки:</label>
+                                    <span id="cron-days-back">—</span>
+                                </div>
+                                <div class="status-item">
+                                    <label>Следующий запуск:</label>
+                                    <span id="cron-next-run">—</span>
+                                </div>
+                                <div class="status-item">
+                                    <label>Последний запуск:</label>
+                                    <span id="cron-last-run">—</span>
+                                </div>
+                                <div class="status-item">
+                                    <label>Выполняется сейчас:</label>
+                                    <span id="cron-is-running" class="badge">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Статистика по организациям -->
+                    <div class="upload-block">
+                        <h3>Статистика по организациям (за последние 7 дней)</h3>
+                        <div class="table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Организация</th>
+                                        <th>БИН</th>
+                                        <th>Запусков</th>
+                                        <th>Успешно</th>
+                                        <th>Ошибок</th>
+                                        <th>События</th>
+                                        <th>Записи</th>
+                                        <th>Последний запуск</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cron-summary-tbody">
+                                    <tr><td colspan="8" class="no-data">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- История запусков -->
+                    <div class="upload-block">
+                        <h3>История запусков (последние 50)</h3>
+                        <div class="section-controls" style="margin-bottom: 10px;">
+                            <select id="cron-filter-status" class="search-input" style="width: 200px; margin-right: 10px;">
+                                <option value="">Все статусы</option>
+                                <option value="success">Успешные</option>
+                                <option value="error">С ошибками</option>
+                                <option value="running">Выполняются</option>
+                            </select>
+                            <select id="cron-filter-org" class="search-input" style="width: 300px;">
+                                <option value="">Все организации</option>
+                            </select>
+                        </div>
+                        <div class="table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 150px;">Дата запуска</th>
+                                        <th>Организация</th>
+                                        <th style="width: 120px;">Период</th>
+                                        <th style="width: 80px;">События</th>
+                                        <th style="width: 80px;">Записи</th>
+                                        <th style="width: 100px;">Статус</th>
+                                        <th style="width: 80px;">Время (сек)</th>
+                                        <th>Ошибка</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cron-logs-tbody">
+                                    <tr><td colspan="8" class="no-data">Загрузка...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Секция: Назначение графиков -->
                 <section id="schedule-assign-section" class="content-section">
                     <div class="section-header">
@@ -1408,5 +1590,6 @@
     <script src="app.js?v=admin-auth-fix-v10.4&ts=20250701-1955&admin-fix=true"></script>
     <script src="admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init"></script>
     <script src="ai-recommendations.js?v=OPENAI-FIX-v1.0&ts=20250715-1700"></script>
+    <script src="cron-scheduler-admin.js?v=1.0&ts=20251116"></script>
 </body>
 </html>

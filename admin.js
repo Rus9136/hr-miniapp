@@ -500,6 +500,9 @@ function switchSection(sectionName) {
         case 'payroll-report':
             initPayrollReportSection();
             break;
+        case 'off-schedule-report':
+            initOffScheduleReportSection();
+            break;
         case 'ai-recommendation':
             // Check if AI recommendations script is loaded
             if (typeof window.initAIRecommendationSection === 'function') {
@@ -518,6 +521,13 @@ function switchSection(sectionName) {
             break;
         case 'upload':
             initUploadSection();
+            break;
+        case 'cron-scheduler':
+            if (typeof initCronSchedulerSection === 'function') {
+                initCronSchedulerSection();
+            } else {
+                console.error('CRON Scheduler script not loaded');
+            }
             break;
         case 'news':
             loadAdminNews();
@@ -899,26 +909,29 @@ let uploadSectionInitialized = false;
 // Initialize upload section
 function initUploadSection() {
     if (uploadSectionInitialized) return;
-    
+
     // Load organizations for dropdown
     loadOrganizationsForUpload();
-    
+
+    // Load CRON status info
+    loadCronStatusForUploadSection();
+
     // Sync buttons
     document.getElementById('sync-employees').addEventListener('click', () => syncData('employees'));
     document.getElementById('sync-departments').addEventListener('click', () => syncData('departments'));
     document.getElementById('sync-positions').addEventListener('click', () => syncData('positions'));
-    
+
     // Timesheet upload form
     document.getElementById('timesheet-upload-form').addEventListener('submit', handleTimesheetUpload);
-    
+
     // Set default dates (current month)
     const today = new Date();
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
+
     document.getElementById('upload-date-from').value = firstDay.toISOString().split('T')[0];
     document.getElementById('upload-date-to').value = lastDay.toISOString().split('T')[0];
-    
+
     uploadSectionInitialized = true;
 }
 
@@ -1745,7 +1758,17 @@ function displaySchedules(schedules) {
     // Filter schedules based on search and organization
     const filteredSchedules = schedules.filter(schedule => {
         const matchesSearch = !searchValue || schedule.schedule_name.toLowerCase().includes(searchValue);
-        const matchesOrg = !orgFilter || (schedule.organization_bin && schedule.organization_bin === orgFilter);
+        // Check if schedule matches organization filter (check organizations array or fallback to single org)
+        let matchesOrg = true;
+        if (orgFilter) {
+            const orgs = schedule.organizations || [];
+            if (orgs.length > 0) {
+                matchesOrg = orgs.some(org => org.organization_bin === orgFilter);
+            } else {
+                // Fallback: check single organization fields
+                matchesOrg = schedule.organization_bin === orgFilter;
+            }
+        }
         return matchesSearch && matchesOrg;
     });
     
@@ -1764,14 +1787,63 @@ function displaySchedules(schedules) {
     }
     
     tbody.innerHTML = filteredSchedules.map(schedule => {
+        // Get organizations array or fallback to single organization
+        const orgs = schedule.organizations || [];
+        let orgDisplay = '';
+        
+        if (orgs.length > 0) {
+            if (orgs.length === 1) {
+                // Single organization
+                orgDisplay = `
+                    <small class="text-muted">
+                        ${orgs[0].organization_name || 'Не указано'}
+                        ${orgs[0].organization_bin ? `<br><small>(${orgs[0].organization_bin})</small>` : ''}
+                    </small>
+                `;
+            } else if (orgs.length <= 3) {
+                // Show all organizations (up to 3)
+                orgDisplay = orgs.map(org => `
+                    <div style="margin-bottom: 4px;">
+                        <small class="text-muted">
+                            ${org.organization_name || 'Не указано'}
+                            ${org.organization_bin ? ` <small>(${org.organization_bin})</small>` : ''}
+                        </small>
+                    </div>
+                `).join('');
+            } else {
+                // Show first 2 and count
+                orgDisplay = orgs.slice(0, 2).map(org => `
+                    <div style="margin-bottom: 4px;">
+                        <small class="text-muted">
+                            ${org.organization_name || 'Не указано'}
+                            ${org.organization_bin ? ` <small>(${org.organization_bin})</small>` : ''}
+                        </small>
+                    </div>
+                `).join('') + `
+                    <div>
+                        <small class="text-muted" style="font-style: italic;">
+                            и еще ${orgs.length - 2} организаций
+                        </small>
+                    </div>
+                `;
+            }
+        } else if (schedule.organization_name || schedule.organization_bin) {
+            // Fallback: show single organization (backward compatibility)
+            orgDisplay = `
+                <small class="text-muted">
+                    ${schedule.organization_name || 'Не указано'}
+                    ${schedule.organization_bin ? `<br><small>(${schedule.organization_bin})</small>` : ''}
+                </small>
+            `;
+        } else {
+            orgDisplay = '<small class="text-muted">Не указано</small>';
+        }
+        
         return `
             <tr>
                 <td>${schedule.schedule_name}</td>
                 <td>
-                    <small class="text-muted">
-                        ${schedule.organization_name || 'Не указано'}
-                        ${schedule.organization_bin ? `<br><small>(${schedule.organization_bin})</small>` : ''}
-                    </small>
+                    ${orgDisplay}
                 </td>
                 <td>
                     <button class="btn btn--sm btn--primary" onclick="openScheduleCard('${schedule.schedule_code}')">Открыть</button>
@@ -1924,18 +1996,37 @@ async function loadScheduleCard1C(scheduleCode) {
         
         const firstSchedule = schedules[0];
         
-        // Show organization info
+        // Show organizations info
         const orgInfoSection = document.getElementById('schedule-organization-info');
         const orgElement = document.getElementById('schedule-card-organization');
         if (orgInfoSection && orgElement) {
-            if (firstSchedule.organization_name || firstSchedule.organization_bin) {
+            // Check if we have organizations array
+            const organizations = firstSchedule.organizations || [];
+            
+            if (organizations.length > 0) {
+                // Display list of organizations
+                let orgsHTML = '';
+                organizations.forEach((org, index) => {
+                    orgsHTML += `
+                        <div class="alert alert-info" style="margin-bottom: ${index < organizations.length - 1 ? '8px' : '0'}; padding: 8px 12px;">
+                            <strong>${org.organization_name || 'Название не указано'}</strong>
+                            ${org.organization_bin ? `<br><small>БИН: ${org.organization_bin}</small>` : ''}
+                        </div>
+                    `;
+                });
+                orgElement.innerHTML = orgsHTML;
+                orgInfoSection.style.display = 'block';
+            } else if (firstSchedule.organization_name || firstSchedule.organization_bin) {
+                // Fallback: show single organization (backward compatibility)
                 orgElement.innerHTML = `
-                    <strong>${firstSchedule.organization_name || 'Название не указано'}</strong>
-                    ${firstSchedule.organization_bin ? `<br><small>БИН: ${firstSchedule.organization_bin}</small>` : ''}
+                    <div class="alert alert-info" style="margin: 0; padding: 8px 12px;">
+                        <strong>${firstSchedule.organization_name || 'Название не указано'}</strong>
+                        ${firstSchedule.organization_bin ? `<br><small>БИН: ${firstSchedule.organization_bin}</small>` : ''}
+                    </div>
                 `;
                 orgInfoSection.style.display = 'block';
             } else {
-                orgElement.innerHTML = '<em>Информация об организации недоступна</em>';
+                orgElement.innerHTML = '<div class="alert alert-warning" style="margin: 0; padding: 8px 12px;"><em>Информация об организациях недоступна</em></div>';
                 orgInfoSection.style.display = 'block';
             }
         }
@@ -4071,6 +4162,291 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }, 3000); // Ждем 3 секунды после загрузки DOM для загрузки данных
 });
+
+// ================================
+// CRON Status for Upload Section
+// ================================
+async function loadCronStatusForUploadSection() {
+    try {
+        // Load CRON scheduler status
+        const statusResponse = await fetch(`${ADMIN_API_BASE_URL}/admin/cron/timesheet/status`);
+        if (!statusResponse.ok) {
+            console.warn('Failed to load CRON status');
+            return;
+        }
+        const status = await statusResponse.json();
+
+        // Update UI elements
+        const lastRunElement = document.getElementById('cron-last-run');
+        const nextRunElement = document.getElementById('cron-next-run');
+        const statusBadgeElement = document.getElementById('cron-status-badge');
+
+        // Format last run time
+        if (status.lastRun) {
+            const lastRunDate = new Date(status.lastRun);
+            lastRunElement.textContent = formatDateTime(lastRunDate);
+        } else {
+            lastRunElement.textContent = 'Еще не запускался';
+        }
+
+        // Format next run time
+        if (status.nextRun) {
+            const nextRunDate = new Date(status.nextRun);
+            nextRunElement.textContent = formatDateTime(nextRunDate);
+        } else {
+            nextRunElement.textContent = '—';
+        }
+
+        // Update status badge
+        if (status.isRunning) {
+            statusBadgeElement.textContent = 'Выполняется...';
+            statusBadgeElement.className = 'badge running';
+            statusBadgeElement.style.background = '#fff3cd';
+            statusBadgeElement.style.color = '#856404';
+        } else if (status.enabled) {
+            statusBadgeElement.textContent = 'Активен';
+            statusBadgeElement.className = 'badge enabled';
+            statusBadgeElement.style.background = '#d4edda';
+            statusBadgeElement.style.color = '#155724';
+        } else {
+            statusBadgeElement.textContent = 'Отключен';
+            statusBadgeElement.className = 'badge disabled';
+            statusBadgeElement.style.background = '#f8d7da';
+            statusBadgeElement.style.color = '#721c24';
+        }
+
+        // Load summary to get total events count
+        const summaryResponse = await fetch(`${ADMIN_API_BASE_URL}/admin/cron/timesheet/logs/summary?days=7`);
+        if (summaryResponse.ok) {
+            const summary = await summaryResponse.json();
+            const totalEvents = summary.reduce((sum, org) => sum + (org.total_events_loaded || 0), 0);
+            const eventsCountElement = document.getElementById('cron-events-count');
+            if (eventsCountElement) {
+                eventsCountElement.textContent = totalEvents.toLocaleString('ru-RU') + ' (за последние 7 дней)';
+            }
+        }
+
+    } catch (error) {
+        console.error('Error loading CRON status for upload section:', error);
+    }
+}
+
+function formatDateTime(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}.${month}.${year} ${hours}:${minutes}`;
+}
+
+// ============================================
+// Off-Schedule Report Functionality
+// ============================================
+let offScheduleReportInitialized = false;
+
+async function initOffScheduleReportSection() {
+    console.log('Initializing off-schedule report section...');
+
+    // Set up event handlers only once
+    if (!offScheduleReportInitialized) {
+        // Load organizations for filter
+        await loadOffScheduleOrganizations();
+
+        const generateBtn = document.getElementById('load-off-schedule-report-btn');
+        const clearBtn = document.getElementById('clear-off-schedule-report-btn');
+
+        // Generate report button
+        if (generateBtn) {
+            generateBtn.addEventListener('click', loadOffScheduleReport);
+        }
+
+        // Clear report button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', clearOffScheduleReport);
+        }
+
+        offScheduleReportInitialized = true;
+        console.log('Off-schedule report section event handlers initialized');
+    }
+
+    // Always update date to today when section is opened
+    const dateInput = document.getElementById('off-schedule-date');
+    if (dateInput) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+        console.log(`Date updated to today: ${dateInput.value}`);
+    }
+}
+
+async function loadOffScheduleOrganizations() {
+    try {
+        console.log('Loading organizations for off-schedule filter...');
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error('Failed to load organizations');
+
+        const organizations = await response.json();
+        console.log('Loaded organizations:', organizations.length);
+
+        const orgFilter = document.getElementById('off-schedule-organization-filter');
+        if (orgFilter) {
+            // Clear organizations
+            orgFilter.innerHTML = '<option value="">Все организации</option>';
+
+            // Add organizations
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.object_company;
+                option.textContent = org.object_company;
+                orgFilter.appendChild(option);
+            });
+
+            console.log('Off-schedule organizations filter populated');
+        }
+    } catch (error) {
+        console.error('Error loading organizations for off-schedule:', error);
+    }
+}
+
+async function loadOffScheduleReport() {
+    const dateInput = document.getElementById('off-schedule-date');
+    const orgFilter = document.getElementById('off-schedule-organization-filter');
+    const generateBtn = document.getElementById('load-off-schedule-report-btn');
+    const spinner = generateBtn?.querySelector('.spinner');
+    const btnText = generateBtn?.querySelector('.btn-text');
+
+    if (!dateInput?.value) {
+        alert('Пожалуйста, выберите дату для отчета');
+        return;
+    }
+
+    // Show loading state
+    if (generateBtn) generateBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    if (btnText) btnText.style.display = 'none';
+
+    try {
+        const params = new URLSearchParams({
+            date: dateInput.value,
+            _t: Date.now() // Cache busting timestamp
+        });
+
+        if (orgFilter?.value) {
+            params.append('organization', orgFilter.value);
+        }
+
+        console.log('Fetching off-schedule report with params:', params.toString());
+        console.log('Date from input:', dateInput.value);
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/off-schedule-attendance?${params}`, {
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        if (!response.ok) throw new Error('Failed to load report');
+
+        const result = await response.json();
+        console.log('Off-schedule report result:', result);
+
+        displayOffScheduleReport(result);
+
+    } catch (error) {
+        console.error('Error loading off-schedule report:', error);
+        alert('Ошибка при загрузке отчета: ' + error.message);
+    } finally {
+        // Hide loading state
+        if (generateBtn) generateBtn.disabled = false;
+        if (spinner) spinner.style.display = 'none';
+        if (btnText) btnText.style.display = 'inline';
+    }
+}
+
+function displayOffScheduleReport(result) {
+    const tbody = document.getElementById('off-schedule-report-body');
+    const totalSpan = document.getElementById('off-schedule-total');
+
+    if (!tbody) {
+        console.error('Off-schedule report table body not found');
+        return;
+    }
+
+    // Update total count
+    if (totalSpan) {
+        totalSpan.textContent = result.totalCount || 0;
+    }
+
+    // Clear table
+    tbody.innerHTML = '';
+
+    if (!result.records || result.records.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center" style="padding: 20px; color: #28a745;">
+                    ✅ Отлично! Никто не пришел в выходной день
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Populate table
+    result.records.forEach(record => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${record.date}</td>
+            <td>${record.employeeName}</td>
+            <td>${record.employeeNumber}</td>
+            <td>${record.organizationName}</td>
+            <td>${record.departmentName}</td>
+            <td>${record.scheduleName}</td>
+            <td><span class="badge" style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px;">${record.scheduleType}</span></td>
+            <td>${record.entryTime}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    console.log('Off-schedule report displayed:', result.totalCount, 'records');
+}
+
+function clearOffScheduleReport() {
+    const tbody = document.getElementById('off-schedule-report-body');
+    const totalSpan = document.getElementById('off-schedule-total');
+    const dateInput = document.getElementById('off-schedule-date');
+    const orgFilter = document.getElementById('off-schedule-organization-filter');
+
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center">Выберите дату и нажмите "Сформировать отчет"</td>
+            </tr>
+        `;
+    }
+
+    if (totalSpan) {
+        totalSpan.textContent = '0';
+    }
+
+    if (orgFilter) {
+        orgFilter.value = '';
+    }
+
+    // Reset date to today
+    if (dateInput) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+    }
+
+    console.log('Off-schedule report cleared');
+}
 
 // Global error handlers
 window.addEventListener('error', (event) => {

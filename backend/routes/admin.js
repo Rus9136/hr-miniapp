@@ -3,9 +3,27 @@ const router = express.Router();
 const db = require('../database_pg');
 const apiSync = require('../utils/apiSync_pg');
 const bodyParser = require('body-parser');
+const fs = require('fs');
+const path = require('path');
 
 // Create special parser for large 1C imports
 const largeJsonParser = bodyParser.json({ limit: '100mb' });
+
+// Debug logger for import operations
+const debugLog = (message, data = null) => {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}${data ? ': ' + JSON.stringify(data, null, 2) : ''}\n`;
+
+    // Log to console
+    console.log(message, data || '');
+
+    // Log to file
+    try {
+        fs.appendFileSync('/tmp/import_debug.log', logMessage);
+    } catch (err) {
+        console.error('Failed to write to debug log:', err);
+    }
+};
 
 // Get all employees with department and position info
 router.get('/admin/employees', (req, res) => {
@@ -297,8 +315,14 @@ router.get('/admin/time-events', (req, res) => {
     const { organization, department, dateFrom, dateTo } = req.query;
     
     let query = `
-        SELECT 
-            te.*,
+        SELECT
+            te.id,
+            te.employee_number,
+            te.event_type,
+            TO_CHAR(te.event_datetime, 'YYYY-MM-DD HH24:MI:SS') as event_datetime,
+            te.event_datetime as event_datetime_sort,
+            te.object_code as te_object_code,
+            te.created_at,
             e.full_name,
             e.table_number,
             e.object_bin,
@@ -332,7 +356,7 @@ router.get('/admin/time-events', (req, res) => {
         params.push(dateTo);
     }
     
-    query += ` ORDER BY te.event_datetime DESC LIMIT 1000`;
+    query += ` ORDER BY event_datetime_sort DESC LIMIT 1000`;
     
     db.queryRows(query, params).then(rows => {
         res.json(rows);
@@ -1544,6 +1568,17 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
             schedulesReceived: Графики?.length || 0
         });
         
+        // Log first schedule's organizations if available (support both field names)
+        if (Графики && Графики.length > 0) {
+            const firstScheduleOrgs = Графики[0].Организации || Графики[0].БИНОрганизации;
+            const fieldName = Графики[0].Организации ? 'Организации' : Графики[0].БИНОрганизации ? 'БИНОрганизации' : 'none';
+            if (firstScheduleOrgs) {
+                console.error(`[STDERR] First schedule has organizations (field: ${fieldName}):`, firstScheduleOrgs);
+            } else {
+                console.error(`[STDERR] First schedule has NO organizations field or it's empty`);
+            }
+        }
+        
         // Basic validation
         if (!Графики || !Array.isArray(Графики) || Графики.length === 0) {
             return res.status(400).json({
@@ -1559,22 +1594,70 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
         
         // Process each schedule
         for (const график of Графики) {
+            // Get a client from the pool for this transaction
+            const client = await db.pool.connect();
+            
             try {
-                const { НаименованиеГрафика, КодГрафика, РабочиеДни } = график;
+                const { НаименованиеГрафика, КодГрафика, РабочиеДни, Организации, БИНОрганизации } = график;
+
+                // Support both field names: "Организации" and "БИНОрганизации"
+                const организации = Организации || БИНОрганизации;
+
+                // Log received data
+                console.error(`[STDERR] Received schedule data:`, {
+                    НаименованиеГрафика,
+                    КодГрафика,
+                    РабочиеДни: РабочиеДни?.length,
+                    Организации: организации,
+                    fieldUsed: Организации ? 'Организации' : БИНОрганизации ? 'БИНОрганизации' : 'none'
+                });
                 
                 // Validate schedule data
                 if (!НаименованиеГрафика || !КодГрафика || !РабочиеДни || !Array.isArray(РабочиеДни)) {
                     errors.push(`Неполные данные для графика: ${НаименованиеГрафика || КодГрафика || 'UNKNOWN'}`);
+                    client.release();
                     continue;
                 }
                 
                 console.log(`Processing schedule: ${НаименованиеГрафика} (${КодГрафика}) with ${РабочиеДни.length} work days`);
-                
-                // Start transaction for this schedule
-                await db.query('BEGIN');
+                console.error(`[STDERR] Processing schedule: ${НаименованиеГрафика}, Organizations:`, организации);
+
+                // Start transaction for this schedule using the same client
+                await client.query('BEGIN');
+
+                // Validate and prepare organizations if provided (inside transaction)
+                let validOrgBins = [];
+                if (организации && Array.isArray(организации) && организации.length > 0) {
+                    try {
+                        debugLog(`Validating ${организации.length} organizations for schedule ${КодГрафика}`, организации);
+                        // Check if all organization BINs exist in departments (inside transaction)
+                        const placeholders = организации.map((_, i) => `$${i + 1}`).join(',');
+                        const orgCheckResult = await client.query(
+                            `SELECT DISTINCT object_bin FROM departments WHERE object_bin IN (${placeholders})`,
+                            организации
+                        );
+                        debugLog(`Found ${orgCheckResult.rows.length} organizations in departments`);
+                        const existingBins = new Set(orgCheckResult.rows.map(row => row.object_bin));
+                        const invalidBins = организации.filter(bin => !existingBins.has(bin));
+
+                        if (invalidBins.length > 0) {
+                            errors.push(`Несуществующие БИНы организаций для графика ${НаименованиеГрафика}: ${invalidBins.join(', ')}`);
+                            debugLog(`Invalid BINs`, invalidBins);
+                        }
+
+                        // Store valid BINs for later use in transaction
+                        validOrgBins = Array.from(existingBins);
+                        debugLog(`Valid organization BINs for ${КодГрафика}`, validOrgBins);
+                    } catch (orgError) {
+                        debugLog(`ERROR validating organizations`, { error: orgError.message, stack: orgError.stack });
+                        errors.push(`Ошибка проверки организаций для графика ${НаименованиеГрафика}: ${orgError.message}`);
+                    }
+                } else {
+                    debugLog(`No organizations provided for schedule ${КодГрафика}`);
+                }
                 
                 // Delete existing records for this schedule code (replace existing data)
-                const deleteResult = await db.query(
+                const deleteResult = await client.query(
                     'DELETE FROM work_schedules_1c WHERE schedule_code = $1',
                     [КодГрафика]
                 );
@@ -1582,6 +1665,37 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
                 const deletedCount = deleteResult.rowCount || 0;
                 if (deletedCount > 0) {
                     console.log(`Deleted ${deletedCount} existing records for schedule ${КодГрафика}`);
+                }
+                
+                // Delete existing organization links for this schedule
+                await client.query(
+                    'DELETE FROM schedule_organizations WHERE schedule_code = $1',
+                    [КодГрафика]
+                );
+                
+                // Insert organization links if we have valid organizations
+                debugLog(`About to insert organizations for ${КодГрафика}`, { count: validOrgBins.length, bins: validOrgBins });
+                if (validOrgBins.length > 0) {
+                    debugLog(`Inserting ${validOrgBins.length} organization links for schedule ${КодГрафика}`, validOrgBins);
+                    for (const orgBin of validOrgBins) {
+                        try {
+                            const insertResult = await client.query(
+                                'INSERT INTO schedule_organizations (schedule_code, organization_bin) VALUES ($1, $2) ON CONFLICT (schedule_code, organization_bin) DO NOTHING RETURNING id',
+                                [КодГрафика, orgBin]
+                            );
+                            if (insertResult.rows.length === 0) {
+                                debugLog(`Organization ${orgBin} already linked (conflict)`);
+                            } else {
+                                debugLog(`Linked organization ${orgBin}`, { id: insertResult.rows[0].id });
+                            }
+                        } catch (insertError) {
+                            debugLog(`ERROR inserting organization ${orgBin}`, { error: insertError.message, stack: insertError.stack });
+                            throw insertError;
+                        }
+                    }
+                    debugLog(`Linked schedule ${КодГрафика} to ${validOrgBins.length} organizations`);
+                } else {
+                    debugLog(`No valid organizations to link for schedule ${КодГрафика}`, { validOrgBins });
                 }
                 
                 let scheduleInsertCount = 0;
@@ -1611,7 +1725,7 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
                     const finalEndTime = ВремяЗавершениеРаботы || extractedTimes.work_end_time;
                     
                     // Insert work day record
-                    await db.query(`
+                    await client.query(`
                         INSERT INTO work_schedules_1c 
                         (schedule_name, schedule_code, work_date, work_month, time_type, work_hours, work_start_time, work_end_time)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -1629,7 +1743,30 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
                     scheduleInsertCount++;
                 }
                 
-                await db.query('COMMIT');
+                // Verify organizations were inserted before commit
+                if (validOrgBins.length > 0) {
+                    const verifyOrgs = await client.query(
+                        'SELECT COUNT(*) as count FROM schedule_organizations WHERE schedule_code = $1',
+                        [КодГрафика]
+                    );
+                    debugLog(`Organizations in DB before commit for ${КодГрафика}`, { count: verifyOrgs.rows[0].count, expected: validOrgBins.length });
+                }
+
+                debugLog(`Committing transaction for schedule ${КодГрафика}`);
+                await client.query('COMMIT');
+                debugLog(`Transaction committed for schedule ${КодГрафика}`);
+
+                // Verify organizations after commit using a new connection
+                if (validOrgBins.length > 0) {
+                    const verifyAfterCommit = await db.pool.query(
+                        'SELECT COUNT(*) as count FROM schedule_organizations WHERE schedule_code = $1',
+                        [КодГрафика]
+                    );
+                    debugLog(`Organizations in DB after commit for ${КодГрафика}`, { count: verifyAfterCommit.rows[0].count, expected: validOrgBins.length });
+                    if (verifyAfterCommit.rows[0].count === 0) {
+                        debugLog(`ERROR: Organizations were not saved for ${КодГрафика}!`, { expected: validOrgBins.length, actual: 0 });
+                    }
+                }
                 
                 console.log(`Successfully processed schedule ${НаименованиеГрафика}: inserted ${scheduleInsertCount} work days`);
                 totalProcessed++;
@@ -1639,10 +1776,14 @@ router.post('/admin/schedules/import-1c', largeJsonParser, async (req, res) => {
                 }
                 
             } catch (scheduleError) {
-                await db.query('ROLLBACK');
+                await client.query('ROLLBACK').catch(() => {}); // Ignore rollback errors
                 const errorMsg = `Ошибка обработки графика ${график.НаименованиеГрафика || график.КодГрафика || 'UNKNOWN'}: ${scheduleError.message}`;
                 console.error(errorMsg, scheduleError);
+                console.error(`[ERROR] Stack:`, scheduleError.stack);
                 errors.push(errorMsg);
+            } finally {
+                // Always release the client back to the pool
+                client.release();
             }
         }
         
@@ -1729,32 +1870,64 @@ router.get('/admin/schedules/1c', async (req, res) => {
         const schedules = await db.queryRows(query, params);
         
         // Add organization info separately if we have schedules
+        let organizations = [];
         if (schedules.length > 0 && scheduleCode) {
             try {
-                const orgQuery = `
-                    SELECT 
+                // First, try to get organizations from schedule_organizations table
+                organizations = await db.queryRows(`
+                    SELECT DISTINCT
                         d.object_company as organization_name,
-                        d.object_bin as organization_bin
-                    FROM employee_schedule_assignments esa 
-                    JOIN employees e ON esa.employee_id = e.id 
-                    JOIN departments d ON e.object_code = d.object_code 
-                    WHERE esa.schedule_code = $1 
-                    GROUP BY d.object_company, d.object_bin 
-                    ORDER BY COUNT(*) DESC 
-                    LIMIT 1
-                `;
+                        so.organization_bin
+                    FROM schedule_organizations so
+                    JOIN departments d ON so.organization_bin = d.object_bin
+                    WHERE so.schedule_code = $1
+                    ORDER BY d.object_company
+                `, [scheduleCode]);
                 
-                const orgInfo = await db.queryRow(orgQuery, [scheduleCode]);
+                // Fallback: if no organizations found in schedule_organizations, use old logic
+                if (organizations.length === 0) {
+                    organizations = await db.queryRows(`
+                        SELECT DISTINCT
+                            d.object_company as organization_name,
+                            d.object_bin as organization_bin
+                        FROM employee_schedule_assignments esa 
+                        JOIN employees e ON esa.employee_id = e.id 
+                        JOIN departments d ON e.object_code = d.object_code 
+                        WHERE esa.schedule_code = $1 
+                            AND d.object_bin IS NOT NULL
+                            AND d.object_company IS NOT NULL
+                        GROUP BY d.object_company, d.object_bin
+                        ORDER BY COUNT(*) DESC, d.object_company
+                    `, [scheduleCode]);
+                }
                 
-                // Add organization info to all schedule records
+                // Add organizations array to all schedule records (for backward compatibility, also add first org)
                 schedules.forEach(schedule => {
-                    schedule.organization_name = orgInfo?.organization_name || null;
-                    schedule.organization_bin = orgInfo?.organization_bin || null;
+                    schedule.organizations = organizations;
+                    if (organizations.length > 0) {
+                        schedule.organization_name = organizations[0].organization_name;
+                        schedule.organization_bin = organizations[0].organization_bin;
+                    } else {
+                        schedule.organization_name = null;
+                        schedule.organization_bin = null;
+                    }
                 });
             } catch (orgError) {
                 console.error('Error getting organization info:', orgError);
                 // Continue without organization info
+                schedules.forEach(schedule => {
+                    schedule.organizations = [];
+                    schedule.organization_name = null;
+                    schedule.organization_bin = null;
+                });
             }
+        } else {
+            // If no scheduleCode, set empty organizations array
+            schedules.forEach(schedule => {
+                schedule.organizations = [];
+                schedule.organization_name = null;
+                schedule.organization_bin = null;
+            });
         }
         
         // Get summary statistics - build a simplified stats query
@@ -1819,37 +1992,57 @@ router.get('/admin/schedules/1c', async (req, res) => {
 router.get('/admin/schedules/1c/list', async (req, res) => {
     try {
         const schedules = await db.queryRows(`
-            SELECT DISTINCT 
+            SELECT
                 ws.schedule_name,
                 ws.schedule_code,
-                COUNT(ws.*) as work_days_count,
+                COUNT(*) as work_days_count,
                 MIN(ws.work_date) as start_date,
                 MAX(ws.work_date) as end_date,
                 AVG(ws.work_hours) as avg_hours,
-                MAX(ws.created_at) as last_updated,
-                -- Получаем наиболее часто встречающуюся организацию для этого графика
-                (SELECT d.object_company 
-                 FROM employee_schedule_assignments esa 
-                 JOIN employees e ON esa.employee_id = e.id 
-                 JOIN departments d ON e.object_code = d.object_code 
-                 WHERE esa.schedule_code = ws.schedule_code 
-                 GROUP BY d.object_company 
-                 ORDER BY COUNT(*) DESC 
-                 LIMIT 1) as organization_name,
-                (SELECT d.object_bin 
-                 FROM employee_schedule_assignments esa 
-                 JOIN employees e ON esa.employee_id = e.id 
-                 JOIN departments d ON e.object_code = d.object_code 
-                 WHERE esa.schedule_code = ws.schedule_code 
-                 GROUP BY d.object_bin 
-                 ORDER BY COUNT(*) DESC 
-                 LIMIT 1) as organization_bin
+                MAX(ws.created_at) as last_updated
             FROM work_schedules_1c ws
             GROUP BY ws.schedule_name, ws.schedule_code
             ORDER BY ws.schedule_name
         `);
         
-        res.json(schedules);
+        // Get organizations for each schedule
+        const schedulesWithOrgs = await Promise.all(schedules.map(async (schedule) => {
+            // First, try to get organizations from schedule_organizations table
+            let organizations = await db.queryRows(`
+                SELECT DISTINCT
+                    d.object_company as organization_name,
+                    so.organization_bin
+                FROM schedule_organizations so
+                JOIN departments d ON so.organization_bin = d.object_bin
+                WHERE so.schedule_code = $1
+                ORDER BY organization_name, organization_bin
+            `, [schedule.schedule_code]);
+
+            // Fallback: if no organizations found in schedule_organizations, use old logic
+            if (organizations.length === 0) {
+                organizations = await db.queryRows(`
+                    SELECT
+                        d.object_company as organization_name,
+                        d.object_bin as organization_bin,
+                        COUNT(*) as employee_count
+                    FROM employee_schedule_assignments esa
+                    JOIN employees e ON esa.employee_id = e.id
+                    JOIN departments d ON e.object_code = d.object_code
+                    WHERE esa.schedule_code = $1
+                        AND d.object_bin IS NOT NULL
+                        AND d.object_company IS NOT NULL
+                    GROUP BY d.object_company, d.object_bin
+                    ORDER BY employee_count DESC, organization_name
+                `, [schedule.schedule_code]);
+            }
+            
+            return {
+                ...schedule,
+                organizations: organizations
+            };
+        }));
+        
+        res.json(schedulesWithOrgs);
     } catch (error) {
         console.error('Error fetching 1C schedules list:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -2513,6 +2706,97 @@ router.get('/admin/reports/payroll', async (req, res) => {
         
     } catch (error) {
         console.error('Error generating payroll report:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при формировании отчета: ' + error.message
+        });
+    }
+});
+
+// Off-schedule attendance report (employees who came on their day off)
+router.get('/admin/reports/off-schedule-attendance', async (req, res) => {
+    try {
+        const { date, organization } = req.query;
+
+        // Default to today if no date provided
+        const reportDate = date || new Date().toISOString().split('T')[0];
+
+        console.log(`Off-schedule attendance report for date: ${reportDate}, organization: ${organization || 'all'}`);
+
+        // SQL query to find employees who came to work on their day off
+        // Logic: If work_date is NOT in work_schedules_1c = weekend (day off)
+        let query = `
+            SELECT
+                to_char(te.event_datetime, 'YYYY-MM-DD') as date,
+                e.full_name as employee_name,
+                e.table_number as employee_number,
+                d.object_company as organization_name,
+                d.object_name as department_name,
+                (SELECT DISTINCT schedule_name FROM work_schedules_1c WHERE schedule_code = esa.schedule_code LIMIT 1) as schedule_name,
+                'Выходной' as schedule_type,
+                TO_CHAR(MIN(te.event_datetime), 'HH24:MI:SS') as entry_time
+            FROM time_events te
+            JOIN employees e ON te.employee_number = e.table_number
+            JOIN employee_schedule_assignments esa ON e.table_number = esa.employee_number
+                AND $1::date BETWEEN esa.start_date AND COALESCE(esa.end_date, '9999-12-31'::date)
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            WHERE
+                te.event_type = '1'
+                AND te.event_datetime::date = $1::date
+                AND NOT EXISTS (
+                    SELECT 1 FROM work_schedules_1c ws
+                    WHERE ws.schedule_code = esa.schedule_code
+                      AND ws.work_date = $1::date
+                )
+        `;
+
+        const params = [reportDate];
+
+        // Add organization filter if provided
+        if (organization) {
+            query += ` AND d.object_company = $${params.length + 1}`;
+            params.push(organization);
+        }
+
+        query += `
+            GROUP BY
+                to_char(te.event_datetime, 'YYYY-MM-DD'),
+                e.full_name,
+                e.table_number,
+                d.object_company,
+                d.object_name,
+                esa.schedule_code
+            ORDER BY entry_time, e.full_name
+        `;
+
+        console.log('DEBUG SQL:', query);
+        console.log('DEBUG PARAMS:', params);
+
+        const result = await db.query(query, params);
+
+        console.log(`Off-schedule attendance report: found ${result.rows.length} records`);
+        if (result.rows.length > 0) {
+            console.log('DEBUG FIRST ROW:', result.rows[0]);
+        }
+
+        res.json({
+            success: true,
+            date: reportDate,
+            totalCount: result.rows.length,
+            records: result.rows.map(row => ({
+                date: row.date, // Already formatted as YYYY-MM-DD by to_char
+                employeeName: row.employee_name,
+                employeeNumber: row.employee_number,
+                organizationName: row.organization_name || 'Не указана',
+                departmentName: row.department_name || 'Не указано',
+                scheduleName: row.schedule_name || 'Не указан',
+                scheduleType: row.schedule_type,
+                entryTime: row.entry_time
+            }))
+        });
+
+    } catch (error) {
+        console.error('Error generating off-schedule attendance report:', error);
         res.status(500).json({
             success: false,
             error: 'Ошибка при формировании отчета: ' + error.message
