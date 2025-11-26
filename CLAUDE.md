@@ -187,16 +187,15 @@ docker exec hr-postgres psql -U hr_user -d hr_tracker -c "SELECT version();"
 │   │   └── cron.js             # CRON управление
 │   ├── services/               # Сервисы (AI, MCP)
 │   └── engines/                # AI провайдеры
-├── admin/                      # Frontend модули админ-панели (12 модулей)
+├── admin/                      # Frontend модули админ-панели (11 модулей)
 │   ├── core.js                 # Утилиты, константы, форматтеры
 │   ├── state.js                # Централизованное состояние
 │   ├── components.js           # SearchableDropdown, OrganizationDropdownManager
 │   ├── employees.js            # Секция "Сотрудники"
 │   ├── departments.js          # Секция "Подразделения"
 │   ├── positions.js            # Секция "Должности"
-│   ├── time-tracking.js        # Секция "Входы/выходы"
 │   ├── schedules.js            # Секция "Графики работы"
-│   ├── reports.js              # Секции отчётов (ФОТ, Вне графика и др.)
+│   ├── reports.js              # Секция "Отчёты" (5 вкладок: Входы/выходы, Опоздания, Вне графика, Перелимит ФОТ, Выручка к ФОТ)
 │   ├── news.js                 # Секция "Новости"
 │   ├── upload.js               # Секция "Синхронизация"
 │   └── index.js                # Главный роутер, switchSection()
@@ -215,9 +214,8 @@ docker exec hr-postgres psql -U hr_user -d hr_tracker -c "SELECT version();"
 |-----------|---------------|---------------|
 | Сотрудники | `admin/employees.js` | `backend/routes/admin/employees.js` |
 | Подразделения | `admin/departments.js` | `backend/routes/admin/departments.js` |
-| Входы/выходы | `admin/time-tracking.js` | `backend/routes/admin/time-tracking.js` |
 | Графики работы | `admin/schedules.js` | `backend/routes/admin/schedules.js` |
-| Отчёты | `admin/reports.js` | `backend/routes/admin/reports.js` |
+| Отчёты (с вкладками) | `admin/reports.js` | `backend/routes/admin/reports.js`, `time-tracking.js` |
 
 **НЕ редактируйте** `admin.js` в корне - он устарел! Используйте модули из папки `admin/`.
 
@@ -610,8 +608,13 @@ docker run --rm -v hr-miniapp_postgres_data:/data -v $(pwd):/backup ubuntu tar c
 
 ## 📋 История изменений
 
+### 2025-11-26
+- ✅ **Объединение отчётов**: 6 разделов → 1 раздел "Отчёты" с 5 вкладками
+- ✅ Удалён `admin/time-tracking.js` (код перенесён в `reports.js`)
+- ✅ Удалён неиспользуемый "Отчет по ФОТ"
+
 ### 2025-11-25
-- ✅ **Рефакторинг frontend admin.js**: Монолит (5266 строк) → 12 модулей в `admin/`
+- ✅ **Рефакторинг frontend admin.js**: Монолит (5266 строк) → 11 модулей в `admin/`
 - ✅ **Рефакторинг backend admin.js**: Монолит (~4000 строк) → 8 модулей в `backend/routes/admin/`
 - 📦 Backup: `admin.js.bak` (frontend), `backend/routes/admin.js.backup` (backend)
 
@@ -622,6 +625,6 @@ docker run --rm -v hr-miniapp_postgres_data:/data -v $(pwd):/backup ubuntu tar c
 
 ---
 
-**Последнее обновление**: 2025-11-25
+**Последнее обновление**: 2025-11-26
 **Версия production**: madlen.space
 **Статус**: ✅ Работает стабильно
