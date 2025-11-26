@@ -534,8 +534,14 @@ function displayAnalysisResults(analysisData) {
         (Date.parse(analysisData.period.end) - Date.parse(analysisData.period.start)) / (1000 * 60 * 60 * 24)
     ));
     
-    // Provider label
-    const providerLabel = analysisData.provider ? analysisData.provider.toUpperCase() : '';
+    // Format dates - extract only YYYY-MM-DD part
+    const formatDateOnly = (dateStr) => {
+        if (!dateStr) return '';
+        return dateStr.split('T')[0];
+    };
+    
+    const periodStart = formatDateOnly(analysisData.period.start);
+    const periodEnd = formatDateOnly(analysisData.period.end);
     
     // Render summary - показываем организацию в заголовке
     if (summaryContainer) {
@@ -549,8 +555,7 @@ function displayAnalysisResults(analysisData) {
                     </div>
                 </div>
                 <div class="ai-summary-meta">
-                    ${providerLabel ? `<span class="ai-summary-provider">${providerLabel}</span>` : ''}
-                    <span class="ai-summary-period">${analysisData.period.start} — ${analysisData.period.end}</span>
+                    <span class="ai-summary-period">${periodStart} — ${periodEnd}</span>
                     <span class="ai-summary-badge">${daysAnalyzed} дн.</span>
                 </div>
             </div>

@@ -182,71 +182,110 @@
     overflow: hidden;
 }
 
-/* Placeholder */
+/* Placeholder - Network Visualization */
 #ai-recommendation-section .ai-placeholder {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 0;
-    padding: 60px 40px;
+    padding: 30px 20px 25px;
     text-align: center;
-    min-height: 400px;
+    min-height: 480px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 16px;
 }
 
-#ai-recommendation-section .ai-placeholder-icon {
-    font-size: 56px;
-    margin-bottom: 16px;
+/* Header */
+#ai-recommendation-section .ai-placeholder-header {
+    text-align: center;
 }
 
 #ai-recommendation-section .ai-placeholder-title {
-    font-size: 24px;
+    color: white;
+    font-size: 26px;
     font-weight: 700;
-    color: white;
-    margin: 0 0 12px 0;
+    margin: 0 0 8px 0;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 
-#ai-recommendation-section .ai-placeholder-desc {
+#ai-recommendation-section .ai-placeholder-subtitle {
+    color: rgba(255,255,255,0.9);
     font-size: 15px;
-    color: rgba(255, 255, 255, 0.9);
-    margin: 0 0 30px 0;
+    font-weight: 400;
+    margin: 0;
 }
 
-#ai-recommendation-section .ai-agents-preview {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 30px;
+/* Network Visual Container */
+#ai-recommendation-section .ai-network-visual {
+    width: 100%;
+    max-width: 520px;
 }
 
-#ai-recommendation-section .ai-agent-preview-item {
-    display: flex;
+#ai-recommendation-section .ai-network-svg {
+    width: 100%;
+    height: auto;
+    max-height: 380px;
+}
+
+/* Animated lines */
+#ai-recommendation-section .ai-lines line {
+    animation: linePulse 2s ease-in-out infinite;
+}
+
+#ai-recommendation-section .ai-lines line:nth-child(1) { animation-delay: 0s; }
+#ai-recommendation-section .ai-lines line:nth-child(2) { animation-delay: 0.3s; }
+#ai-recommendation-section .ai-lines line:nth-child(3) { animation-delay: 0.6s; }
+#ai-recommendation-section .ai-lines line:nth-child(4) { animation-delay: 0.9s; }
+#ai-recommendation-section .ai-lines line:nth-child(5) { animation-delay: 1.2s; }
+#ai-recommendation-section .ai-lines line:nth-child(6) { animation-delay: 1.5s; }
+
+@keyframes linePulse {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.7; }
+}
+
+/* Labels */
+#ai-recommendation-section .ai-label {
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Hint at bottom */
+#ai-recommendation-section .ai-placeholder-hint {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.95);
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 500;
-    color: white;
+    gap: 10px;
     border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
 }
 
-#ai-recommendation-section .ai-agent-preview-icon {
+#ai-recommendation-section .ai-hint-icon {
     font-size: 16px;
 }
 
-#ai-recommendation-section .ai-placeholder-hint {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.85);
-    padding: 14px 24px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    display: inline-block;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+/* Responsive */
+@media (max-width: 560px) {
+    #ai-recommendation-section .ai-placeholder-title {
+        font-size: 20px;
+    }
+    
+    #ai-recommendation-section .ai-placeholder-subtitle {
+        font-size: 13px;
+    }
+    
+    #ai-recommendation-section .ai-network-visual {
+        max-width: 380px;
+    }
+    
+    #ai-recommendation-section .ai-placeholder-hint {
+        font-size: 13px;
+        padding: 10px 18px;
+    }
 }
 
 /* ============================================
@@ -888,12 +927,8 @@
     }
     
     #ai-recommendation-section .ai-placeholder {
-        padding: 40px 20px;
-    }
-    
-    #ai-recommendation-section .ai-agents-preview {
-        flex-direction: column;
-        align-items: center;
+        padding: 20px 15px;
+        min-height: 420px;
     }
 }
 

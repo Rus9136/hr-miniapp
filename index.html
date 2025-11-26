@@ -929,36 +929,95 @@
                         <main class="ai-main-content">
                             <!-- Placeholder -->
                             <div id="ai-placeholder" class="ai-placeholder">
-                                <div class="ai-placeholder-icon">🤖</div>
-                                <h3 class="ai-placeholder-title">Мультиагентный анализ ресторана</h3>
-                                <p class="ai-placeholder-desc">Система из 6 специализированных AI-агентов для комплексного анализа</p>
-                                <div class="ai-agents-preview">
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">📈</span>
-                                        <span>Продажи</span>
-                                    </div>
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">💰</span>
-                                        <span>Затраты</span>
-                                    </div>
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">👥</span>
-                                        <span>Смены</span>
-                                    </div>
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">⭐</span>
-                                        <span>Репутация</span>
-                                    </div>
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">🎯</span>
-                                        <span>Оптимизация</span>
-                                    </div>
-                                    <div class="ai-agent-preview-item">
-                                        <span class="ai-agent-preview-icon">📊</span>
-                                        <span>Итоги</span>
-                                    </div>
+                                <div class="ai-placeholder-header">
+                                    <h2 class="ai-placeholder-title">Мультиагентный анализ ресторана</h2>
+                                    <p class="ai-placeholder-subtitle">Система из 6 специализированных AI-агентов для комплексного анализа</p>
                                 </div>
+                                
+                                <div class="ai-network-visual">
+                                    <svg viewBox="0 0 420 340" class="ai-network-svg">
+                                        <defs>
+                                            <linearGradient id="coreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#667eea"/>
+                                                <stop offset="100%" style="stop-color:#764ba2"/>
+                                            </linearGradient>
+                                            <filter id="coreGlow">
+                                                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                                                <feMerge>
+                                                    <feMergeNode in="coloredBlur"/>
+                                                    <feMergeNode in="SourceGraphic"/>
+                                                </feMerge>
+                                            </filter>
+                                            <linearGradient id="agent1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#4ECDC4"/><stop offset="100%" style="stop-color:#44A08D"/>
+                                            </linearGradient>
+                                            <linearGradient id="agent2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#FF6B6B"/><stop offset="100%" style="stop-color:#ee5a24"/>
+                                            </linearGradient>
+                                            <linearGradient id="agent3" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#FFE66D"/><stop offset="100%" style="stop-color:#f0932b"/>
+                                            </linearGradient>
+                                            <linearGradient id="agent4" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#95E1D3"/><stop offset="100%" style="stop-color:#6ab04c"/>
+                                            </linearGradient>
+                                            <linearGradient id="agent5" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#DDA0DD"/><stop offset="100%" style="stop-color:#be2edd"/>
+                                            </linearGradient>
+                                            <linearGradient id="agent6" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#87CEEB"/><stop offset="100%" style="stop-color:#4834d4"/>
+                                            </linearGradient>
+                                        </defs>
+                                        
+                                        <!-- Соединительные линии -->
+                                        <g stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-dasharray="6 4" class="ai-lines">
+                                            <line x1="210" y1="170" x2="210" y2="55"/>
+                                            <line x1="210" y1="170" x2="340" y2="85"/>
+                                            <line x1="210" y1="170" x2="340" y2="255"/>
+                                            <line x1="210" y1="170" x2="210" y2="285"/>
+                                            <line x1="210" y1="170" x2="80" y2="255"/>
+                                            <line x1="210" y1="170" x2="80" y2="85"/>
+                                        </g>
+                                        
+                                        <!-- Центральное ядро AI -->
+                                        <circle cx="210" cy="170" r="50" fill="url(#coreGrad)" filter="url(#coreGlow)"/>
+                                        <path d="M188 158 Q210 132 232 158 Q244 172 232 190 Q210 210 188 190 Q176 172 188 158" fill="#fff" opacity="0.2"/>
+                                        <text x="210" y="180" text-anchor="middle" fill="#fff" font-size="28" font-weight="bold" font-family="system-ui">AI</text>
+                                        
+                                        <!-- 6 агентов вокруг -->
+                                        <!-- Верх: Продажи -->
+                                        <circle cx="210" cy="35" r="24" fill="url(#agent1)"/>
+                                        <text x="210" y="43" text-anchor="middle" font-size="20">📊</text>
+                                        <text x="210" y="5" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" class="ai-label">Продажи</text>
+                                        
+                                        <!-- Верх-право: Затраты -->
+                                        <circle cx="340" cy="85" r="24" fill="url(#agent2)"/>
+                                        <text x="340" y="93" text-anchor="middle" font-size="20">💰</text>
+                                        <text x="378" y="90" text-anchor="start" fill="#fff" font-size="13" font-weight="600" class="ai-label">Затраты</text>
+                                        
+                                        <!-- Низ-право: Смены -->
+                                        <circle cx="340" cy="255" r="24" fill="url(#agent3)"/>
+                                        <text x="340" y="263" text-anchor="middle" font-size="20">👥</text>
+                                        <text x="378" y="260" text-anchor="start" fill="#fff" font-size="13" font-weight="600" class="ai-label">Смены</text>
+                                        
+                                        <!-- Низ: Репутация -->
+                                        <circle cx="210" cy="305" r="24" fill="url(#agent4)"/>
+                                        <text x="210" y="313" text-anchor="middle" font-size="20">⭐</text>
+                                        <text x="210" y="340" text-anchor="middle" fill="#fff" font-size="13" font-weight="600" class="ai-label">Репутация</text>
+                                        
+                                        <!-- Низ-лево: Оптимизация -->
+                                        <circle cx="80" cy="255" r="24" fill="url(#agent5)"/>
+                                        <text x="80" y="263" text-anchor="middle" font-size="20">🎯</text>
+                                        <text x="42" y="260" text-anchor="end" fill="#fff" font-size="13" font-weight="600" class="ai-label">Оптимизация</text>
+                                        
+                                        <!-- Верх-лево: Итоги -->
+                                        <circle cx="80" cy="85" r="24" fill="url(#agent6)"/>
+                                        <text x="80" y="93" text-anchor="middle" font-size="20">📈</text>
+                                        <text x="42" y="90" text-anchor="end" fill="#fff" font-size="13" font-weight="600" class="ai-label">Итоги</text>
+                                    </svg>
+                                </div>
+                                
                                 <div class="ai-placeholder-hint">
+                                    <span class="ai-hint-icon">💡</span>
                                     Выберите подразделение и период, затем нажмите "Запустить анализ"
                                 </div>
                             </div>
