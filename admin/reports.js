@@ -956,8 +956,8 @@ function renderRTPChart(days) {
                 {
                     label: 'ФОТ + Бонус',
                     data: days.map(d => d.total_payroll || d.actual_payroll || 0),
-                    borderColor: '#6f42c1',
-                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                    borderColor: '#cc9900',
+                    backgroundColor: 'rgba(204, 153, 0, 0.1)',
                     fill: true,
                     tension: 0.3
                 }
@@ -966,16 +966,26 @@ function renderRTPChart(days) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: { position: 'top' },
                 tooltip: {
                     callbacks: {
+                        label: function() {
+                            return null;
+                        },
                         afterBody: function(context) {
                             const dataIndex = context[0].dataIndex;
                             const day = days[dataIndex];
+                            const revenue = day.revenue || 0;
+                            const totalPayroll = day.total_payroll || 0;
                             const bonus = day.bonus || 0;
                             return [
-                                '',
+                                '■ Выручка: ' + formatNumber(revenue) + ' ₸',
+                                '■ ФОТ + Бонус: ' + formatNumber(totalPayroll) + ' ₸',
                                 '■ Бонус: ' + formatNumber(bonus) + ' ₸'
                             ];
                         }
