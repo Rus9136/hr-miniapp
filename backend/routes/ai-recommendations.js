@@ -118,17 +118,14 @@ router.get('/history', async (req, res) => {
 
         const query = `
             SELECT id, department_id, date_start, date_end, created_at, provider,
-                   CONCAT(
-                       jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_name'),
-                       ' (',
-                       CASE provider
-                           WHEN 'claude' THEN 'CLAUDE'
-                           WHEN 'openai' THEN 'CHAT GPT'
-                           WHEN 'gemini' THEN 'GEMINI'
-                           ELSE UPPER(provider)
-                       END,
-                       ')'
-                   ) as department_name
+                   jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_name') as department_name,
+                   jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_company') as organization_name,
+                   CASE provider
+                       WHEN 'claude' THEN 'CLAUDE'
+                       WHEN 'openai' THEN 'CHAT GPT'
+                       WHEN 'gemini' THEN 'GEMINI'
+                       ELSE UPPER(provider)
+                   END as provider_label
             FROM ai_recommendations 
             ORDER BY created_at DESC 
             LIMIT $1 OFFSET $2
@@ -626,7 +623,10 @@ router.get('/analysis/:id', async (req, res) => {
         const { id } = req.params;
 
         const query = `
-            SELECT * FROM ai_recommendations 
+            SELECT *,
+                   jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_name') as department_name,
+                   jsonb_extract_path_text(mcp_response, 'department_info', 'data', 'object_company') as organization_name
+            FROM ai_recommendations 
             WHERE id = $1
         `;
 

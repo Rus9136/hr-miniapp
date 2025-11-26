@@ -755,7 +755,10 @@ router.get('/payroll-overtime', async (req, res) => {
  */
 router.get('/revenue-to-payroll', async (req, res) => {
     try {
-        let { organization, date_from, date_to, department_code } = req.query;
+        let { organization, date_from, date_to, department_code, bonus_percent } = req.query;
+
+        // Parse bonus_percent with default value 4%
+        const bonusPercent = parseFloat(bonus_percent) || 4;
 
         // Fix UTF-8 encoding for organization parameter (cyrillic support)
         if (organization) {
@@ -945,41 +948,54 @@ router.get('/revenue-to-payroll', async (req, res) => {
             }
         }
 
-        // STEP 3: Convert aggregated data to array and calculate coefficients
+        // STEP 3: Convert aggregated data to array and calculate coefficients with bonus
         const days = [];
         let totalRevenue = 0;
         let totalPayroll = 0;
+        let totalBonus = 0;
         let totalEmployees = 0;
 
         dateRange.forEach(date => {
             const dayData = aggregatedByDay[date];
-            const coefficient = dayData.payroll > 0
-                ? Math.round((dayData.revenue / dayData.payroll) * 100) / 100
+
+            // Calculate bonus from revenue
+            const bonus = Math.round(dayData.revenue * (bonusPercent / 100));
+            const totalPayrollWithBonus = dayData.payroll + bonus;
+
+            // Coefficient: revenue / (payroll + bonus)
+            const coefficient = totalPayrollWithBonus > 0
+                ? Math.round((dayData.revenue / totalPayrollWithBonus) * 100) / 100
                 : 0;
 
             days.push({
                 date,
                 revenue: dayData.revenue,
                 actual_payroll: dayData.payroll,
+                bonus: bonus,
+                total_payroll: totalPayrollWithBonus,
                 employees_count: dayData.employees_count,
                 coefficient
             });
 
             totalRevenue += dayData.revenue;
             totalPayroll += dayData.payroll;
+            totalBonus += bonus;
             if (dayData.employees_count > totalEmployees) {
                 totalEmployees = dayData.employees_count;
             }
         });
 
-        // STEP 4: Calculate summary
-        const avgCoefficient = totalPayroll > 0
-            ? Math.round((totalRevenue / totalPayroll) * 100) / 100
+        // STEP 4: Calculate summary with bonus
+        const grandTotalPayroll = totalPayroll + totalBonus;
+        const avgCoefficient = grandTotalPayroll > 0
+            ? Math.round((totalRevenue / grandTotalPayroll) * 100) / 100
             : 0;
 
         const summary = {
             total_revenue: totalRevenue,
             total_payroll: totalPayroll,
+            total_bonus: totalBonus,
+            grand_total_payroll: grandTotalPayroll,
             total_employees: totalEmployees,
             avg_coefficient: avgCoefficient
         };
@@ -988,6 +1004,7 @@ router.get('/revenue-to-payroll', async (req, res) => {
             success: true,
             period: { start: date_from, end: date_to },
             organization,
+            bonus_percent: bonusPercent,
             days,
             summary
         });

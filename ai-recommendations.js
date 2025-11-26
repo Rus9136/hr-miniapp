@@ -150,6 +150,7 @@ function setupAIEventHandlers() {
     const refreshHistoryBtn = document.getElementById('ai-refresh-history');
     const showPromptsBtn = document.getElementById('ai-show-prompts');
     const orgFilter = document.getElementById('ai-organization-filter');
+    const historyDropdown = document.getElementById('ai-history-dropdown');
     
     if (processBtn) {
         processBtn.addEventListener('click', runAIAnalysis);
@@ -166,6 +167,11 @@ function setupAIEventHandlers() {
     // Organization filter change event for cascading departments
     if (orgFilter) {
         orgFilter.addEventListener('change', onAIOrganizationChange);
+    }
+    
+    // History dropdown change event
+    if (historyDropdown) {
+        historyDropdown.addEventListener('change', onHistoryDropdownChange);
     }
 }
 
@@ -364,32 +370,52 @@ function hideAIPlaceholder() {
 
 // Show analysis progress
 function showAnalysisProgress() {
+    const placeholder = document.getElementById('ai-placeholder');
     const resultsContainer = document.getElementById('ai-results-container');
-    if (!resultsContainer) return;
+    const mainContent = document.querySelector('.ai-main-content');
     
-    resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = `
-        <div class="ai-analysis-progress">
-            <div class="progress-header">
-                <span class="progress-icon">⏳</span>
-                <h3 class="progress-title">Выполняется мультиагентный анализ</h3>
+    // Hide placeholder
+    if (placeholder) placeholder.style.display = 'none';
+    
+    // Show progress in results container or create progress element
+    if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+    }
+    
+    // Create or update progress element
+    let progressEl = document.getElementById('ai-progress');
+    if (!progressEl) {
+        progressEl = document.createElement('div');
+        progressEl.id = 'ai-progress';
+        progressEl.className = 'ai-progress';
+        if (mainContent) {
+            mainContent.insertBefore(progressEl, mainContent.firstChild);
+        }
+    }
+    
+    progressEl.style.display = 'block';
+    progressEl.innerHTML = `
+        <div class="ai-progress-card">
+            <div class="ai-progress-header">
+                <span class="ai-progress-spinner"></span>
+                <h3>Выполняется мультиагентный анализ</h3>
             </div>
-            <ul class="progress-steps">
-                <li class="progress-step active" id="step-data">
-                    <span class="step-icon">📊</span>
-                    Получение данных от MCP API...
+            <ul class="ai-progress-steps">
+                <li class="ai-progress-step active" id="step-data">
+                    <span class="ai-step-icon">📊</span>
+                    <span>Получение данных от MCP API...</span>
                 </li>
-                <li class="progress-step" id="step-agents">
-                    <span class="step-icon">🤖</span>
-                    Запуск 6 AI-агентов...
+                <li class="ai-progress-step" id="step-agents">
+                    <span class="ai-step-icon">🤖</span>
+                    <span>Запуск 6 AI-агентов...</span>
                 </li>
-                <li class="progress-step" id="step-analysis">
-                    <span class="step-icon">📈</span>
-                    Анализ и формирование рекомендаций...
+                <li class="ai-progress-step" id="step-analysis">
+                    <span class="ai-step-icon">📈</span>
+                    <span>Анализ и формирование рекомендаций...</span>
                 </li>
-                <li class="progress-step" id="step-complete">
-                    <span class="step-icon">✅</span>
-                    Сохранение результатов...
+                <li class="ai-progress-step" id="step-complete">
+                    <span class="ai-step-icon">✅</span>
+                    <span>Сохранение результатов...</span>
                 </li>
             </ul>
         </div>
@@ -463,11 +489,17 @@ async function displayAnalysisById(analysisId) {
     }
 }
 
-// Display analysis results
+// Display analysis results with horizontal agent tabs
 function displayAnalysisResults(analysisData) {
     console.log('🎯 displayAnalysisResults called with:', analysisData);
     
     const resultsContainer = document.getElementById('ai-results-container');
+    const placeholder = document.getElementById('ai-placeholder');
+    const progressEl = document.getElementById('ai-progress');
+    const summaryContainer = document.getElementById('ai-analysis-summary');
+    const tabsNav = document.getElementById('ai-agents-tabs-nav');
+    const tabsContent = document.getElementById('ai-agents-tabs-content');
+    
     if (!resultsContainer) {
         console.error('❌ ai-results-container not found!');
         return;
@@ -475,150 +507,325 @@ function displayAnalysisResults(analysisData) {
     
     console.log('✅ Results container found, displaying...');
     
-    // Make sure container is visible
+    // Hide placeholder and progress, show results
+    if (placeholder) placeholder.style.display = 'none';
+    if (progressEl) progressEl.style.display = 'none';
     resultsContainer.style.display = 'block';
     
-    // Get department info
+    // Get organization and department info
     const departmentFilter = document.getElementById('ai-department-filter');
     const selectedOption = departmentFilter?.querySelector(`option[value="${analysisData.department_id}"]`);
     let departmentName = selectedOption?.getAttribute('data-department-name') || selectedOption?.textContent;
     
-    // If we can't find department name from dropdown, try to get it from analysis data
     if (!departmentName || departmentName === 'Неизвестно') {
-        // Try to extract from period object or use department_id
         departmentName = analysisData.department_name || analysisData.department_id || 'Неизвестно';
     }
     
-    console.log('🏢 Department name:', departmentName);
+    // Получаем название организации
+    let organizationName = analysisData.organization_name || '';
+    if (!organizationName && selectedOption) {
+        organizationName = selectedOption.getAttribute('data-company') || '';
+    }
     
-    resultsContainer.innerHTML = `
-        <div class="ai-analysis-summary">
-            <div class="summary-header">
-                <span class="summary-icon">📊</span>
-                <h3 class="summary-title">Результаты анализа</h3>
-            </div>
-            <div class="summary-stats">
-                <div class="summary-stat">
-                    <div class="stat-value">6</div>
-                    <div class="stat-label">AI агентов</div>
+    console.log('🏢 Organization:', organizationName, 'Department:', departmentName);
+    
+    // Calculate days
+    const daysAnalyzed = Math.max(1, Math.round(
+        (Date.parse(analysisData.period.end) - Date.parse(analysisData.period.start)) / (1000 * 60 * 60 * 24)
+    ));
+    
+    // Provider label
+    const providerLabel = analysisData.provider ? analysisData.provider.toUpperCase() : '';
+    
+    // Render summary - показываем организацию в заголовке
+    if (summaryContainer) {
+        summaryContainer.innerHTML = `
+            <div class="ai-summary-header">
+                <div class="ai-summary-title">
+                    <span class="ai-summary-icon">📊</span>
+                    <div>
+                        <h3>Результаты анализа</h3>
+                        <p class="ai-summary-subtitle">${organizationName || departmentName}</p>
+                    </div>
                 </div>
-                <div class="summary-stat">
-                    <div class="stat-value">${Object.keys(analysisData.agent_results).length}</div>
-                    <div class="stat-label">Выполнено</div>
-                </div>
-                <div class="summary-stat">
-                    <div class="stat-value">${Math.round((Date.parse(analysisData.created_at) - Date.parse(analysisData.period.start)) / (1000 * 60 * 60 * 24))}</div>
-                    <div class="stat-label">Дней анализа</div>
+                <div class="ai-summary-meta">
+                    ${providerLabel ? `<span class="ai-summary-provider">${providerLabel}</span>` : ''}
+                    <span class="ai-summary-period">${analysisData.period.start} — ${analysisData.period.end}</span>
+                    <span class="ai-summary-badge">${daysAnalyzed} дн.</span>
                 </div>
             </div>
-            <div class="summary-department">
-                <strong>Подразделение:</strong> ${departmentName}
+            <div class="ai-summary-stats">
+                <div class="ai-summary-stat">
+                    <span class="ai-summary-stat-value">${Object.keys(analysisData.agent_results).length}</span>
+                    <span class="ai-summary-stat-label">агентов</span>
+                </div>
             </div>
-            <div class="summary-period">
-                <strong>Период:</strong> ${analysisData.period.start} — ${analysisData.period.end}
-            </div>
-        </div>
+        `;
+    }
+    
+    // Generate tabs navigation and content
+    if (tabsNav && tabsContent) {
+        const { tabsNavHTML, tabsContentHTML } = generateAgentTabsHTML(analysisData.agent_results);
+        tabsNav.innerHTML = tabsNavHTML;
+        tabsContent.innerHTML = tabsContentHTML;
         
-        <div class="ai-agents-results">
-            ${generateAgentResultsHTML(analysisData.agent_results)}
-        </div>
-        
-        <div class="export-actions-section">
-            <div class="export-actions-header">
-                <span class="export-icon">📄</span>
-                <h4 class="export-title">Экспорт и отправка результатов</h4>
-            </div>
-            
-            <div class="export-controls">
-                <button id="export-pdf-btn" class="export-pdf-btn">
-                    <span class="btn-icon">📄</span>
-                    Скачать PDF
-                </button>
-                
-                <div class="webhook-controls">
-                    <input type="url" id="webhook-url" class="webhook-url-input" placeholder="https://example.com/webhook" value="">
-                    <button id="webhook-send-btn" class="webhook-send-btn">
-                        <span class="btn-icon">🔗</span>
-                        Отправить на webhook
-                    </button>
-                </div>
-            </div>
-            
-            <div id="webhook-status" class="webhook-status"></div>
-            <div id="export-status" class="export-status"></div>
-        </div>
-    `;
+        // Setup tab switching
+        setupAgentTabsSwitching();
+    }
     
     // Setup webhook functionality
     setupWebhookSender(analysisData);
     
     // Setup PDF export functionality
     setupPDFExport(analysisData, departmentName);
-    
-    // Setup agent collapse functionality
-    setupAgentCollapse();
 }
 
-// Generate agent results HTML with tabs
-function generateAgentResultsHTML(agentResults) {
-    const agentConfig = {
-        SalesAnalysisAgent: { icon: '📈', title: 'Аналитик продаж', description: 'Анализ прогнозов и динамики продаж' },
-        PayrollAnalysisAgent: { icon: '💰', title: 'Аналитик затрат', description: 'Анализ ФОТ и эффективности персонала' },
-        StaffingAgent: { icon: '👥', title: 'Оптимизация смен', description: 'Распределение персонала по часам' },
-        ReputationAgent: { icon: '⭐', title: 'Анализ репутации', description: 'Отзывы клиентов и проблемы сервиса' },
-        OptimizationAgent: { icon: '🎯', title: 'Консультант оптимизации', description: 'Конкретные шаги улучшения' },
-        NarrativeAgent: { icon: '📊', title: 'Бизнес-консультант', description: 'Итоговый отчет для управляющего' }
-    };
+// Agent configuration
+const AGENT_CONFIG = {
+    SalesAnalysisAgent: { icon: '📈', title: 'Продажи', fullTitle: 'Аналитик продаж', description: 'Анализ прогнозов и динамики продаж' },
+    PayrollAnalysisAgent: { icon: '💰', title: 'Затраты', fullTitle: 'Аналитик затрат', description: 'Анализ ФОТ и эффективности персонала' },
+    StaffingAgent: { icon: '👥', title: 'Смены', fullTitle: 'Оптимизация смен', description: 'Распределение персонала по часам' },
+    ReputationAgent: { icon: '⭐', title: 'Репутация', fullTitle: 'Анализ репутации', description: 'Отзывы клиентов и проблемы сервиса' },
+    OptimizationAgent: { icon: '🎯', title: 'Оптимизация', fullTitle: 'Консультант оптимизации', description: 'Конкретные шаги улучшения' },
+    NarrativeAgent: { icon: '📊', title: 'Итоги', fullTitle: 'Бизнес-консультант', description: 'Итоговый отчет для управляющего' }
+};
+
+// Define agent order for consistent display
+const AGENT_ORDER = [
+    'SalesAnalysisAgent',
+    'PayrollAnalysisAgent', 
+    'StaffingAgent',
+    'ReputationAgent',
+    'OptimizationAgent',
+    'NarrativeAgent'
+];
+
+// Generate horizontal agent tabs HTML
+function generateAgentTabsHTML(agentResults) {
+    let tabsNavHTML = '';
+    let tabsContentHTML = '';
+    let isFirst = true;
     
-    let html = '';
+    // Use defined order, filtering to only include agents with results
+    const orderedAgents = AGENT_ORDER.filter(name => agentResults.hasOwnProperty(name));
+    // Add any agents not in the predefined order
+    Object.keys(agentResults).forEach(name => {
+        if (!orderedAgents.includes(name)) {
+            orderedAgents.push(name);
+        }
+    });
     
-    Object.entries(agentResults).forEach(([agentName, result]) => {
-        const config = agentConfig[agentName] || { icon: '🤖', title: agentName, description: 'AI агент' };
+    orderedAgents.forEach(agentName => {
+        const result = agentResults[agentName];
+        const config = AGENT_CONFIG[agentName] || { icon: '🤖', title: agentName, fullTitle: agentName, description: 'AI агент' };
         const isError = result.error || false;
         const resultText = isError ? result.message || 'Ошибка выполнения агента' : result;
+        const activeClass = isFirst ? 'active' : '';
         
-        html += `
-            <div class="ai-agent-result ${isError ? 'error' : ''}" data-agent="${agentName}">
-                <div class="agent-result-header">
-                    <div class="agent-header-left">
-                        <span class="agent-result-icon">${config.icon}</span>
+        // Tab button
+        tabsNavHTML += `
+            <button class="ai-agent-tab ${activeClass} ${isError ? 'error' : ''}" 
+                    data-agent="${agentName}" 
+                    title="${config.fullTitle}">
+                <span class="ai-agent-tab-icon">${config.icon}</span>
+                <span class="ai-agent-tab-title">${config.title}</span>
+            </button>
+        `;
+        
+        // Tab content
+        tabsContentHTML += `
+            <div class="ai-agent-pane ${activeClass}" data-agent="${agentName}">
+                <div class="ai-agent-pane-header">
+                    <div class="ai-agent-pane-title">
+                        <span class="ai-agent-pane-icon">${config.icon}</span>
                         <div>
-                            <h4 class="agent-result-title">${config.title}</h4>
-                            <p class="agent-result-description">${config.description}</p>
+                            <h4>${config.fullTitle}</h4>
+                            <p>${config.description}</p>
                         </div>
                     </div>
-                    <span class="agent-collapse-icon">▼</span>
+                    <div class="ai-agent-pane-tabs">
+                        <button class="ai-pane-tab active" data-tab="result" data-agent="${agentName}">
+                            Результат
+                        </button>
+                        <button class="ai-pane-tab" data-tab="prompt" data-agent="${agentName}">
+                            Промпт
+                        </button>
+                    </div>
                 </div>
-                <div class="agent-result-content">
-                    <div class="agent-tabs">
-                        <div class="agent-tab-buttons">
-                            <button class="agent-tab-button active" data-tab="result" data-agent="${agentName}">
-                                📊 Результат анализа
-                            </button>
-                            <button class="agent-tab-button" data-tab="prompt" data-agent="${agentName}">
-                                📝 Отправленный промпт
-                            </button>
-                        </div>
-                        <div class="agent-tab-content">
-                            <div class="agent-tab-panel active" data-tab="result" data-agent="${agentName}">
-                                <div class="agent-result-text">${resultText}</div>
-                            </div>
-                            <div class="agent-tab-panel" data-tab="prompt" data-agent="${agentName}">
-                                <div class="agent-prompt-content">
-                                    <div class="prompt-loading">
-                                        <span class="spinner"></span>
-                                        Загрузка промпта...
-                                    </div>
-                                </div>
+                <div class="ai-agent-pane-content">
+                    <div class="ai-pane-panel active" data-tab="result" data-agent="${agentName}">
+                        <div class="ai-result-text ${isError ? 'error' : ''}">${resultText}</div>
+                    </div>
+                    <div class="ai-pane-panel" data-tab="prompt" data-agent="${agentName}">
+                        <div class="ai-prompt-content">
+                            <div class="ai-prompt-loading">
+                                <span class="spinner"></span>
+                                Загрузка промпта...
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+        
+        isFirst = false;
     });
     
-    return html;
+    return { tabsNavHTML, tabsContentHTML };
+}
+
+// Setup agent tabs switching
+function setupAgentTabsSwitching() {
+    // Main agent tabs switching
+    document.querySelectorAll('.ai-agent-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const agentName = tab.dataset.agent;
+            
+            // Update tab buttons
+            document.querySelectorAll('.ai-agent-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update panes
+            document.querySelectorAll('.ai-agent-pane').forEach(pane => {
+                pane.classList.toggle('active', pane.dataset.agent === agentName);
+            });
+        });
+    });
+    
+    // Inner tabs (Result/Prompt) switching
+    document.querySelectorAll('.ai-pane-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const agentName = tab.dataset.agent;
+            const tabType = tab.dataset.tab;
+            const pane = tab.closest('.ai-agent-pane');
+            
+            // Update tab buttons within this pane
+            pane.querySelectorAll('.ai-pane-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update panels within this pane
+            pane.querySelectorAll('.ai-pane-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.dataset.tab === tabType);
+            });
+            
+            // Load prompt data if needed
+            if (tabType === 'prompt' && currentAnalysisId) {
+                loadAgentPromptNew(agentName, currentAnalysisId, pane);
+            }
+        });
+    });
+}
+
+// Load agent prompt for new tab structure
+async function loadAgentPromptNew(agentName, analysisId, pane) {
+    const promptContent = pane.querySelector('.ai-prompt-content');
+    if (!promptContent) return;
+    
+    // Check if already loaded
+    if (promptContent.querySelector('.ai-prompt-details')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/prompts/${analysisId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const agents = data.data.agents || [];
+            const agent = agents.find(a => a.name === agentName);
+            
+            if (agent && agent.prompt) {
+                const prompt = agent.prompt;
+                const requestTime = new Date(prompt.request_timestamp).toLocaleString('ru-RU');
+                const responseTime = prompt.response_timestamp ? new Date(prompt.response_timestamp).toLocaleString('ru-RU') : 'Не завершен';
+                
+                promptContent.innerHTML = `
+                    <div class="ai-prompt-details">
+                        <div class="ai-prompt-meta">
+                            <div class="ai-prompt-meta-item">
+                                <strong>Провайдер:</strong> ${prompt.provider.toUpperCase()}
+                            </div>
+                            <div class="ai-prompt-meta-item">
+                                <strong>Время:</strong> ${requestTime}
+                            </div>
+                            ${prompt.response_time_seconds ? `
+                                <div class="ai-prompt-meta-item">
+                                    <strong>Выполнение:</strong> ${Math.round(prompt.response_time_seconds * 100) / 100} сек
+                                </div>
+                            ` : ''}
+                            <div class="ai-prompt-meta-item">
+                                <span class="ai-prompt-status ${prompt.success ? 'success' : 'error'}">
+                                    ${prompt.success ? '✅ Успешно' : '❌ Ошибка'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="ai-prompt-section">
+                            <div class="ai-prompt-section-header">
+                                <h5>Отправленный промпт</h5>
+                                <button class="ai-copy-btn" data-prompt="${encodeURIComponent(prompt.full_prompt)}">
+                                    📋 Копировать
+                                </button>
+                            </div>
+                            <pre class="ai-prompt-text">${prompt.full_prompt}</pre>
+                        </div>
+                        
+                        ${prompt.system_prompt ? `
+                            <div class="ai-prompt-section">
+                                <div class="ai-prompt-section-header">
+                                    <h5>Системный промпт</h5>
+                                    <button class="ai-copy-btn" data-prompt="${encodeURIComponent(prompt.system_prompt)}">
+                                        📋 Копировать
+                                    </button>
+                                </div>
+                                <pre class="ai-prompt-text ai-prompt-text--system">${prompt.system_prompt}</pre>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                // Setup copy buttons
+                setupCopyButtonsNew(promptContent);
+            } else {
+                promptContent.innerHTML = `
+                    <div class="ai-prompt-error">
+                        <span>⚠️</span>
+                        <p>Промпт для агента не найден</p>
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error(data.error || 'Ошибка загрузки');
+        }
+    } catch (error) {
+        console.error('❌ Error loading agent prompt:', error);
+        promptContent.innerHTML = `
+            <div class="ai-prompt-error">
+                <span>❌</span>
+                <p>Ошибка загрузки: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Setup copy buttons for new structure
+function setupCopyButtonsNew(container) {
+    container.querySelectorAll('.ai-copy-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const promptText = decodeURIComponent(button.dataset.prompt);
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(promptText).then(() => {
+                    showNotification('Промпт скопирован', 'success');
+                    button.textContent = '✅ Скопировано';
+                    setTimeout(() => { button.textContent = '📋 Копировать'; }, 2000);
+                }).catch(() => {
+                    showNotification('Ошибка копирования', 'error');
+                });
+            }
+        });
+    });
 }
 
 // Setup webhook sender
@@ -1199,38 +1406,50 @@ function setupCopyButtons(container) {
 }
 
 // Load AI history
+// Load AI history into dropdown
 async function loadAIHistory() {
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/history?limit=10`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/ai-recommendations/history?limit=20`);
         const data = await response.json();
         
-        const historyContainer = document.getElementById('ai-history-list');
-        if (!historyContainer) return;
+        const historyDropdown = document.getElementById('ai-history-dropdown');
+        if (!historyDropdown) return;
+        
+        // Clear existing options except the first one
+        historyDropdown.innerHTML = '<option value="">Выберите анализ...</option>';
         
         if (data.success && data.data && data.data.length > 0) {
             analysisHistory = data.data;
             
-            historyContainer.innerHTML = data.data.map(item => `
-                <div class="ai-history-item" data-id="${item.id}">
-                    <div class="history-info">
-                        <div class="history-department">${item.department_name || 'Неизвестно'}</div>
-                        <div class="history-period">${item.date_start} — ${item.date_end}</div>
-                    </div>
-                    <div class="history-date">${formatDateTime(item.created_at)}</div>
-                </div>
-            `).join('');
-            
-            // Add click handlers for history items
-            historyContainer.querySelectorAll('.ai-history-item').forEach(item => {
-                item.addEventListener('click', () => loadHistoryItem(item.dataset.id));
+            data.data.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                const dateStr = formatDateTime(item.created_at);
+                // Показываем организацию вместо подразделения
+                const orgName = item.organization_name || 'Неизвестно';
+                const providerLabel = item.provider_label || item.provider?.toUpperCase() || '';
+                option.textContent = `${orgName} (${providerLabel}) • ${dateStr}`;
+                option.setAttribute('data-created-at', item.created_at);
+                option.setAttribute('data-organization', item.organization_name || '');
+                option.setAttribute('data-department', item.department_name || '');
+                historyDropdown.appendChild(option);
             });
             
-        } else {
-            historyContainer.innerHTML = '<div class="ai-history-empty">История анализов пуста</div>';
+            console.log(`📋 Loaded ${data.data.length} history items into dropdown`);
         }
         
     } catch (error) {
         console.error('❌ Error loading AI history:', error);
+    }
+}
+
+// Handle history dropdown change
+function onHistoryDropdownChange() {
+    const dropdown = document.getElementById('ai-history-dropdown');
+    const selectedId = dropdown?.value;
+    
+    if (selectedId) {
+        loadHistoryItem(selectedId);
     }
 }
 
@@ -1252,13 +1471,15 @@ async function loadHistoryItem(analysisId) {
             const analysisResultsData = {
                 analysis_id: analysisId,
                 department_id: data.data.department_id,
-                department_name: data.data.department_name || data.data.department_id, // Add department name
+                department_name: data.data.department_name || data.data.department_id,
+                organization_name: data.data.organization_name || '', // Добавляем название организации
                 period: {
                     start: data.data.date_start,
                     end: data.data.date_end
                 },
                 agent_results: data.data.agent_results,
-                created_at: data.data.created_at
+                created_at: data.data.created_at,
+                provider: data.data.provider
             };
             
             console.log('📈 Displaying analysis results:', analysisResultsData);
@@ -1595,4 +1816,5 @@ function formatDateTime(dateString) {
 }
 
 // Make function globally available
+window.initAIRecommendationSection = initAIRecommendationSection;
 window.initAIRecommendationSection = initAIRecommendationSection;

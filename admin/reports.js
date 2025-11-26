@@ -821,6 +821,7 @@ async function loadRevenueToPayrollReport() {
     const orgFilter = document.getElementById('rtp-organization-filter');
     const dateFrom = document.getElementById('rtp-date-from');
     const dateTo = document.getElementById('rtp-date-to');
+    const bonusPercentInput = document.getElementById('rtp-bonus-percent');
     const generateBtn = document.getElementById('load-rtp-report-btn');
     const spinner = generateBtn?.querySelector('.spinner');
     const btnText = generateBtn?.querySelector('.btn-text');
@@ -835,10 +836,13 @@ async function loadRevenueToPayrollReport() {
     if (btnText) btnText.style.display = 'none';
 
     try {
+        const bonusPercent = parseFloat(bonusPercentInput?.value) || 4;
+
         const params = new URLSearchParams({
             organization: orgFilter.value,
             date_from: dateFrom?.value || '',
-            date_to: dateTo?.value || ''
+            date_to: dateTo?.value || '',
+            bonus_percent: bonusPercent
         });
 
         const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/revenue-to-payroll?${params}`);
@@ -882,7 +886,9 @@ function renderRevenueToPayrollReport(data) {
         tbody.innerHTML = days.map(day => {
             const dateObj = new Date(day.date);
             const dayOfWeek = weekDays[dateObj.getDay()];
-            const payroll = day.actual_payroll || day.payroll || 0;
+            const payroll = day.actual_payroll || 0;
+            const bonus = day.bonus || 0;
+            const totalPayroll = day.total_payroll || payroll;
             const coefficient = day.coefficient || 0;
 
             return `
@@ -891,6 +897,8 @@ function renderRevenueToPayrollReport(data) {
                     <td>${dayOfWeek}</td>
                     <td>${formatNumber(day.revenue || 0)} ₸</td>
                     <td>${formatNumber(payroll)} ₸</td>
+                    <td style="color: #17a2b8;">${formatNumber(bonus)} ₸</td>
+                    <td style="font-weight: 600; color: #6f42c1;">${formatNumber(totalPayroll)} ₸</td>
                     <td>${day.employees_count || 0}</td>
                     <td style="font-weight: bold; color: ${coefficient >= 1 ? '#28a745' : '#dc3545'}">
                         ${coefficient.toFixed(2)}
@@ -901,17 +909,21 @@ function renderRevenueToPayrollReport(data) {
     }
 
     // Update footer totals
-    const totalRevenue = document.getElementById('rtp-total-revenue');
-    const totalPayroll = document.getElementById('rtp-total-payroll');
-    const totalEmployees = document.getElementById('rtp-total-employees');
-    const totalCoefficient = document.getElementById('rtp-total-coefficient');
-    const avgCoefficient = document.getElementById('rtp-avg-coefficient');
+    const totalRevenueEl = document.getElementById('rtp-total-revenue');
+    const totalPayrollEl = document.getElementById('rtp-total-payroll');
+    const totalBonusEl = document.getElementById('rtp-total-bonus');
+    const grandTotalPayrollEl = document.getElementById('rtp-grand-total-payroll');
+    const totalEmployeesEl = document.getElementById('rtp-total-employees');
+    const totalCoefficientEl = document.getElementById('rtp-total-coefficient');
+    const avgCoefficientEl = document.getElementById('rtp-avg-coefficient');
 
-    if (totalRevenue) totalRevenue.textContent = formatNumber(summary.total_revenue || 0) + ' ₸';
-    if (totalPayroll) totalPayroll.textContent = formatNumber(summary.total_payroll || 0) + ' ₸';
-    if (totalEmployees) totalEmployees.textContent = summary.total_employees || 0;
-    if (totalCoefficient) totalCoefficient.textContent = (summary.avg_coefficient || 0).toFixed(2);
-    if (avgCoefficient) avgCoefficient.textContent = (summary.avg_coefficient || 0).toFixed(2);
+    if (totalRevenueEl) totalRevenueEl.textContent = formatNumber(summary.total_revenue || 0) + ' ₸';
+    if (totalPayrollEl) totalPayrollEl.textContent = formatNumber(summary.total_payroll || 0) + ' ₸';
+    if (totalBonusEl) totalBonusEl.textContent = formatNumber(summary.total_bonus || 0) + ' ₸';
+    if (grandTotalPayrollEl) grandTotalPayrollEl.textContent = formatNumber(summary.grand_total_payroll || 0) + ' ₸';
+    if (totalEmployeesEl) totalEmployeesEl.textContent = summary.total_employees || 0;
+    if (totalCoefficientEl) totalCoefficientEl.textContent = (summary.avg_coefficient || 0).toFixed(2);
+    if (avgCoefficientEl) avgCoefficientEl.textContent = (summary.avg_coefficient || 0).toFixed(2);
 
     // Render chart if Chart.js available
     if (typeof Chart !== 'undefined' && days.length > 0) {
@@ -942,10 +954,10 @@ function renderRTPChart(days) {
                     tension: 0.3
                 },
                 {
-                    label: 'ФОТ',
-                    data: days.map(d => d.actual_payroll || d.payroll || 0),
-                    borderColor: '#dc3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    label: 'ФОТ + Бонус',
+                    data: days.map(d => d.total_payroll || d.actual_payroll || 0),
+                    borderColor: '#6f42c1',
+                    backgroundColor: 'rgba(111, 66, 193, 0.1)',
                     fill: true,
                     tension: 0.3
                 }
@@ -955,7 +967,20 @@ function renderRTPChart(days) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top' }
+                legend: { position: 'top' },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(context) {
+                            const dataIndex = context[0].dataIndex;
+                            const day = days[dataIndex];
+                            const bonus = day.bonus || 0;
+                            return [
+                                '',
+                                '■ Бонус: ' + formatNumber(bonus) + ' ₸'
+                            ];
+                        }
+                    }
+                }
             },
             scales: {
                 y: {
@@ -975,6 +1000,7 @@ function clearRevenueToPayrollReport() {
     const resultsContainer = document.getElementById('rtp-results-container');
     const placeholder = document.getElementById('rtp-report-placeholder');
     const orgFilter = document.getElementById('rtp-organization-filter');
+    const bonusPercentInput = document.getElementById('rtp-bonus-percent');
 
     if (revenueToPayrollChart) {
         revenueToPayrollChart.destroy();
@@ -987,6 +1013,7 @@ function clearRevenueToPayrollReport() {
         placeholder.textContent = 'Выберите организацию и период, затем нажмите "Сформировать отчет"';
     }
     if (orgFilter) orgFilter.value = '';
+    if (bonusPercentInput) bonusPercentInput.value = '4';
 
     // Reset dates
     const today = new Date();

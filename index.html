@@ -786,6 +786,8 @@
                                         </select>
                                         <input type="date" id="rtp-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
                                         <input type="date" id="rtp-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
+                                        <label style="margin-right: 5px; font-weight: 500;">Бонус %:</label>
+                                        <input type="number" id="rtp-bonus-percent" class="form-control" style="width: 70px; margin-right: 10px;" value="4" min="0" max="100" step="0.5">
                                         <button id="load-rtp-report-btn" class="btn btn--primary btn--sm">
                                             <span class="btn-text">Сформировать отчет</span>
                                             <span class="spinner" style="display: none;">⏳</span>
@@ -796,8 +798,8 @@
                                 </div>
                                 <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
                                     <p style="margin: 0; color: #1976D2; font-size: 14px;">
-                                        💡 <strong>Описание отчета:</strong> Показывает эффективность работы через коэффициент "Выручка / Фактический ФОТ".
-                                        Чем выше коэффициент, тем эффективнее используются ресурсы. Рекомендуемый коэффициент: <strong>10-15</strong>.
+                                        💡 <strong>Описание отчета:</strong> Показывает эффективность работы через коэффициент "Выручка / (ФОТ + Бонус)".
+                                        Бонус рассчитывается как процент от выручки. Чем выше коэффициент, тем эффективнее используются ресурсы.
                                     </p>
                                 </div>
                                 <div id="rtp-results-container" style="display: none;">
@@ -815,6 +817,8 @@
                                                         <th>День недели</th>
                                                         <th>Выручка (₸)</th>
                                                         <th>ФОТ (₸)</th>
+                                                        <th>Бонус (₸)</th>
+                                                        <th>Итого ФОТ (₸)</th>
                                                         <th>Сотрудников</th>
                                                         <th>Коэффициент</th>
                                                     </tr>
@@ -825,8 +829,10 @@
                                                 <tfoot id="rtp-report-footer" style="font-weight: bold; background: #f8f9fa;">
                                                     <tr>
                                                         <td colspan="2">ИТОГО:</td>
-                                                        <td id="rtp-total-revenue">0.00</td>
-                                                        <td id="rtp-total-payroll">0.00</td>
+                                                        <td id="rtp-total-revenue">0 ₸</td>
+                                                        <td id="rtp-total-payroll">0 ₸</td>
+                                                        <td id="rtp-total-bonus">0 ₸</td>
+                                                        <td id="rtp-grand-total-payroll">0 ₸</td>
                                                         <td id="rtp-total-employees">0</td>
                                                         <td id="rtp-total-coefficient" style="font-size: 16px; color: #2196F3;">0.00</td>
                                                     </tr>
@@ -847,107 +853,152 @@
                 <section id="ai-recommendation-section" class="content-section">
                     <div class="section-header">
                         <h2>AI-рекомендации</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <select id="ai-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все организации</option>
+                    </div>
+                    
+                    <!-- Sidebar Layout -->
+                    <div class="ai-layout">
+                        <!-- Sidebar -->
+                        <aside class="ai-sidebar">
+                            <!-- Фильтры -->
+                            <div class="ai-sidebar-section">
+                                <h4 class="ai-sidebar-title">Параметры анализа</h4>
+                                
+                                <div class="ai-filter-group">
+                                    <label class="ai-filter-label">Организация</label>
+                                    <select id="ai-organization-filter" class="ai-filter-select">
+                                        <option value="">Все организации</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="ai-filter-group">
+                                    <label class="ai-filter-label">Подразделение</label>
+                                    <select id="ai-department-filter" class="ai-filter-select">
+                                        <option value="">Выберите подразделение</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="ai-filter-group">
+                                    <label class="ai-filter-label">Период анализа</label>
+                                    <div class="ai-date-range">
+                                        <input type="date" id="ai-date-from" class="ai-filter-input" title="Дата начала">
+                                        <span class="ai-date-separator">—</span>
+                                        <input type="date" id="ai-date-to" class="ai-filter-input" title="Дата конца">
+                                    </div>
+                                </div>
+                                
+                                <div class="ai-filter-row">
+                                    <div class="ai-filter-group ai-filter-half">
+                                        <label class="ai-filter-label">Отзывов</label>
+                                        <input type="number" id="ai-reviews-count" class="ai-filter-input" placeholder="50" min="1" max="200" value="50" title="Количество отзывов">
+                                    </div>
+                                    <div class="ai-filter-group ai-filter-half">
+                                        <label class="ai-filter-label">Провайдер</label>
+                                        <select id="ai-provider-select" class="ai-filter-select" title="AI-провайдер">
+                                            <option value="claude">Claude</option>
+                                            <option value="openai">OpenAI</option>
+                                            <option value="gemini" disabled>Gemini</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- История -->
+                            <div class="ai-sidebar-section">
+                                <h4 class="ai-sidebar-title">История анализов</h4>
+                                <select id="ai-history-dropdown" class="ai-filter-select ai-history-select">
+                                    <option value="">Выберите анализ...</option>
                                 </select>
-                                <select id="ai-department-filter" class="search-input" style="width: 300px; margin-right: 10px;">
-                                    <option value="">Выберите подразделение</option>
-                                </select>
-                                <input type="date" id="ai-date-from" class="search-input" style="width: 150px; margin-right: 10px;" title="Дата начала периода">
-                                <input type="date" id="ai-date-to" class="search-input" style="width: 150px; margin-right: 10px;" title="Дата конца периода">
-                                <input type="number" id="ai-reviews-count" class="search-input" style="width: 100px; margin-right: 10px;" placeholder="50" min="1" max="200" value="50" title="Количество отзывов">
-                                <select id="ai-provider-select" class="search-input" style="width: 150px; margin-right: 10px;" title="AI-провайдер">
-                                    <option value="claude">Claude (Anthropic)</option>
-                                    <option value="openai">OpenAI GPT-4</option>
-                                    <option value="gemini" disabled>Google Gemini (скоро)</option>
-                                </select>
-                                <button id="ai-process-btn" class="btn btn--primary btn--sm">
+                                <button id="ai-refresh-history" class="ai-sidebar-btn ai-sidebar-btn--secondary">
+                                    <span>🔄</span> Обновить историю
+                                </button>
+                            </div>
+                            
+                            <!-- Действия -->
+                            <div class="ai-sidebar-section ai-sidebar-actions">
+                                <button id="ai-process-btn" class="ai-sidebar-btn ai-sidebar-btn--primary">
                                     <span class="btn-text">🤖 Запустить анализ</span>
                                     <span class="spinner" style="display: none;">⏳</span>
                                 </button>
+                                <button id="ai-show-prompts" class="ai-sidebar-btn ai-sidebar-btn--secondary">
+                                    <span>⚙️</span> Настройки промптов
+                                </button>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <!-- История анализов -->
-                    <div class="ai-history-section" style="margin-bottom: 20px;">
-                        <h3 style="margin-bottom: 10px;">📋 История анализов</h3>
-                        <div class="ai-history-controls" style="margin-bottom: 10px;">
-                            <button id="ai-refresh-history" class="btn btn--secondary btn--sm">🔄 Обновить</button>
-                            <button id="ai-show-prompts" class="btn btn--secondary btn--sm">⚙️ Настроить промпты</button>
-                        </div>
-                        <div id="ai-history-list" class="ai-history-container">
-                            <!-- История будет загружена динамически -->
-                        </div>
-                    </div>
-                    
-                    <!-- Основной контент -->
-                    <div class="ai-content-container">
-                        <div id="ai-placeholder" class="ai-placeholder">
-                            <div class="ai-icon">🤖</div>
-                            <h3>Мультиагентный анализ ресторана</h3>
-                            <p>Система из 6 специализированных AI-агентов для комплексного анализа работы ресторана:</p>
-                            <div class="ai-agents-grid">
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">📈</span>
-                                    <div class="agent-info">
-                                        <h4>Аналитик продаж</h4>
-                                        <p>Анализ прогнозов, план vs факт, динамика</p>
-                                    </div>
-                                </div>
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">💰</span>
-                                    <div class="agent-info">
-                                        <h4>Аналитик затрат</h4>
-                                        <p>ФОТ, эффективность персонала</p>
-                                    </div>
-                                </div>
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">👥</span>
-                                    <div class="agent-info">
-                                        <h4>Оптимизация смен</h4>
-                                        <p>Распределение персонала по часам</p>
-                                    </div>
-                                </div>
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">⭐</span>
-                                    <div class="agent-info">
-                                        <h4>Анализ репутации</h4>
-                                        <p>Отзывы клиентов, проблемы сервиса</p>
-                                    </div>
-                                </div>
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">🎯</span>
-                                    <div class="agent-info">
-                                        <h4>Консультант оптимизации</h4>
-                                        <p>Конкретные шаги улучшения</p>
-                                    </div>
-                                </div>
-                                <div class="ai-agent-card">
-                                    <span class="agent-icon">📊</span>
-                                    <div class="agent-info">
-                                        <h4>Бизнес-консультант</h4>
-                                        <p>Итоговый отчет для управляющего</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="ai-instructions">
-                                <p><strong>Инструкция:</strong></p>
-                                <ol>
-                                    <li>Выберите подразделение из списка</li>
-                                    <li>Укажите период анализа (дата начала и конца)</li>
-                                    <li>Задайте количество отзывов для анализа (по умолчанию 50)</li>
-                                    <li>Нажмите "Запустить анализ" и дождитесь результатов</li>
-                                </ol>
-                            </div>
-                        </div>
+                        </aside>
                         
-                        <!-- Результаты анализа -->
-                        <div id="ai-results-container" class="ai-results-container" style="display: none;">
-                            <!-- Результаты будут отображены здесь -->
-                        </div>
+                        <!-- Main Content -->
+                        <main class="ai-main-content">
+                            <!-- Placeholder -->
+                            <div id="ai-placeholder" class="ai-placeholder">
+                                <div class="ai-placeholder-icon">🤖</div>
+                                <h3 class="ai-placeholder-title">Мультиагентный анализ ресторана</h3>
+                                <p class="ai-placeholder-desc">Система из 6 специализированных AI-агентов для комплексного анализа</p>
+                                <div class="ai-agents-preview">
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">📈</span>
+                                        <span>Продажи</span>
+                                    </div>
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">💰</span>
+                                        <span>Затраты</span>
+                                    </div>
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">👥</span>
+                                        <span>Смены</span>
+                                    </div>
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">⭐</span>
+                                        <span>Репутация</span>
+                                    </div>
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">🎯</span>
+                                        <span>Оптимизация</span>
+                                    </div>
+                                    <div class="ai-agent-preview-item">
+                                        <span class="ai-agent-preview-icon">📊</span>
+                                        <span>Итоги</span>
+                                    </div>
+                                </div>
+                                <div class="ai-placeholder-hint">
+                                    Выберите подразделение и период, затем нажмите "Запустить анализ"
+                                </div>
+                            </div>
+                            
+                            <!-- Results Container -->
+                            <div id="ai-results-container" class="ai-results-container" style="display: none;">
+                                <!-- Summary Header -->
+                                <div id="ai-analysis-summary" class="ai-analysis-summary">
+                                    <!-- Будет заполнено динамически -->
+                                </div>
+                                
+                                <!-- Agent Tabs -->
+                                <div class="ai-agents-tabs">
+                                    <div class="ai-agents-tabs-nav" id="ai-agents-tabs-nav">
+                                        <!-- Вкладки агентов будут добавлены динамически -->
+                                    </div>
+                                    <div class="ai-agents-tabs-content" id="ai-agents-tabs-content">
+                                        <!-- Контент вкладок будет добавлен динамически -->
+                                    </div>
+                                </div>
+                                
+                                <!-- Export Actions -->
+                                <div class="ai-export-section">
+                                    <h4 class="ai-export-title">Экспорт результатов</h4>
+                                    <div class="ai-export-controls">
+                                        <button id="export-pdf-btn" class="ai-export-btn ai-export-btn--pdf">
+                                            <span>📄</span> Скачать PDF
+                                        </button>
+                                        <div class="ai-export-webhook">
+                                            <input type="url" id="webhook-url" class="ai-export-input" placeholder="https://example.com/webhook">
+                                            <button id="webhook-send-btn" class="ai-export-btn ai-export-btn--webhook">
+                                                <span>🔗</span> Отправить
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div id="webhook-status" class="ai-status-message"></div>
+                                    <div id="export-status" class="ai-status-message"></div>
+                                </div>
+                            </div>
+                        </main>
                     </div>
                 </section>
                 
