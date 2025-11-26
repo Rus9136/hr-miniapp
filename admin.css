@@ -1657,3 +1657,491 @@
         font-size: 24px;
     }
 }
+
+/* CRON Scheduler Styles */
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.status-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.status-item label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.status-item span {
+    font-size: 14px;
+    color: #1a1d23;
+    font-weight: 500;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge.success, .badge.enabled {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge.error, .badge.disabled {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge.running {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge.info {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+/* ==========================================
+   📊 PAYROLL OVERTIME REPORT STYLES
+   ========================================== */
+
+/* Overtime table specific styles */
+.overtime-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.overtime-table thead tr:first-child th {
+    border-bottom: none;
+    padding-bottom: 5px;
+}
+
+.overtime-table thead tr:last-child th {
+    padding-top: 5px;
+}
+
+.overtime-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    padding: 12px;
+    text-align: left;
+    border: 1px solid #dee2e6;
+}
+
+.overtime-table td {
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+}
+
+.overtime-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+/* Color-coded cells for difference column */
+.overtime-cell {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    font-weight: 600;
+}
+
+.savings-cell {
+    background: #d4edda !important;
+    color: #155724 !important;
+    font-weight: 600;
+}
+
+.neutral-cell {
+    background: #e2e3e5 !important;
+    color: #383d41 !important;
+}
+
+/* Summary row styling */
+.overtime-table .summary-row {
+    background: #e9ecef !important;
+    font-weight: 700;
+}
+
+.overtime-table .summary-row td {
+    border-top: 2px solid #495057;
+    padding: 15px 12px;
+}
+
+/* Department block */
+.department-block {
+    margin-bottom: 30px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+}
+
+.department-block h4 {
+    margin: 0;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* Total summary cards */
+.total-summary {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 30px;
+    border: 1px solid #dee2e6;
+}
+
+.total-summary h3 {
+    margin: 0 0 15px 0;
+    color: #495057;
+    font-size: 18px;
+}
+
+/* Responsive design for overtime report */
+@media (max-width: 768px) {
+    .total-summary > div {
+        grid-template-columns: 1fr !important;
+    }
+
+    .overtime-table {
+        font-size: 12px;
+    }
+
+    .overtime-table th,
+    .overtime-table td {
+        padding: 6px 8px;
+    }
+}
+
+/* ===== Organizations Section Styles ===== */
+
+/* Controls layout */
+.organizations-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.organizations-controls .search-wrapper {
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+}
+
+.organizations-controls .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.organizations-controls .btn-icon-add {
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+/* BIN code styling */
+.bin-code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    background: #f1f3f5;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #495057;
+    letter-spacing: 0.5px;
+}
+
+/* Organization name */
+.org-name {
+    font-weight: 500;
+    color: #212529;
+}
+
+/* Text center utility */
+.text-center {
+    text-align: center;
+}
+
+/* Compact action buttons */
+.actions-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.action-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.action-btn--edit {
+    background: #e8f4fd;
+    color: #0066cc;
+}
+
+.action-btn--edit:hover:not(:disabled) {
+    background: #0066cc;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
+}
+
+.action-btn--delete {
+    background: #fef2f2;
+    color: #dc3545;
+}
+
+.action-btn--delete:hover:not(:disabled) {
+    background: #dc3545;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+/* Organization Modal Styles */
+#organizationModal.organization-modal .modal-content {
+    background: #ffffff;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+}
+
+#organizationModal .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+    padding: 20px 24px;
+    border-bottom: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#organizationModal .modal-header h3 {
+    color: #ffffff;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+#organizationModal .btn-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+#organizationModal .btn-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+#organizationModal .modal-body {
+    padding: 24px;
+    background: #ffffff;
+}
+
+#organizationModal .form-group {
+    margin-bottom: 20px;
+}
+
+#organizationModal .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #374151;
+    font-size: 14px;
+}
+
+#organizationModal .form-group .required {
+    color: #dc3545;
+}
+
+#organizationModal .form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    background-color: #ffffff;
+    color: #374151;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+#organizationModal .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+#organizationModal .form-control:disabled {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+#organizationModal textarea.form-control {
+    resize: vertical;
+    min-height: 80px;
+}
+
+#organizationModal .form-text {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 5px;
+}
+
+#organizationModal .checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    padding: 8px 0;
+}
+
+#organizationModal .checkbox-wrapper input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #667eea;
+    cursor: pointer;
+}
+
+#organizationModal .checkbox-label-text {
+    color: #374151;
+    font-size: 14px;
+}
+
+#organizationModal .form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+#organizationModal .btn--primary {
+    background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+    border: none;
+    color: white;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#organizationModal .btn--primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+#organizationModal .btn--primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#organizationModal .btn--outline {
+    background: transparent;
+    border: 1px solid #d1d5db;
+    color: #6b7280;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+#organizationModal .btn--outline:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+/* Organizations table specific styles */
+#organizations-section .admin-table td {
+    vertical-align: middle;
+}
+
+#organizations-section .admin-table th:last-child,
+#organizations-section .admin-table td:last-child {
+    width: 90px;
+    text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .organizations-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .organizations-controls .search-wrapper {
+        max-width: none;
+    }
+    
+    .organizations-controls .controls-right {
+        justify-content: space-between;
+    }
+    
+    #organizationModal.organization-modal .modal-content {
+        width: 95%;
+        margin: 10px;
+    }
+    
+    .action-btn {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .action-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+}

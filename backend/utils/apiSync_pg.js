@@ -450,7 +450,7 @@ async function loadTimeEventsWithProgress({ tableNumber, dateFrom, dateTo, objec
               message: `Обработано ${processedCount}/${employees.length} сотрудников из "${deptName}"`,
               currentDepartment: deptName,
               processedEmployees: processedCount,
-              eventsLoaded: totalEvents
+              eventsLoaded: totalEventsProcessed
             });
             
             // Небольшая задержка между запросами

@@ -12,8 +12,9 @@ class ClaudeEngine extends BaseEngine {
         // Инициализация существующего AnthropicClient
         this.anthropicClient = new AnthropicClient(apiKey);
         
-        this.defaultModel = 'claude-3-5-sonnet-20241022';
+        this.defaultModel = 'claude-sonnet-4-20250514';
         this.supportedModels = [
+            'claude-sonnet-4-20250514',
             'claude-3-5-sonnet-20241022',
             'claude-3-5-haiku-20241022',
             'claude-3-opus-20240229'

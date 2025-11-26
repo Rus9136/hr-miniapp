@@ -219,6 +219,33 @@ async function initializeDatabase() {
       WHERE end_date IS NULL
     `);
 
+    // Schedule organizations table (many-to-many relationship)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS schedule_organizations (
+        id SERIAL PRIMARY KEY,
+        schedule_code VARCHAR(255) NOT NULL,
+        organization_bin VARCHAR(50) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_schedule_organization UNIQUE(schedule_code, organization_bin)
+      )
+    `);
+
+    // Indexes for schedule_organizations
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_schedule_organizations_schedule 
+      ON schedule_organizations(schedule_code)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_schedule_organizations_org 
+      ON schedule_organizations(organization_bin)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_schedule_organizations_composite 
+      ON schedule_organizations(schedule_code, organization_bin)
+    `);
+
     // Insert admin user if not exists
     await pool.query(`
       INSERT INTO users (employee_number, role) 

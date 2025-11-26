@@ -30,9 +30,13 @@
             }
         });
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
             onload="console.log('📄 jsPDF loaded from static HTML:', typeof window.jsPDF)"
             onerror="console.warn('⚠️ jsPDF failed to load from static HTML')"></script>
+    <!-- Chart.js for Revenue to Payroll Report -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+            onload="console.log('📊 Chart.js loaded:', typeof Chart)"
+            onerror="console.warn('⚠️ Chart.js failed to load')"></script>
 </head>
 <body>
     <!-- Экран входа -->
@@ -465,6 +469,7 @@
                     <ul class="sidebar-menu">
                         <li><a href="#" data-section="employees" class="menu-item active">Сотрудники</a></li>
                         <li><a href="#" data-section="departments" class="menu-item">Подразделения</a></li>
+                        <li><a href="#" data-section="organizations" class="menu-item">Организации</a></li>
                         <li><a href="#" data-section="positions" class="menu-item">Должности</a></li>
                     </ul>
                 </div>
@@ -485,6 +490,8 @@
                         <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
                         <li><a href="#" data-section="reports" class="menu-item">Отчеты</a></li>
                         <li><a href="#" data-section="off-schedule-report" class="menu-item">Вне графика</a></li>
+                        <li><a href="#" data-section="payroll-overtime-report" class="menu-item">Перелимит ФОТ</a></li>
+                        <li><a href="#" data-section="revenue-to-payroll-report" class="menu-item">Выручка к ФОТ</a></li>
                         <li><a href="#" data-section="ai-recommendation" class="menu-item">AI-рекомендация</a></li>
                         <li><a href="#" data-section="payroll-report" class="menu-item">Отчет по ФОТ</a></li>
                     </ul>
@@ -597,7 +604,42 @@
                         </table>
                     </div>
                 </section>
-                
+
+                <!-- Секция: Организации -->
+                <section id="organizations-section" class="content-section">
+                    <div class="section-header">
+                        <h2>Организации</h2>
+                        <div class="section-controls organizations-controls">
+                            <div class="search-wrapper">
+                                <input type="text" id="organizations-search" class="search-input" placeholder="Поиск по БИН или названию...">
+                            </div>
+                            <div class="controls-right">
+                                <button id="add-organization-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-icon-add">+</span> Добавить
+                                </button>
+                                <span class="total-count">Всего: <span id="organizations-total">0</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>БИН</th>
+                                    <th>Название</th>
+                                    <th>ID IIKO</th>
+                                    <th>Подразделений</th>
+                                    <th>Статус</th>
+                                    <th style="width: 100px;">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="organizations-tbody">
+                                <!-- Данные будут загружены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <!-- Секция: Входы/выходы (time_events) -->
                 <section id="time-events-section" class="content-section">
                     <div class="section-header">
@@ -610,14 +652,15 @@
                                 <select id="events-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
                                     <option value="">Все подразделения</option>
                                 </select>
+                                <select id="events-type-filter" class="search-input" style="width: 150px; margin-right: 10px;">
+                                    <option value="">Все события</option>
+                                    <option value="1">Приход</option>
+                                    <option value="2">Уход</option>
+                                </select>
                                 <input type="date" id="events-date-from" class="form-control">
                                 <input type="date" id="events-date-to" class="form-control">
                                 <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
                                 <button id="events-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
-                                <button id="events-delete-all-btn" class="btn btn--danger btn--sm" title="Удалить все записи из таблицы">
-                                    <span class="btn-text">🗑️ Очистить таблицу</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
                             </div>
                             <span class="total-count">Всего: <span id="events-total">0</span></span>
                         </div>
@@ -629,6 +672,7 @@
                                     <th>Дата/время</th>
                                     <th>Сотрудник</th>
                                     <th>Табельный номер</th>
+                                    <th>Должность</th>
                                     <th>Тип события</th>
                                     <th>Подразделение</th>
                                 </tr>
@@ -763,7 +807,7 @@
                                 <tr>
                                     <th>Дата</th>
                                     <th>Сотрудник</th>
-                                    <th>Табельный номер</th>
+                                    <th>Должность</th>
                                     <th>Организация</th>
                                     <th>Подразделение</th>
                                     <th>График работы</th>
@@ -777,6 +821,116 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+
+                <!-- Секция: Отчет "Перелимит ФОТ" -->
+                <section id="payroll-overtime-report-section" class="content-section">
+                    <div class="section-header">
+                        <h2>📊 Отчет: Перелимит ФОТ</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <select id="overtime-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
+                                    <option value="">Выберите организацию...</option>
+                                </select>
+                                <input type="date" id="overtime-date-filter" class="form-control" style="margin-right: 10px;">
+                                <button id="load-overtime-report-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Сформировать отчет</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                                <button id="clear-overtime-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            </div>
+                            <span class="total-count">Подразделений: <span id="overtime-departments-total">0</span></span>
+                        </div>
+                    </div>
+                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                        <p style="margin: 0; color: #856404; font-size: 14px;">
+                            💰 <strong>Описание отчета:</strong> Сравнивает плановый и фактический ФОТ по должностям.
+                            Показывает <span style="color: #dc3545;">перелимит</span> (когда вышли более дорогие сотрудники)
+                            и <span style="color: #28a745;">экономию</span> (когда вышли более дешевые).
+                        </p>
+                    </div>
+
+                    <!-- Результаты отчета -->
+                    <div id="overtime-results-container">
+                        <div class="table-container">
+                            <div id="overtime-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                                Выберите организацию и дату, затем нажмите "Сформировать отчет"
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Секция: Выручка к ФОТ -->
+                <section id="revenue-to-payroll-report-section" class="content-section">
+                    <div class="section-header">
+                        <h2>📊 Отчет: Выручка к ФОТ</h2>
+                        <div class="section-controls">
+                            <div class="filter-controls">
+                                <select id="rtp-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
+                                    <option value="">Выберите организацию...</option>
+                                </select>
+                                <input type="date" id="rtp-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
+                                <input type="date" id="rtp-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
+                                <button id="load-rtp-report-btn" class="btn btn--primary btn--sm">
+                                    <span class="btn-text">Сформировать отчет</span>
+                                    <span class="spinner" style="display: none;">⏳</span>
+                                </button>
+                                <button id="clear-rtp-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            </div>
+                            <span class="total-count">Коэффициент: <span id="rtp-avg-coefficient">0.00</span></span>
+                        </div>
+                    </div>
+                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
+                        <p style="margin: 0; color: #1976D2; font-size: 14px;">
+                            💡 <strong>Описание отчета:</strong> Показывает эффективность работы через коэффициент "Выручка / Фактический ФОТ".
+                            Чем выше коэффициент, тем эффективнее используются ресурсы. Рекомендуемый коэффициент: <strong>10-15</strong>.
+                        </p>
+                    </div>
+
+                    <!-- График и таблица -->
+                    <div id="rtp-results-container" style="display: none;">
+                        <!-- График (Chart.js) -->
+                        <div id="rtp-chart-container" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📈 Динамика выручки, ФОТ и коэффициента</h3>
+                            <canvas id="rtp-chart" style="max-height: 400px;"></canvas>
+                        </div>
+
+                        <!-- Таблица с детализацией -->
+                        <div id="rtp-table-container" style="margin: 20px 0;">
+                            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📋 Детализация по дням</h3>
+                            <div class="table-container">
+                                <table class="admin-table" id="rtp-report-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Дата</th>
+                                            <th>День недели</th>
+                                            <th>Выручка (₸)</th>
+                                            <th>ФОТ (₸)</th>
+                                            <th>Сотрудников</th>
+                                            <th>Коэффициент</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rtp-report-body">
+                                        <!-- Данные будут загружены динамически -->
+                                    </tbody>
+                                    <tfoot id="rtp-report-footer" style="font-weight: bold; background: #f8f9fa;">
+                                        <tr>
+                                            <td colspan="2">ИТОГО:</td>
+                                            <td id="rtp-total-revenue">0.00</td>
+                                            <td id="rtp-total-payroll">0.00</td>
+                                            <td id="rtp-total-employees">0</td>
+                                            <td id="rtp-total-coefficient" style="font-size: 16px; color: #2196F3;">0.00</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Placeholder -->
+                    <div id="rtp-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                        Выберите организацию и период, затем нажмите "Сформировать отчет"
                     </div>
                 </section>
 
@@ -1524,6 +1678,55 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования организации -->
+    <div id="organizationModal" class="modal organization-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="organizationModalTitle">Редактирование организации</h3>
+                <button id="closeOrganizationModal" class="btn-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="organizationForm">
+                    <input type="hidden" id="org-id">
+
+                    <div class="form-group">
+                        <label for="org-bin">БИН организации <span class="required">*</span></label>
+                        <input type="text" id="org-bin" class="form-control"
+                               placeholder="Например: 123456789012" maxlength="12" required>
+                        <small class="form-text">12-значный идентификационный номер</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="org-name">Название организации <span class="required">*</span></label>
+                        <input type="text" id="org-name" class="form-control"
+                               placeholder="Например: ТОО «Компания»" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="org-iiko-ids">ID IIKO (UUID точек продаж)</label>
+                        <textarea id="org-iiko-ids" class="form-control" rows="3"
+                                  placeholder="По одному UUID на строку"></textarea>
+                        <small class="form-text">Каждый UUID на новой строке</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" id="org-is-active" checked>
+                            <span class="checkbox-label-text">Организация активна</span>
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="saveOrganizationBtn" class="btn btn--primary">
+                            Сохранить
+                        </button>
+                        <button type="button" id="cancelOrganizationBtn" class="btn btn--outline">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно деталей дня -->
     <div id="dayModal" class="modal">
         <div class="modal-content">
@@ -1588,7 +1791,20 @@
     <!-- Application scripts -->
     <script src="telegram.js?v=conflict-fix-v8.6&ts=20250611-1740&conflict-resolved=true"></script>
     <script src="app.js?v=admin-auth-fix-v10.4&ts=20250701-1955&admin-fix=true"></script>
-    <script src="admin.js?v=FIXED-v12.0&ts=20250713-1452&cache=bust-init"></script>
+    <!-- Admin Panel Modules (modular structure v1.0) -->
+    <script src="admin/core.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/state.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/components.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/employees.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/departments.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/positions.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/time-tracking.js?v=modular-v1.2&ts=20251125-cleanup"></script>
+    <script src="admin/schedules.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/reports.js?v=modular-v1.5&ts=20251126-rtp-fix"></script>
+    <script src="admin/news.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/upload.js?v=modular-v1.0&ts=20251125"></script>
+    <script src="admin/organizations.js?v=modular-v1.0&ts=20251126"></script>
+    <script src="admin/index.js?v=modular-v1.0&ts=20251125"></script>
     <script src="ai-recommendations.js?v=OPENAI-FIX-v1.0&ts=20250715-1700"></script>
     <script src="cron-scheduler-admin.js?v=1.0&ts=20251116"></script>
 </body>

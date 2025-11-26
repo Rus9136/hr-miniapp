@@ -32,7 +32,7 @@ EXPOSE 3030 443
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "const http = require('http'); \
     const options = { \
-      host: 'localhost', \
+      host: '127.0.0.1', \
       port: 3030, \
       path: '/api/health', \
       timeout: 2000 \

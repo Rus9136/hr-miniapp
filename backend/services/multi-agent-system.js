@@ -185,9 +185,10 @@ class MultiAgentSystem {
         if (planVsFactData && Array.isArray(planVsFactData)) {
             compressed.plan_vs_fact = planVsFactData.slice(0, 10).map(item => ({
                 date: item.date,
-                plan: item.plan ? Math.round(item.plan / 1000) + 'k' : 'N/A',
-                fact: item.fact ? Math.round(item.fact / 1000) + 'k' : 'N/A',
-                deviation: item.deviation || 0
+                // MCP API возвращает predicted_sales и actual_sales
+                plan: item.predicted_sales ? Math.round(item.predicted_sales / 1000) + 'k' : 'N/A',
+                fact: item.actual_sales ? Math.round(item.actual_sales / 1000) + 'k' : 'N/A',
+                deviation: item.error_percentage || item.deviation || 0
             }));
         }
         

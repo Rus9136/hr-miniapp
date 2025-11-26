@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест UI: Отчет "Перелимит ФОТ"</title>
+    <link rel="stylesheet" href="admin.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Тест UI: Отчет "Перелимит ФОТ"</h1>
+
+        <!-- Фильтры -->
+        <div class="section-header">
+            <h2>📊 Отчет: Перелимит ФОТ</h2>
+            <div class="section-controls">
+                <div class="filter-controls">
+                    <select id="overtime-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
+                        <option value="">Выберите организацию...</option>
+                        <option value="ТОО Tary Astana">ТОО Tary Astana</option>
+                    </select>
+                    <input type="date" id="overtime-date-filter" class="form-control" style="margin-right: 10px;" value="2025-11-17">
+                    <button id="load-overtime-report-btn" class="btn btn--primary btn--sm" onclick="testLoadReport()">
+                        <span class="btn-text">Сформировать отчет</span>
+                        <span class="spinner" style="display: none;">⏳</span>
+                    </button>
+                    <button id="clear-overtime-report-btn" class="btn btn--outline btn--sm" onclick="clearResults()">Очистить</button>
+                </div>
+                <span class="total-count">Подразделений: <span id="overtime-departments-total">0</span></span>
+            </div>
+        </div>
+
+        <div class="info-message" style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+            <p style="margin: 0; color: #856404; font-size: 14px;">
+                💰 <strong>Описание отчета:</strong> Сравнивает плановый и фактический ФОТ по должностям.
+                Показывает <span style="color: #dc3545;">перелимит</span> (когда вышли более дорогие сотрудники)
+                и <span style="color: #28a745;">экономию</span> (когда вышли более дешевые).
+            </p>
+        </div>
+
+        <!-- Результаты -->
+        <div id="overtime-results-container">
+            <div class="table-container">
+                <div id="overtime-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                    Выберите организацию и дату, затем нажмите "Сформировать отчет"
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_API_BASE_URL = 'http://localhost:3030/api';
+
+        async function testLoadReport() {
+            const organizationFilter = document.getElementById('overtime-organization-filter');
+            const dateFilter = document.getElementById('overtime-date-filter');
+            const generateBtn = document.getElementById('load-overtime-report-btn');
+            const spinner = generateBtn?.querySelector('.spinner');
+            const btnText = generateBtn?.querySelector('.btn-text');
+
+            if (!organizationFilter?.value || !dateFilter?.value) {
+                alert('Выберите организацию и дату');
+                return;
+            }
+
+            // Show loading
+            if (generateBtn) generateBtn.disabled = true;
+            if (spinner) spinner.style.display = 'inline';
+            if (btnText) btnText.style.display = 'none';
+
+            try {
+                const params = new URLSearchParams({
+                    organization: organizationFilter.value,
+                    date: dateFilter.value
+                });
+
+                console.log('Fetching:', `${ADMIN_API_BASE_URL}/admin/reports/payroll-overtime?${params}`);
+
+                const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/payroll-overtime?${params}`);
+                if (!response.ok) throw new Error('Failed to load report');
+
+                const result = await response.json();
+                console.log('Result:', result);
+
+                renderPayrollOvertimeReport(result);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ошибка: ' + error.message);
+            } finally {
+                if (generateBtn) generateBtn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+                if (btnText) btnText.style.display = 'inline';
+            }
+        }
+
+        function renderPayrollOvertimeReport(data) {
+            const container = document.getElementById('overtime-results-container');
+            const totalSpan = document.getElementById('overtime-departments-total');
+
+            if (totalSpan) {
+                totalSpan.textContent = data.departments?.length || 0;
+            }
+
+            if (!data.departments || data.departments.length === 0) {
+                container.innerHTML = '<div class="text-center" style="padding: 40px;">Нет данных</div>';
+                return;
+            }
+
+            let html = `
+                <div class="overtime-report" style="margin-top: 20px;">
+                    <div class="report-header" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 10px 0; color: #495057;">Отчет за ${data.date}</h3>
+                        <p style="margin: 0; color: #6c757d;">Организация: ${data.organization}</p>
+                    </div>
+            `;
+
+            data.departments.forEach(dept => {
+                const summaryClass = dept.summary.difference > 0 ? 'overtime-cell' :
+                                   dept.summary.difference < 0 ? 'savings-cell' : 'neutral-cell';
+
+                html += `
+                    <div class="department-block">
+                        <h4>📂 ${dept.departmentName}</h4>
+                        <table class="admin-table overtime-table">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" style="vertical-align: middle;">Должность</th>
+                                    <th colspan="2" style="text-align: center; background: #e7f3ff;">План</th>
+                                    <th colspan="2" style="text-align: center; background: #fff3cd;">Факт</th>
+                                    <th rowspan="2" style="vertical-align: middle;">Разница (₸)</th>
+                                </tr>
+                                <tr>
+                                    <th style="background: #e7f3ff;">Кол-во</th>
+                                    <th style="background: #e7f3ff;">ФОТ</th>
+                                    <th style="background: #fff3cd;">Кол-во</th>
+                                    <th style="background: #fff3cd;">ФОТ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                dept.positions.forEach(pos => {
+                    const diffClass = pos.difference > 0 ? 'overtime-cell' :
+                                    pos.difference < 0 ? 'savings-cell' : 'neutral-cell';
+                    const diffSign = pos.difference > 0 ? '+' : '';
+
+                    html += `
+                        <tr>
+                            <td>${pos.positionName}</td>
+                            <td style="text-align: center;">${pos.planned.count}</td>
+                            <td style="text-align: right;">${formatNumber(pos.planned.payroll)}</td>
+                            <td style="text-align: center;">${pos.actual.count}</td>
+                            <td style="text-align: right;">${formatNumber(pos.actual.payroll)}</td>
+                            <td class="${diffClass}" style="text-align: right; font-weight: 600;">
+                                ${diffSign}${formatNumber(pos.difference)}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                const summaryDiffSign = dept.summary.difference > 0 ? '+' : '';
+                html += `
+                            </tbody>
+                            <tfoot>
+                                <tr class="summary-row">
+                                    <td><strong>ИТОГО:</strong></td>
+                                    <td style="text-align: center;"><strong>${dept.summary.plannedCount}</strong></td>
+                                    <td style="text-align: right;"><strong>${formatNumber(dept.summary.plannedPayroll)}</strong></td>
+                                    <td style="text-align: center;"><strong>${dept.summary.actualCount}</strong></td>
+                                    <td style="text-align: right;"><strong>${formatNumber(dept.summary.actualPayroll)}</strong></td>
+                                    <td class="${summaryClass}" style="text-align: right; font-weight: 700;">
+                                        ${summaryDiffSign}${formatNumber(dept.summary.difference)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                `;
+            });
+
+            const totalDiffSign = data.totalSummary.difference > 0 ? '+' : '';
+            const totalClass = data.totalSummary.difference > 0 ? 'overtime-cell' :
+                              data.totalSummary.difference < 0 ? 'savings-cell' : 'neutral-cell';
+
+            html += `
+                    <div class="total-summary">
+                        <h3>Общий итог</h3>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                            <div style="padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #007bff;">
+                                <div style="font-size: 14px; color: #6c757d; margin-bottom: 5px;">Плановый ФОТ</div>
+                                <div style="font-size: 24px; font-weight: 700; color: #007bff;">${formatNumber(data.totalSummary.plannedPayroll)}₸</div>
+                            </div>
+                            <div style="padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #ffc107;">
+                                <div style="font-size: 14px; color: #6c757d; margin-bottom: 5px;">Фактический ФОТ</div>
+                                <div style="font-size: 24px; font-weight: 700; color: #ffc107;">${formatNumber(data.totalSummary.actualPayroll)}₸</div>
+                            </div>
+                            <div class="${totalClass}" style="padding: 15px; border-radius: 4px;">
+                                <div style="font-size: 14px; margin-bottom: 5px;">${data.totalSummary.difference > 0 ? 'Перелимит' : data.totalSummary.difference < 0 ? 'Экономия' : 'Без изменений'}</div>
+                                <div style="font-size: 24px; font-weight: 700;">
+                                    ${totalDiffSign}${formatNumber(data.totalSummary.difference)}₸
+                                    ${data.totalSummary.differencePercent !== 0 ? `<div style="font-size: 16px;">(${totalDiffSign}${data.totalSummary.differencePercent}%)</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '0';
+            return (Math.round(num * 100) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function clearResults() {
+            document.getElementById('overtime-results-container').innerHTML = `
+                <div class="table-container">
+                    <div class="text-center" style="padding: 40px; color: #6c757d;">
+                        Выберите организацию и дату, затем нажмите "Сформировать отчет"
+                    </div>
+                </div>
+            `;
+            document.getElementById('overtime-departments-total').textContent = '0';
+        }
+    </script>
+</body>
+</html>

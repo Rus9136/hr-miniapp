@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест отчета "Вне графика"</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .controls { background: #f5f5f5; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        input, select, button { padding: 8px; margin: 5px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #4CAF50; color: white; }
+        .info { background: #e7f3ff; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
+        .error { background: #f8d7da; padding: 10px; margin: 10px 0; border-left: 4px solid #dc3545; }
+        .success { background: #d4edda; padding: 10px; margin: 10px 0; border-left: 4px solid #28a745; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест отчета "Вне графика"</h1>
+
+    <div class="controls">
+        <h3>Параметры отчета:</h3>
+        <label>Дата: <input type="date" id="reportDate"></label>
+        <button onclick="loadReport()">📊 Сформировать отчет</button>
+        <button onclick="setToday()">📅 Сегодня</button>
+        <button onclick="setYesterday()">📅 Вчера</button>
+    </div>
+
+    <div id="status"></div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3030/api/admin/reports';
+
+        // Set today's date on load
+        window.addEventListener('DOMContentLoaded', () => {
+            setToday();
+        });
+
+        function setToday() {
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            document.getElementById('reportDate').value = dateStr;
+            console.log('Date set to today:', dateStr);
+        }
+
+        function setYesterday() {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const dateStr = yesterday.toISOString().split('T')[0];
+            document.getElementById('reportDate').value = dateStr;
+            console.log('Date set to yesterday:', dateStr);
+        }
+
+        async function loadReport() {
+            const date = document.getElementById('reportDate').value;
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+
+            if (!date) {
+                statusDiv.innerHTML = '<div class="error">❌ Выберите дату</div>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<div class="info">⏳ Загрузка данных...</div>';
+            resultsDiv.innerHTML = '';
+
+            try {
+                console.log('Requesting report for date:', date);
+                const url = `${API_BASE}/off-schedule-attendance?date=${date}&_t=${Date.now()}`;
+                console.log('URL:', url);
+
+                const response = await fetch(url, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Response:', data);
+
+                statusDiv.innerHTML = `
+                    <div class="success">
+                        ✅ Отчет успешно загружен<br>
+                        <strong>Дата:</strong> ${data.date}<br>
+                        <strong>Найдено:</strong> ${data.totalCount} сотрудников
+                    </div>
+                `;
+
+                if (data.records && data.records.length > 0) {
+                    let html = '<table><thead><tr>';
+                    html += '<th>№</th><th>Дата</th><th>Сотрудник</th><th>Таб. номер</th>';
+                    html += '<th>Организация</th><th>Подразделение</th><th>График</th><th>Время входа</th>';
+                    html += '</tr></thead><tbody>';
+
+                    data.records.forEach((rec, i) => {
+                        html += `<tr>
+                            <td>${i + 1}</td>
+                            <td>${rec.date}</td>
+                            <td>${rec.employeeName}</td>
+                            <td>${rec.employeeNumber}</td>
+                            <td>${rec.organizationName}</td>
+                            <td>${rec.departmentName}</td>
+                            <td>${rec.scheduleName}</td>
+                            <td><strong>${rec.entryTime}</strong></td>
+                        </tr>`;
+                    });
+
+                    html += '</tbody></table>';
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = '<div class="success">✅ Отлично! Никто не пришел в выходной день</div>';
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

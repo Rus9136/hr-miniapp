@@ -24,7 +24,7 @@ class AnthropicClient {
             apiKey: this.apiKey,
         });
 
-        this.defaultModel = 'claude-3-5-sonnet-20241022';
+        this.defaultModel = 'claude-sonnet-4-20250514';
         this.maxTokens = 2000; // Уже оптимизировано ранее
         this.temperature = 0.7;
         

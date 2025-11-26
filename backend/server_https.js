@@ -11,8 +11,12 @@ const db = require('./database_pg');
 const apiSync = require('./utils/apiSync_pg');
 const authRoutes = require('./routes/auth');
 const employeeRoutes = require('./routes/employee');
-const adminRoutes = require('./routes/admin');
+const adminRoutes = require('./routes/admin/index');
 const telegramRoutes = require('./routes/telegram');
+const newsRoutes = require('./routes/news');
+const aiRecommendationsRoutes = require('./routes/ai-recommendations');
+const cronRoutes = require('./routes/cron');
+const timesheetScheduler = require('./services/timesheet-scheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3030;
@@ -37,7 +41,10 @@ app.use(express.static(path.join(__dirname, '..')));
 app.use('/api', authRoutes);
 app.use('/api', employeeRoutes);
 app.use('/api', adminRoutes);
+app.use('/api/admin/ai-recommendations', aiRecommendationsRoutes);
 app.use('/api', telegramRoutes);
+app.use('/api', newsRoutes);
+app.use('/api', cronRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -71,8 +78,17 @@ async function startServer() {
     } catch (error) {
       console.error('Initial sync failed:', error.message);
     }
+
+    // Start CRON scheduler for automatic timesheet loading
+    console.log('Starting CRON scheduler for automatic timesheet loading...');
+    try {
+      timesheetScheduler.startScheduler();
+      console.log('CRON scheduler started successfully');
+    } catch (error) {
+      console.error('Failed to start CRON scheduler:', error.message);
+    }
   } else {
-    console.log('Development mode: Skipping data sync');
+    console.log('Development mode: Skipping data sync and CRON scheduler');
   }
 
   // Start HTTPS server if certificates are available

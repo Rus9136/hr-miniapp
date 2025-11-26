@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Тест загрузки организаций</title>
+</head>
+<body>
+    <h1>Тест загрузки организаций для отчета "Перелимит ФОТ"</h1>
+
+    <div>
+        <h2>Select элемент:</h2>
+        <select id="overtime-organization-filter" style="width: 300px; padding: 5px;">
+            <option value="">Выберите организацию...</option>
+        </select>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <button onclick="testLoad()">Загрузить организации</button>
+        <button onclick="checkElement()">Проверить элемент</button>
+    </div>
+
+    <div id="log" style="margin-top: 20px; padding: 10px; background: #f0f0f0; font-family: monospace; white-space: pre;"></div>
+
+    <script>
+        const ADMIN_API_BASE_URL = 'http://localhost:3030/api';
+
+        function log(msg) {
+            const logDiv = document.getElementById('log');
+            logDiv.textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        function checkElement() {
+            const orgFilter = document.getElementById('overtime-organization-filter');
+            log('Элемент найден: ' + (orgFilter ? 'ДА' : 'НЕТ'));
+            if (orgFilter) {
+                log('Количество options: ' + orgFilter.options.length);
+            }
+        }
+
+        async function testLoad() {
+            document.getElementById('log').textContent = '';
+            log('Начинаю загрузку организаций...');
+
+            try {
+                const orgFilter = document.getElementById('overtime-organization-filter');
+                if (!orgFilter) {
+                    log('ОШИБКА: элемент overtime-organization-filter не найден!');
+                    return;
+                }
+                log('✅ Элемент найден');
+
+                const url = `${ADMIN_API_BASE_URL}/admin/organizations`;
+                log('URL: ' + url);
+
+                const response = await fetch(url);
+                log('Response status: ' + response.status);
+
+                if (!response.ok) {
+                    log('ОШИБКА: response не OK');
+                    return;
+                }
+
+                const organizations = await response.json();
+                log('Загружено организаций: ' + organizations.length);
+
+                if (organizations.length > 0) {
+                    log('Первая организация: ' + JSON.stringify(organizations[0]));
+                }
+
+                // Clear existing
+                orgFilter.innerHTML = '<option value="">Выберите организацию...</option>';
+                log('Очищен select');
+
+                // Add organizations
+                organizations.forEach(org => {
+                    const option = document.createElement('option');
+                    option.value = org.object_company;
+                    option.textContent = org.object_company;
+                    orgFilter.appendChild(option);
+                });
+
+                log('✅ Организации добавлены в select');
+                log('Итоговое количество options: ' + orgFilter.options.length);
+
+            } catch (error) {
+                log('ОШИБКА: ' + error.message);
+                log('Stack: ' + error.stack);
+            }
+        }
+    </script>
+</body>
+</html>

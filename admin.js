@@ -503,6 +503,12 @@ function switchSection(sectionName) {
         case 'off-schedule-report':
             initOffScheduleReportSection();
             break;
+        case 'payroll-overtime-report':
+            initPayrollOvertimeReportSection();
+            break;
+        case 'revenue-to-payroll-report':
+            initRevenueToPayrollReportSection();
+            break;
         case 'ai-recommendation':
             // Check if AI recommendations script is loaded
             if (typeof window.initAIRecommendationSection === 'function') {
@@ -1332,11 +1338,13 @@ async function loadTimeEvents() {
     const params = new URLSearchParams();
     const organization = document.getElementById('events-organization-filter').value;
     const department = document.getElementById('events-department-filter').value;
+    const eventType = document.getElementById('events-type-filter').value;
     const dateFrom = document.getElementById('events-date-from').value;
     const dateTo = document.getElementById('events-date-to').value;
-    
+
     if (organization) params.append('organization', organization);
     if (department) params.append('department', department);
+    if (eventType) params.append('eventType', eventType);
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     
@@ -1356,21 +1364,22 @@ async function loadTimeEvents() {
 // Display time events
 function displayTimeEvents(events) {
     const tbody = document.getElementById('time-events-tbody');
-    
+
     if (events.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Нет данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Нет данных</td></tr>';
         return;
     }
-    
+
     tbody.innerHTML = events.map(event => {
         const eventType = event.event_type === '1' ? 'Вход' : 'Выход';
         const eventClass = event.event_type === '1' ? 'event-type-1' : 'event-type-2';
-        
+
         return `
             <tr>
                 <td>${formatDateTime(event.event_datetime)}</td>
                 <td>${event.full_name || `ID: ${event.employee_id}`}</td>
                 <td>${event.table_number || '-'}</td>
+                <td>${event.position_name || '-'}</td>
                 <td><span class="${eventClass}">${eventType}</span></td>
                 <td>${event.department_name || '-'}</td>
             </tr>
@@ -1382,7 +1391,8 @@ function displayTimeEvents(events) {
 function clearEventsFilter() {
     document.getElementById('events-organization-filter').value = '';
     document.getElementById('events-department-filter').value = '';
-    
+    document.getElementById('events-type-filter').value = '';
+
     // Reset to default dates (May 2025)
     const dateFrom = new Date('2025-05-01');
     const dateTo = new Date('2025-05-31');
@@ -4401,7 +4411,7 @@ function displayOffScheduleReport(result) {
         row.innerHTML = `
             <td>${record.date}</td>
             <td>${record.employeeName}</td>
-            <td>${record.employeeNumber}</td>
+            <td>${record.positionName}</td>
             <td>${record.organizationName}</td>
             <td>${record.departmentName}</td>
             <td>${record.scheduleName}</td>
@@ -4446,6 +4456,808 @@ function clearOffScheduleReport() {
     }
 
     console.log('Off-schedule report cleared');
+}
+
+// ==========================================
+// 📊 PAYROLL OVERTIME REPORT FUNCTIONS
+// ==========================================
+
+let payrollOvertimeReportInitialized = false;
+let revenueToPayrollReportInitialized = false;
+let revenueToPayrollChart = null; // Chart.js instance
+
+/**
+ * Initialize Payroll Overtime Report Section
+ */
+async function initPayrollOvertimeReportSection() {
+    console.log('Initializing payroll overtime report section...');
+
+    // Set up event handlers only once
+    if (!payrollOvertimeReportInitialized) {
+        // Load organizations for filter
+        await loadPayrollOvertimeOrganizations();
+
+        const generateBtn = document.getElementById('load-overtime-report-btn');
+        const clearBtn = document.getElementById('clear-overtime-report-btn');
+
+        // Generate report button
+        if (generateBtn) {
+            generateBtn.addEventListener('click', loadPayrollOvertimeReport);
+            console.log('✅ Generate button event listener added');
+        }
+
+        // Clear report button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', clearPayrollOvertimeReport);
+            console.log('✅ Clear button event listener added');
+        }
+
+        payrollOvertimeReportInitialized = true;
+        console.log('Payroll overtime report section event handlers initialized');
+    }
+
+    // Always update date to today when section is opened
+    const dateInput = document.getElementById('overtime-date-filter');
+    if (dateInput) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+        console.log(`Date updated to today: ${dateInput.value}`);
+    }
+}
+
+/**
+ * Load organizations for overtime report filter
+ */
+async function loadPayrollOvertimeOrganizations() {
+    try {
+        console.log('Loading organizations for overtime filter...');
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error('Failed to load organizations');
+
+        const organizations = await response.json();
+        console.log('Loaded organizations:', organizations.length);
+
+        const orgFilter = document.getElementById('overtime-organization-filter');
+        if (orgFilter) {
+            // Clear existing options
+            orgFilter.innerHTML = '<option value="">Выберите организацию...</option>';
+
+            // Add organizations
+            organizations.forEach(org => {
+                const option = document.createElement('option');
+                option.value = org.object_company;
+                option.textContent = org.object_company;
+                orgFilter.appendChild(option);
+            });
+
+            console.log('Overtime organizations filter populated');
+        }
+    } catch (error) {
+        console.error('Error loading organizations for overtime report:', error);
+    }
+}
+
+/**
+ * Load Payroll Overtime Report from API
+ */
+async function loadPayrollOvertimeReport() {
+    const organizationFilter = document.getElementById('overtime-organization-filter');
+    const dateFilter = document.getElementById('overtime-date-filter');
+    const generateBtn = document.getElementById('load-overtime-report-btn');
+    const spinner = generateBtn?.querySelector('.spinner');
+    const btnText = generateBtn?.querySelector('.btn-text');
+
+    // Validation
+    if (!organizationFilter?.value) {
+        alert('Пожалуйста, выберите организацию');
+        return;
+    }
+
+    if (!dateFilter?.value) {
+        alert('Пожалуйста, выберите дату для отчета');
+        return;
+    }
+
+    // Show loading state
+    if (generateBtn) generateBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline';
+    if (btnText) btnText.style.display = 'none';
+
+    try {
+        const params = new URLSearchParams({
+            organization: organizationFilter.value,
+            date: dateFilter.value,
+            _t: Date.now() // Cache busting
+        });
+
+        console.log('📊 Fetching payroll overtime report:', params.toString());
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/payroll-overtime?${params}`, {
+            cache: 'no-cache',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to load report');
+        }
+
+        const result = await response.json();
+        console.log('✅ Payroll overtime report loaded:', result);
+
+        renderPayrollOvertimeReport(result);
+
+    } catch (error) {
+        console.error('❌ Error loading payroll overtime report:', error);
+        alert('Ошибка при загрузке отчета: ' + error.message);
+
+        // Show error in container
+        const container = document.getElementById('overtime-results-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="table-container">
+                    <div class="text-center" style="padding: 40px; color: #dc3545;">
+                        ❌ Ошибка: ${error.message}
+                    </div>
+                </div>
+            `;
+        }
+    } finally {
+        // Hide loading state
+        if (generateBtn) generateBtn.disabled = false;
+        if (spinner) spinner.style.display = 'none';
+        if (btnText) btnText.style.display = 'inline';
+    }
+}
+
+/**
+ * Render Payroll Overtime Report in UI
+ */
+function renderPayrollOvertimeReport(data) {
+    const container = document.getElementById('overtime-results-container');
+    const totalSpan = document.getElementById('overtime-departments-total');
+
+    if (!container) {
+        console.error('Overtime results container not found');
+        return;
+    }
+
+    // Update total count
+    if (totalSpan) {
+        totalSpan.textContent = data.departments?.length || 0;
+    }
+
+    // Check if no departments
+    if (!data.departments || data.departments.length === 0) {
+        container.innerHTML = `
+            <div class="table-container">
+                <div class="text-center" style="padding: 40px; color: #6c757d;">
+                    📋 Нет данных для отображения. Возможно, на выбранную дату нет плановых или фактических данных.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Build report HTML
+    let html = `
+        <div class="overtime-report" style="margin-top: 20px;">
+            <!-- Report Header -->
+            <div class="report-header" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; color: #495057;">Отчет за ${data.date}</h3>
+                <p style="margin: 0; color: #6c757d;">Организация: ${data.organization}</p>
+            </div>
+    `;
+
+    // Iterate through departments
+    data.departments.forEach(dept => {
+        const summaryClass = dept.summary.difference > 0 ? 'overtime-cell' :
+                           dept.summary.difference < 0 ? 'savings-cell' : 'neutral-cell';
+
+        html += `
+            <div class="department-block" style="margin-bottom: 30px;">
+                <h4 style="background: #007bff; color: white; padding: 10px; border-radius: 4px; margin: 0 0 10px 0;">
+                    📂 ${dept.departmentName}
+                </h4>
+
+                <table class="admin-table overtime-table">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" style="vertical-align: middle;">Должность</th>
+                            <th colspan="2" style="text-align: center; background: #e7f3ff;">План (по графику)</th>
+                            <th colspan="2" style="text-align: center; background: #fff3cd;">Факт (реально вышли)</th>
+                            <th rowspan="2" style="vertical-align: middle;">Разница ФОТ (₸)</th>
+                        </tr>
+                        <tr>
+                            <th style="background: #e7f3ff;">Кол-во</th>
+                            <th style="background: #e7f3ff;">ФОТ (₸)</th>
+                            <th style="background: #fff3cd;">Кол-во</th>
+                            <th style="background: #fff3cd;">ФОТ (₸)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        // Iterate through positions
+        dept.positions.forEach(pos => {
+            const diffClass = pos.difference > 0 ? 'overtime-cell' :
+                            pos.difference < 0 ? 'savings-cell' : 'neutral-cell';
+            const diffSign = pos.difference > 0 ? '+' : '';
+
+            html += `
+                <tr>
+                    <td>${pos.positionName}</td>
+                    <td style="text-align: center;">${pos.planned.count}</td>
+                    <td style="text-align: right;">${formatNumber(pos.planned.payroll)}</td>
+                    <td style="text-align: center;">${pos.actual.count}</td>
+                    <td style="text-align: right;">${formatNumber(pos.actual.payroll)}</td>
+                    <td class="${diffClass}" style="text-align: right; font-weight: 600;">
+                        ${diffSign}${formatNumber(pos.difference)}
+                    </td>
+                </tr>
+            `;
+        });
+
+        // Department summary row
+        const summaryDiffSign = dept.summary.difference > 0 ? '+' : '';
+        html += `
+                    </tbody>
+                    <tfoot>
+                        <tr class="summary-row">
+                            <td><strong>ИТОГО ПО ПОДРАЗДЕЛЕНИЮ:</strong></td>
+                            <td style="text-align: center;"><strong>${dept.summary.plannedCount}</strong></td>
+                            <td style="text-align: right;"><strong>${formatNumber(dept.summary.plannedPayroll)}</strong></td>
+                            <td style="text-align: center;"><strong>${dept.summary.actualCount}</strong></td>
+                            <td style="text-align: right;"><strong>${formatNumber(dept.summary.actualPayroll)}</strong></td>
+                            <td class="${summaryClass}" style="text-align: right; font-weight: 700; font-size: 16px;">
+                                ${summaryDiffSign}${formatNumber(dept.summary.difference)}
+                                ${dept.summary.differencePercent !== 0 ? `<br><small>(${summaryDiffSign}${dept.summary.differencePercent}%)</small>` : ''}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+    });
+
+    // Total summary block
+    const totalDiffSign = data.totalSummary.difference > 0 ? '+' : '';
+    const totalClass = data.totalSummary.difference > 0 ? 'overtime-cell' :
+                      data.totalSummary.difference < 0 ? 'savings-cell' : 'neutral-cell';
+
+    html += `
+            <!-- Grand Total Summary -->
+            <div class="total-summary" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 30px;">
+                <h3 style="margin: 0 0 15px 0;">Общий итог по организации</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div style="padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #007bff;">
+                        <div style="font-size: 14px; color: #6c757d; margin-bottom: 5px;">Плановый ФОТ</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #007bff;">${formatNumber(data.totalSummary.plannedPayroll)}₸</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 4px; border-left: 4px solid #ffc107;">
+                        <div style="font-size: 14px; color: #6c757d; margin-bottom: 5px;">Фактический ФОТ</div>
+                        <div style="font-size: 24px; font-weight: 700; color: #ffc107;">${formatNumber(data.totalSummary.actualPayroll)}₸</div>
+                    </div>
+                    <div class="${totalClass}" style="padding: 15px; border-radius: 4px; border-left: 4px solid ${data.totalSummary.difference > 0 ? '#dc3545' : data.totalSummary.difference < 0 ? '#28a745' : '#6c757d'};">
+                        <div style="font-size: 14px; margin-bottom: 5px;">${data.totalSummary.difference > 0 ? 'Перелимит' : data.totalSummary.difference < 0 ? 'Экономия' : 'Без изменений'}</div>
+                        <div style="font-size: 24px; font-weight: 700;">
+                            ${totalDiffSign}${formatNumber(data.totalSummary.difference)}₸
+                            ${data.totalSummary.differencePercent !== 0 ? `<div style="font-size: 16px; margin-top: 5px;">(${totalDiffSign}${data.totalSummary.differencePercent}%)</div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+    console.log('✅ Payroll overtime report rendered successfully');
+}
+
+/**
+ * Clear Payroll Overtime Report
+ */
+function clearPayrollOvertimeReport() {
+    const container = document.getElementById('overtime-results-container');
+    const totalSpan = document.getElementById('overtime-departments-total');
+    const dateFilter = document.getElementById('overtime-date-filter');
+    const orgFilter = document.getElementById('overtime-organization-filter');
+
+    if (container) {
+        container.innerHTML = `
+            <div class="table-container">
+                <div id="overtime-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                    Выберите организацию и дату, затем нажмите "Сформировать отчет"
+                </div>
+            </div>
+        `;
+    }
+
+    if (totalSpan) {
+        totalSpan.textContent = '0';
+    }
+
+    if (orgFilter) {
+        orgFilter.value = '';
+    }
+
+    // Reset date to today
+    if (dateFilter) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateFilter.value = `${year}-${month}-${day}`;
+    }
+
+    console.log('Payroll overtime report cleared');
+}
+
+/**
+ * Helper: Format number with thousand separators
+ */
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return (Math.round(num * 100) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ==========================================
+// 📊 REVENUE TO PAYROLL REPORT FUNCTIONS
+// ==========================================
+
+/**
+ * Initialize Revenue to Payroll Report Section
+ */
+async function initRevenueToPayrollReportSection() {
+    console.log('Initializing revenue to payroll report section...');
+
+    // Set up event handlers only once
+    if (!revenueToPayrollReportInitialized) {
+        // Load organizations for filter
+        await loadRTPOrganizations();
+
+        const generateBtn = document.getElementById('load-rtp-report-btn');
+        const clearBtn = document.getElementById('clear-rtp-report-btn');
+
+        // Generate report button
+        if (generateBtn) {
+            generateBtn.addEventListener('click', loadRevenueToPayrollReport);
+            console.log('✅ RTP Generate button event listener added');
+        }
+
+        // Clear report button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', clearRevenueToPayrollReport);
+            console.log('✅ RTP Clear button event listener added');
+        }
+
+        revenueToPayrollReportInitialized = true;
+        console.log('Revenue to Payroll report section event handlers initialized');
+    }
+
+    // Always update dates when section is opened
+    const dateFromInput = document.getElementById('rtp-date-from');
+    const dateToInput = document.getElementById('rtp-date-to');
+
+    if (dateFromInput && dateToInput) {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        // Format dates
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        dateFromInput.value = formatDate(firstDayOfMonth);
+        dateToInput.value = formatDate(today);
+        console.log(`Dates set: ${dateFromInput.value} - ${dateToInput.value}`);
+    }
+}
+
+/**
+ * Load organizations for RTP report filter
+ */
+async function loadRTPOrganizations() {
+    try {
+        console.log('Loading organizations for RTP filter...');
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/organizations`);
+        if (!response.ok) throw new Error('Failed to load organizations');
+
+        const organizations = await response.json();
+        console.log('Loaded organizations:', organizations.length);
+
+        const orgFilter = document.getElementById('rtp-organization-filter');
+        if (!orgFilter) return;
+
+        // Clear and populate
+        orgFilter.innerHTML = '<option value="">Выберите организацию...</option>';
+
+        organizations.forEach(org => {
+            const option = document.createElement('option');
+            option.value = org.object_company;
+            option.textContent = org.object_company;
+            orgFilter.appendChild(option);
+        });
+
+        console.log('✅ Organizations loaded into RTP filter');
+    } catch (error) {
+        console.error('Error loading RTP organizations:', error);
+        alert('Ошибка загрузки списка организаций');
+    }
+}
+
+/**
+ * Load Revenue to Payroll Report
+ */
+async function loadRevenueToPayrollReport() {
+    const btn = document.getElementById('load-rtp-report-btn');
+    const spinner = btn.querySelector('.spinner');
+    const btnText = btn.querySelector('.btn-text');
+
+    const organization = document.getElementById('rtp-organization-filter').value;
+    const dateFrom = document.getElementById('rtp-date-from').value;
+    const dateTo = document.getElementById('rtp-date-to').value;
+
+    // Validation
+    if (!organization) {
+        alert('Пожалуйста, выберите организацию');
+        return;
+    }
+
+    if (!dateFrom || !dateTo) {
+        alert('Пожалуйста, укажите период');
+        return;
+    }
+
+    if (new Date(dateFrom) > new Date(dateTo)) {
+        alert('Дата начала не может быть позже даты окончания');
+        return;
+    }
+
+    try {
+        // Show loading
+        btn.disabled = true;
+        spinner.style.display = 'inline';
+        btnText.textContent = 'Загрузка...';
+
+        console.log('Loading RTP report:', { organization, dateFrom, dateTo });
+
+        // Build URL with params
+        const params = new URLSearchParams({
+            organization,
+            date_from: dateFrom,
+            date_to: dateTo
+        });
+
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/reports/revenue-to-payroll?${params}`);
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to load report');
+        }
+
+        const data = await response.json();
+        console.log('RTP Report data received:', data);
+
+        // Render report
+        renderRevenueToPayrollReport(data);
+
+    } catch (error) {
+        console.error('Error loading RTP report:', error);
+        alert(`Ошибка загрузки отчета: ${error.message}`);
+    } finally {
+        // Hide loading
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = 'Сформировать отчет';
+    }
+}
+
+/**
+ * Render Revenue to Payroll Report (Chart + Table)
+ */
+function renderRevenueToPayrollReport(data) {
+    console.log('Rendering RTP report...');
+
+    // Show results container, hide placeholder
+    const resultsContainer = document.getElementById('rtp-results-container');
+    const placeholder = document.getElementById('rtp-report-placeholder');
+
+    if (resultsContainer) resultsContainer.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+
+    // Render Chart
+    renderRTPChart(data);
+
+    // Render Table
+    renderRTPTable(data);
+
+    // Update average coefficient in header
+    const avgCoeffSpan = document.getElementById('rtp-avg-coefficient');
+    if (avgCoeffSpan && data.summary) {
+        avgCoeffSpan.textContent = formatNumber(data.summary.avg_coefficient);
+
+        // Color code based on efficiency
+        if (data.summary.avg_coefficient >= 15) {
+            avgCoeffSpan.style.color = '#28a745'; // Green - excellent
+        } else if (data.summary.avg_coefficient >= 10) {
+            avgCoeffSpan.style.color = '#2196F3'; // Blue - good
+        } else if (data.summary.avg_coefficient >= 7) {
+            avgCoeffSpan.style.color = '#ffc107'; // Yellow - acceptable
+        } else {
+            avgCoeffSpan.style.color = '#dc3545'; // Red - poor
+        }
+    }
+
+    console.log('✅ RTP Report rendered successfully');
+}
+
+/**
+ * Render Chart.js Chart
+ */
+function renderRTPChart(data) {
+    const canvas = document.getElementById('rtp-chart');
+    if (!canvas) {
+        console.warn('Canvas element not found');
+        return;
+    }
+
+    // Destroy previous chart instance if exists
+    if (revenueToPayrollChart) {
+        revenueToPayrollChart.destroy();
+    }
+
+    // Prepare data arrays
+    const labels = [];
+    const revenueData = [];
+    const payrollData = [];
+    const coefficientData = [];
+
+    // Process daily data
+    if (data.days && Array.isArray(data.days)) {
+        data.days.forEach(day => {
+            // Format date as DD.MM
+            const date = new Date(day.date);
+            const formatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}`;
+            labels.push(formatted);
+
+            revenueData.push(day.revenue || 0);
+            payrollData.push(day.actual_payroll || 0);
+            coefficientData.push(day.coefficient || 0);
+        });
+    }
+
+    // Create chart
+    const ctx = canvas.getContext('2d');
+    revenueToPayrollChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Выручка (₸)',
+                    data: revenueData,
+                    backgroundColor: 'rgba(33, 150, 243, 0.6)',
+                    borderColor: 'rgba(33, 150, 243, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'ФОТ (₸)',
+                    data: payrollData,
+                    backgroundColor: 'rgba(255, 152, 0, 0.6)',
+                    borderColor: 'rgba(255, 152, 0, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Коэффициент',
+                    data: coefficientData,
+                    type: 'line',
+                    borderColor: 'rgba(76, 175, 80, 1)',
+                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    borderWidth: 2,
+                    yAxisID: 'y1',
+                    order: 1,
+                    tension: 0.3,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                if (context.dataset.yAxisID === 'y1') {
+                                    // Coefficient
+                                    label += context.parsed.y.toFixed(2);
+                                } else {
+                                    // Money
+                                    label += context.parsed.y.toLocaleString('ru-RU') + ' ₸';
+                                }
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Сумма (₸)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString('ru-RU');
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Коэффициент'
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(1);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    console.log('✅ Chart rendered with', labels.length, 'data points');
+}
+
+/**
+ * Render RTP Table
+ */
+function renderRTPTable(data) {
+    const tbody = document.getElementById('rtp-report-body');
+    if (!tbody) {
+        console.warn('Table body not found');
+        return;
+    }
+
+    // Clear table
+    tbody.innerHTML = '';
+
+    // Days mapping for Russian
+    const daysRu = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+    // Populate rows
+    if (data.days && Array.isArray(data.days)) {
+        data.days.forEach(day => {
+            const row = document.createElement('tr');
+
+            // Format date
+            const date = new Date(day.date);
+            const dayOfWeek = daysRu[date.getDay()];
+
+            // Color code coefficient
+            let coeffStyle = '';
+            if (day.coefficient >= 15) {
+                coeffStyle = 'color: #28a745; font-weight: bold;'; // Green
+            } else if (day.coefficient >= 10) {
+                coeffStyle = 'color: #2196F3; font-weight: bold;'; // Blue
+            } else if (day.coefficient >= 7) {
+                coeffStyle = 'color: #ffc107; font-weight: bold;'; // Yellow
+            } else {
+                coeffStyle = 'color: #dc3545; font-weight: bold;'; // Red
+            }
+
+            row.innerHTML = `
+                <td>${day.date}</td>
+                <td>${dayOfWeek}</td>
+                <td class="text-right">${formatNumber(day.revenue)}</td>
+                <td class="text-right">${formatNumber(day.actual_payroll)}</td>
+                <td class="text-center">${day.employees_count}</td>
+                <td class="text-center" style="${coeffStyle}">${formatNumber(day.coefficient)}</td>
+            `;
+
+            tbody.appendChild(row);
+        });
+    }
+
+    // Update footer totals
+    if (data.summary) {
+        document.getElementById('rtp-total-revenue').textContent = formatNumber(data.summary.total_revenue);
+        document.getElementById('rtp-total-payroll').textContent = formatNumber(data.summary.total_payroll);
+        document.getElementById('rtp-total-employees').textContent = data.summary.total_employees || 0;
+        document.getElementById('rtp-total-coefficient').textContent = formatNumber(data.summary.avg_coefficient);
+    }
+
+    console.log('✅ Table rendered with', data.days?.length || 0, 'rows');
+}
+
+/**
+ * Clear Revenue to Payroll Report
+ */
+function clearRevenueToPayrollReport() {
+    console.log('Clearing RTP report...');
+
+    // Hide results, show placeholder
+    const resultsContainer = document.getElementById('rtp-results-container');
+    const placeholder = document.getElementById('rtp-report-placeholder');
+
+    if (resultsContainer) resultsContainer.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'block';
+
+    // Clear filters
+    const orgFilter = document.getElementById('rtp-organization-filter');
+    const dateFromInput = document.getElementById('rtp-date-from');
+    const dateToInput = document.getElementById('rtp-date-to');
+    const avgCoeffSpan = document.getElementById('rtp-avg-coefficient');
+
+    if (orgFilter) orgFilter.value = '';
+    if (avgCoeffSpan) {
+        avgCoeffSpan.textContent = '0.00';
+        avgCoeffSpan.style.color = '';
+    }
+
+    // Reset dates to current month
+    if (dateFromInput && dateToInput) {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        dateFromInput.value = formatDate(firstDayOfMonth);
+        dateToInput.value = formatDate(today);
+    }
+
+    // Destroy chart
+    if (revenueToPayrollChart) {
+        revenueToPayrollChart.destroy();
+        revenueToPayrollChart = null;
+    }
+
+    console.log('✅ RTP report cleared');
 }
 
 // Global error handlers
