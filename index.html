@@ -487,13 +487,8 @@
                 <div class="sidebar-section">
                     <h3 class="section-title">Данные по табелю</h3>
                     <ul class="sidebar-menu">
-                        <li><a href="#" data-section="time-events" class="menu-item">Входы/выходы</a></li>
-                        <li><a href="#" data-section="reports" class="menu-item">Отчеты</a></li>
-                        <li><a href="#" data-section="off-schedule-report" class="menu-item">Вне графика</a></li>
-                        <li><a href="#" data-section="payroll-overtime-report" class="menu-item">Перелимит ФОТ</a></li>
-                        <li><a href="#" data-section="revenue-to-payroll-report" class="menu-item">Выручка к ФОТ</a></li>
+                        <li><a href="#" data-section="reports" class="menu-item">Отчёты</a></li>
                         <li><a href="#" data-section="ai-recommendation" class="menu-item">AI-рекомендация</a></li>
-                        <li><a href="#" data-section="payroll-report" class="menu-item">Отчет по ФОТ</a></li>
                     </ul>
                 </div>
                 
@@ -640,297 +635,242 @@
                     </div>
                 </section>
 
-                <!-- Секция: Входы/выходы (time_events) -->
-                <section id="time-events-section" class="content-section">
-                    <div class="section-header">
-                        <h2>Входы/выходы</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <select id="events-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все организации</option>
-                                </select>
-                                <select id="events-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все подразделения</option>
-                                </select>
-                                <select id="events-type-filter" class="search-input" style="width: 150px; margin-right: 10px;">
-                                    <option value="">Все события</option>
-                                    <option value="1">Приход</option>
-                                    <option value="2">Уход</option>
-                                </select>
-                                <input type="date" id="events-date-from" class="form-control">
-                                <input type="date" id="events-date-to" class="form-control">
-                                <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
-                                <button id="events-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
-                            </div>
-                            <span class="total-count">Всего: <span id="events-total">0</span></span>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Дата/время</th>
-                                    <th>Сотрудник</th>
-                                    <th>Табельный номер</th>
-                                    <th>Должность</th>
-                                    <th>Тип события</th>
-                                    <th>Подразделение</th>
-                                </tr>
-                            </thead>
-                            <tbody id="time-events-tbody">
-                                <!-- Данные будут загружены динамически -->
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-                
-                <!-- Секция: Отчеты -->
+                <!-- Секция: Отчёты (объединённая с вкладками) -->
                 <section id="reports-section" class="content-section">
                     <div class="section-header">
-                        <h2>Отчеты по опоздавшим сотрудникам</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <input type="date" id="report-date-filter" class="form-control" style="margin-right: 10px;">
-                                <select id="report-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все организации</option>
-                                </select>
-                                <select id="report-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все подразделения</option>
-                                </select>
-                                <button id="generate-report-btn" class="btn btn--primary btn--sm">
-                                    <span class="btn-text">Сформировать отчет</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
-                                <button id="clear-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                        <h2>📊 Отчёты</h2>
+                    </div>
+                    
+                    <!-- Вкладки -->
+                    <div class="reports-tabs-container">
+                        <div class="reports-tabs-header">
+                            <button class="reports-tab-btn active" data-tab="time-events">Входы/выходы</button>
+                            <button class="reports-tab-btn" data-tab="late-employees">Опоздания</button>
+                            <button class="reports-tab-btn" data-tab="off-schedule">Вне графика</button>
+                            <button class="reports-tab-btn" data-tab="payroll-overtime">Перелимит ФОТ</button>
+                            <button class="reports-tab-btn" data-tab="revenue-payroll">Выручка к ФОТ</button>
+                        </div>
+                        
+                        <div class="reports-tabs-content">
+                            <!-- Вкладка: Входы/выходы -->
+                            <div class="reports-tab-pane active" id="tab-time-events">
+                                <div class="tab-controls">
+                                    <div class="filter-controls">
+                                        <select id="events-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                            <option value="">Все организации</option>
+                                        </select>
+                                        <select id="events-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                            <option value="">Все подразделения</option>
+                                        </select>
+                                        <select id="events-type-filter" class="search-input" style="width: 150px; margin-right: 10px;">
+                                            <option value="">Все события</option>
+                                            <option value="1">Приход</option>
+                                            <option value="2">Уход</option>
+                                        </select>
+                                        <input type="date" id="events-date-from" class="form-control">
+                                        <input type="date" id="events-date-to" class="form-control">
+                                        <button id="events-filter-btn" class="btn btn--primary btn--sm">Фильтр</button>
+                                        <button id="events-clear-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                    </div>
+                                    <span class="total-count">Всего: <span id="events-total">0</span></span>
+                                </div>
+                                <div class="table-container">
+                                    <table class="admin-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Дата/время</th>
+                                                <th>Сотрудник</th>
+                                                <th>Табельный номер</th>
+                                                <th>Должность</th>
+                                                <th>Тип события</th>
+                                                <th>Подразделение</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="time-events-tbody">
+                                            <!-- Данные будут загружены динамически -->
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <span class="total-count">Найдено: <span id="report-total">0</span> сотрудников</span>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Сотрудник</th>
-                                    <th>Табельный номер</th>
-                                    <th>Подразделение</th>
-                                    <th>График</th>
-                                    <th>Время входа по графику</th>
-                                    <th>Время фактического входа</th>
-                                    <th>Время опоздания</th>
-                                </tr>
-                            </thead>
-                            <tbody id="reports-tbody">
-                                <!-- Данные будут загружены динамически -->
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-                
-                <!-- Секция: Отчет по ФОТ -->
-                <section id="payroll-report-section" class="content-section">
-                    <div class="section-header">
-                        <h2>Отчет по ФОТ</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <select id="payroll-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все организации</option>
-                                </select>
-                                <select id="payroll-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все подразделения</option>
-                                </select>
-                                <input type="date" id="payroll-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
-                                <input type="date" id="payroll-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
-                                <button id="generate-payroll-report-btn" class="btn btn--primary btn--sm">
-                                    <span class="btn-text">Сформировать отчет</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
-                                <button id="clear-payroll-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            
+                            <!-- Вкладка: Опоздания -->
+                            <div class="reports-tab-pane" id="tab-late-employees">
+                                <div class="tab-controls">
+                                    <div class="filter-controls">
+                                        <input type="date" id="report-date-filter" class="form-control" style="margin-right: 10px;">
+                                        <select id="report-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                            <option value="">Все организации</option>
+                                        </select>
+                                        <select id="report-department-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                            <option value="">Все подразделения</option>
+                                        </select>
+                                        <button id="generate-report-btn" class="btn btn--primary btn--sm">
+                                            <span class="btn-text">Сформировать отчет</span>
+                                            <span class="spinner" style="display: none;">⏳</span>
+                                        </button>
+                                        <button id="clear-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                    </div>
+                                    <span class="total-count">Найдено: <span id="report-total">0</span> сотрудников</span>
+                                </div>
+                                <div class="table-container">
+                                    <table class="admin-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Сотрудник</th>
+                                                <th>Табельный номер</th>
+                                                <th>Подразделение</th>
+                                                <th>График</th>
+                                                <th>Время входа по графику</th>
+                                                <th>Время фактического входа</th>
+                                                <th>Время опоздания</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reports-tbody">
+                                            <!-- Данные будут загружены динамически -->
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <span class="total-count">Итого: <span id="payroll-total">0.00</span> тенге</span>
-                        </div>
-                    </div>
-                    <div class="table-container">
-                        <table class="admin-table" id="payroll-report-table">
-                            <thead>
-                                <tr>
-                                    <th>Дата</th>
-                                    <th>ФИО</th>
-                                    <th>Табельный номер</th>
-                                    <th>Подразделение</th>
-                                    <th>ФОТ за месяц</th>
-                                    <th>Смен в месяце</th>
-                                    <th>ФОТ на день</th>
-                                </tr>
-                            </thead>
-                            <tbody id="payroll-report-body">
-                                <tr>
-                                    <td colspan="7" class="text-center">Выберите параметры и нажмите "Сформировать отчет"</td>
-                                </tr>
-                            </tbody>
-                            <tfoot id="payroll-report-footer" style="display: none;">
-                                <tr class="payroll-total-row">
-                                    <td colspan="6" class="text-right"><strong>Итого:</strong></td>
-                                    <td><strong id="payroll-total-amount">0.00</strong></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </section>
-
-                <!-- Секция: Отчет по сотрудникам вне графика -->
-                <section id="off-schedule-report-section" class="content-section">
-                    <div class="section-header">
-                        <h2>Отчет по сотрудникам вне графика</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <input type="date" id="off-schedule-date" class="form-control" style="margin-right: 10px;">
-                                <select id="off-schedule-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
-                                    <option value="">Все организации</option>
-                                </select>
-                                <button id="load-off-schedule-report-btn" class="btn btn--primary btn--sm">
-                                    <span class="btn-text">Сформировать отчет</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
-                                <button id="clear-off-schedule-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            
+                            <!-- Вкладка: Вне графика -->
+                            <div class="reports-tab-pane" id="tab-off-schedule">
+                                <div class="tab-controls">
+                                    <div class="filter-controls">
+                                        <input type="date" id="off-schedule-date" class="form-control" style="margin-right: 10px;">
+                                        <select id="off-schedule-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;">
+                                            <option value="">Все организации</option>
+                                        </select>
+                                        <button id="load-off-schedule-report-btn" class="btn btn--primary btn--sm">
+                                            <span class="btn-text">Сформировать отчет</span>
+                                            <span class="spinner" style="display: none;">⏳</span>
+                                        </button>
+                                        <button id="clear-off-schedule-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                    </div>
+                                    <span class="total-count">Найдено: <span id="off-schedule-total">0</span> сотрудников</span>
+                                </div>
+                                <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
+                                    <p style="margin: 0; color: #1976D2; font-size: 14px;">
+                                        📋 <strong>Описание отчета:</strong> Показывает сотрудников, которые пришли на работу в день, когда по их графику был выходной.
+                                    </p>
+                                </div>
+                                <div class="table-container">
+                                    <table class="admin-table" id="off-schedule-report-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Дата</th>
+                                                <th>Сотрудник</th>
+                                                <th>Должность</th>
+                                                <th>Организация</th>
+                                                <th>Подразделение</th>
+                                                <th>График работы</th>
+                                                <th>Значение графика</th>
+                                                <th>Время входа</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="off-schedule-report-body">
+                                            <tr>
+                                                <td colspan="8" class="text-center">Выберите дату и нажмите "Сформировать отчет"</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <span class="total-count">Найдено: <span id="off-schedule-total">0</span> сотрудников</span>
-                        </div>
-                    </div>
-                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
-                        <p style="margin: 0; color: #1976D2; font-size: 14px;">
-                            📋 <strong>Описание отчета:</strong> Показывает сотрудников, которые пришли на работу в день, когда по их графику был выходной.
-                        </p>
-                    </div>
-                    <div class="table-container">
-                        <table class="admin-table" id="off-schedule-report-table">
-                            <thead>
-                                <tr>
-                                    <th>Дата</th>
-                                    <th>Сотрудник</th>
-                                    <th>Должность</th>
-                                    <th>Организация</th>
-                                    <th>Подразделение</th>
-                                    <th>График работы</th>
-                                    <th>Значение графика</th>
-                                    <th>Время входа</th>
-                                </tr>
-                            </thead>
-                            <tbody id="off-schedule-report-body">
-                                <tr>
-                                    <td colspan="8" class="text-center">Выберите дату и нажмите "Сформировать отчет"</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <!-- Секция: Отчет "Перелимит ФОТ" -->
-                <section id="payroll-overtime-report-section" class="content-section">
-                    <div class="section-header">
-                        <h2>📊 Отчет: Перелимит ФОТ</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <select id="overtime-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
-                                    <option value="">Выберите организацию...</option>
-                                </select>
-                                <input type="date" id="overtime-date-filter" class="form-control" style="margin-right: 10px;">
-                                <button id="load-overtime-report-btn" class="btn btn--primary btn--sm">
-                                    <span class="btn-text">Сформировать отчет</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
-                                <button id="clear-overtime-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                            
+                            <!-- Вкладка: Перелимит ФОТ -->
+                            <div class="reports-tab-pane" id="tab-payroll-overtime">
+                                <div class="tab-controls">
+                                    <div class="filter-controls">
+                                        <select id="overtime-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
+                                            <option value="">Выберите организацию...</option>
+                                        </select>
+                                        <input type="date" id="overtime-date-filter" class="form-control" style="margin-right: 10px;">
+                                        <button id="load-overtime-report-btn" class="btn btn--primary btn--sm">
+                                            <span class="btn-text">Сформировать отчет</span>
+                                            <span class="spinner" style="display: none;">⏳</span>
+                                        </button>
+                                        <button id="clear-overtime-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                    </div>
+                                    <span class="total-count">Подразделений: <span id="overtime-departments-total">0</span></span>
+                                </div>
+                                <div class="info-message" style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                                    <p style="margin: 0; color: #856404; font-size: 14px;">
+                                        💰 <strong>Описание отчета:</strong> Сравнивает плановый и фактический ФОТ по должностям.
+                                        Показывает <span style="color: #dc3545;">перелимит</span> (когда вышли более дорогие сотрудники)
+                                        и <span style="color: #28a745;">экономию</span> (когда вышли более дешевые).
+                                    </p>
+                                </div>
+                                <div id="overtime-results-container">
+                                    <div class="table-container">
+                                        <div id="overtime-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                                            Выберите организацию и дату, затем нажмите "Сформировать отчет"
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <span class="total-count">Подразделений: <span id="overtime-departments-total">0</span></span>
-                        </div>
-                    </div>
-                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-                        <p style="margin: 0; color: #856404; font-size: 14px;">
-                            💰 <strong>Описание отчета:</strong> Сравнивает плановый и фактический ФОТ по должностям.
-                            Показывает <span style="color: #dc3545;">перелимит</span> (когда вышли более дорогие сотрудники)
-                            и <span style="color: #28a745;">экономию</span> (когда вышли более дешевые).
-                        </p>
-                    </div>
-
-                    <!-- Результаты отчета -->
-                    <div id="overtime-results-container">
-                        <div class="table-container">
-                            <div id="overtime-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
-                                Выберите организацию и дату, затем нажмите "Сформировать отчет"
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Секция: Выручка к ФОТ -->
-                <section id="revenue-to-payroll-report-section" class="content-section">
-                    <div class="section-header">
-                        <h2>📊 Отчет: Выручка к ФОТ</h2>
-                        <div class="section-controls">
-                            <div class="filter-controls">
-                                <select id="rtp-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
-                                    <option value="">Выберите организацию...</option>
-                                </select>
-                                <input type="date" id="rtp-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
-                                <input type="date" id="rtp-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
-                                <button id="load-rtp-report-btn" class="btn btn--primary btn--sm">
-                                    <span class="btn-text">Сформировать отчет</span>
-                                    <span class="spinner" style="display: none;">⏳</span>
-                                </button>
-                                <button id="clear-rtp-report-btn" class="btn btn--outline btn--sm">Очистить</button>
-                            </div>
-                            <span class="total-count">Коэффициент: <span id="rtp-avg-coefficient">0.00</span></span>
-                        </div>
-                    </div>
-                    <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
-                        <p style="margin: 0; color: #1976D2; font-size: 14px;">
-                            💡 <strong>Описание отчета:</strong> Показывает эффективность работы через коэффициент "Выручка / Фактический ФОТ".
-                            Чем выше коэффициент, тем эффективнее используются ресурсы. Рекомендуемый коэффициент: <strong>10-15</strong>.
-                        </p>
-                    </div>
-
-                    <!-- График и таблица -->
-                    <div id="rtp-results-container" style="display: none;">
-                        <!-- График (Chart.js) -->
-                        <div id="rtp-chart-container" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📈 Динамика выручки, ФОТ и коэффициента</h3>
-                            <canvas id="rtp-chart" style="max-height: 400px;"></canvas>
-                        </div>
-
-                        <!-- Таблица с детализацией -->
-                        <div id="rtp-table-container" style="margin: 20px 0;">
-                            <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📋 Детализация по дням</h3>
-                            <div class="table-container">
-                                <table class="admin-table" id="rtp-report-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Дата</th>
-                                            <th>День недели</th>
-                                            <th>Выручка (₸)</th>
-                                            <th>ФОТ (₸)</th>
-                                            <th>Сотрудников</th>
-                                            <th>Коэффициент</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="rtp-report-body">
-                                        <!-- Данные будут загружены динамически -->
-                                    </tbody>
-                                    <tfoot id="rtp-report-footer" style="font-weight: bold; background: #f8f9fa;">
-                                        <tr>
-                                            <td colspan="2">ИТОГО:</td>
-                                            <td id="rtp-total-revenue">0.00</td>
-                                            <td id="rtp-total-payroll">0.00</td>
-                                            <td id="rtp-total-employees">0</td>
-                                            <td id="rtp-total-coefficient" style="font-size: 16px; color: #2196F3;">0.00</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                            
+                            <!-- Вкладка: Выручка к ФОТ -->
+                            <div class="reports-tab-pane" id="tab-revenue-payroll">
+                                <div class="tab-controls">
+                                    <div class="filter-controls">
+                                        <select id="rtp-organization-filter" class="search-input" style="width: 250px; margin-right: 10px;" required>
+                                            <option value="">Выберите организацию...</option>
+                                        </select>
+                                        <input type="date" id="rtp-date-from" class="form-control" style="margin-right: 10px;" placeholder="Дата с">
+                                        <input type="date" id="rtp-date-to" class="form-control" style="margin-right: 10px;" placeholder="Дата по">
+                                        <button id="load-rtp-report-btn" class="btn btn--primary btn--sm">
+                                            <span class="btn-text">Сформировать отчет</span>
+                                            <span class="spinner" style="display: none;">⏳</span>
+                                        </button>
+                                        <button id="clear-rtp-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                    </div>
+                                    <span class="total-count">Коэффициент: <span id="rtp-avg-coefficient">0.00</span></span>
+                                </div>
+                                <div class="info-message" style="margin: 15px 0; padding: 12px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 4px;">
+                                    <p style="margin: 0; color: #1976D2; font-size: 14px;">
+                                        💡 <strong>Описание отчета:</strong> Показывает эффективность работы через коэффициент "Выручка / Фактический ФОТ".
+                                        Чем выше коэффициент, тем эффективнее используются ресурсы. Рекомендуемый коэффициент: <strong>10-15</strong>.
+                                    </p>
+                                </div>
+                                <div id="rtp-results-container" style="display: none;">
+                                    <div id="rtp-chart-container" style="margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📈 Динамика выручки, ФОТ и коэффициента</h3>
+                                        <canvas id="rtp-chart" style="max-height: 400px;"></canvas>
+                                    </div>
+                                    <div id="rtp-table-container" style="margin: 20px 0;">
+                                        <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #333;">📋 Детализация по дням</h3>
+                                        <div class="table-container">
+                                            <table class="admin-table" id="rtp-report-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Дата</th>
+                                                        <th>День недели</th>
+                                                        <th>Выручка (₸)</th>
+                                                        <th>ФОТ (₸)</th>
+                                                        <th>Сотрудников</th>
+                                                        <th>Коэффициент</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="rtp-report-body">
+                                                    <!-- Данные будут загружены динамически -->
+                                                </tbody>
+                                                <tfoot id="rtp-report-footer" style="font-weight: bold; background: #f8f9fa;">
+                                                    <tr>
+                                                        <td colspan="2">ИТОГО:</td>
+                                                        <td id="rtp-total-revenue">0.00</td>
+                                                        <td id="rtp-total-payroll">0.00</td>
+                                                        <td id="rtp-total-employees">0</td>
+                                                        <td id="rtp-total-coefficient" style="font-size: 16px; color: #2196F3;">0.00</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="rtp-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
+                                    Выберите организацию и период, затем нажмите "Сформировать отчет"
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Placeholder -->
-                    <div id="rtp-report-placeholder" class="text-center" style="padding: 40px; color: #6c757d;">
-                        Выберите организацию и период, затем нажмите "Сформировать отчет"
                     </div>
                 </section>
 
@@ -1798,9 +1738,8 @@
     <script src="admin/employees.js?v=modular-v1.0&ts=20251125"></script>
     <script src="admin/departments.js?v=modular-v1.0&ts=20251125"></script>
     <script src="admin/positions.js?v=modular-v1.0&ts=20251125"></script>
-    <script src="admin/time-tracking.js?v=modular-v1.2&ts=20251125-cleanup"></script>
     <script src="admin/schedules.js?v=modular-v1.0&ts=20251125"></script>
-    <script src="admin/reports.js?v=modular-v1.5&ts=20251126-rtp-fix"></script>
+    <script src="admin/reports.js?v=modular-v2.0&ts=20251126-unified-tabs"></script>
     <script src="admin/news.js?v=modular-v1.0&ts=20251125"></script>
     <script src="admin/upload.js?v=modular-v1.0&ts=20251125"></script>
     <script src="admin/organizations.js?v=modular-v1.0&ts=20251126"></script>

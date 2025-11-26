@@ -157,28 +157,8 @@ function switchSection(sectionName) {
             initScheduleAssignSection();
             break;
 
-        case 'time-events':
-            initTimeEventsSection();
-            break;
-
         case 'reports':
             initReportsSection();
-            break;
-
-        case 'payroll-report':
-            initPayrollReportSection();
-            break;
-
-        case 'off-schedule-report':
-            initOffScheduleReportSection();
-            break;
-
-        case 'payroll-overtime-report':
-            initPayrollOvertimeReportSection();
-            break;
-
-        case 'revenue-to-payroll-report':
-            initRevenueToPayrollReportSection();
             break;
 
         case 'ai-recommendation':

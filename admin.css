@@ -2145,3 +2145,105 @@
         height: 14px;
     }
 }
+
+/* ===== Reports Tabs Styles ===== */
+
+.reports-tabs-container {
+    padding: 0;
+}
+
+.reports-tabs-header {
+    display: flex;
+    gap: 0;
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    padding: 0 20px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.reports-tab-btn {
+    background: none;
+    border: none;
+    padding: 14px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6c757d;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.reports-tab-btn:hover {
+    color: #495057;
+    background: rgba(0, 123, 255, 0.05);
+}
+
+.reports-tab-btn.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background: white;
+}
+
+.reports-tabs-content {
+    padding: 0;
+}
+
+.reports-tab-pane {
+    display: none;
+    padding: 20px;
+    animation: fadeInTab 0.3s ease;
+}
+
+.reports-tab-pane.active {
+    display: block;
+}
+
+@keyframes fadeInTab {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Tab controls layout */
+.reports-tab-pane .tab-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.reports-tab-pane .tab-controls .filter-controls {
+    flex: 1;
+}
+
+/* Responsive tabs */
+@media (max-width: 768px) {
+    .reports-tabs-header {
+        padding: 0 10px;
+    }
+    
+    .reports-tab-btn {
+        padding: 12px 14px;
+        font-size: 13px;
+    }
+    
+    .reports-tab-pane {
+        padding: 15px;
+    }
+    
+    .reports-tab-pane .tab-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
