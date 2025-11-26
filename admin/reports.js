@@ -956,10 +956,21 @@ function renderRTPChart(days) {
                 {
                     label: 'ФОТ + Бонус',
                     data: days.map(d => d.total_payroll || d.actual_payroll || 0),
-                    borderColor: '#cc9900',
-                    backgroundColor: 'rgba(204, 153, 0, 0.1)',
+                    borderColor: '#FFD700',
+                    backgroundColor: 'rgba(255, 215, 0, 0.1)',
                     fill: true,
                     tension: 0.3
+                },
+                {
+                    label: 'Бонус',
+                    data: days.map(d => d.bonus || 0),
+                    borderColor: '#9333EA',
+                    backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                    fill: false,
+                    tension: 0.3,
+                    hidden: true,
+                    showLine: false,
+                    pointRadius: 0
                 }
             ]
         },
@@ -971,24 +982,28 @@ function renderRTPChart(days) {
                 intersect: false
             },
             plugins: {
-                legend: { position: 'top' },
+                legend: {
+                    position: 'top',
+                    labels: {
+                        filter: function(item) {
+                            return item.text !== 'Бонус';
+                        }
+                    }
+                },
                 tooltip: {
                     callbacks: {
-                        label: function() {
-                            return null;
-                        },
-                        afterBody: function(context) {
-                            const dataIndex = context[0].dataIndex;
-                            const day = days[dataIndex];
-                            const revenue = day.revenue || 0;
-                            const totalPayroll = day.total_payroll || 0;
-                            const bonus = day.bonus || 0;
-                            return [
-                                '■ Выручка: ' + formatNumber(revenue) + ' ₸',
-                                '■ ФОТ + Бонус: ' + formatNumber(totalPayroll) + ' ₸',
-                                '■ Бонус: ' + formatNumber(bonus) + ' ₸'
-                            ];
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y || 0;
+                            return label + ': ' + formatNumber(value) + ' ₸';
                         }
+                    },
+                    filter: function() {
+                        return true;
+                    },
+                    itemSort: function(a, b) {
+                        const order = { 'Выручка': 0, 'ФОТ + Бонус': 1, 'Бонус': 2 };
+                        return order[a.dataset.label] - order[b.dataset.label];
                     }
                 }
             },
