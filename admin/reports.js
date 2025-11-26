@@ -966,11 +966,10 @@ function renderRTPChart(days) {
                     data: days.map(d => d.bonus || 0),
                     borderColor: '#9333EA',
                     backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                    borderWidth: 0,
+                    pointRadius: 0,
                     fill: false,
-                    tension: 0.3,
-                    hidden: true,
-                    showLine: false,
-                    pointRadius: 0
+                    tension: 0.3
                 }
             ]
         },
