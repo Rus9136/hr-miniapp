@@ -392,15 +392,18 @@ function displayLateEmployeesReport(employees) {
 
     tbody.innerHTML = employees.map(employee => {
         const statusClass = employee.status === 'late' ? 'status-late' : 'status-absent';
+        const offScheduleBadge = employee.is_off_schedule
+            ? '<span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">Вне графика</span>'
+            : '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">По графику</span>';
         return `
             <tr>
                 <td>${employee.employee_name}</td>
-                <td>${employee.table_number}</td>
                 <td>${employee.department_name}</td>
                 <td>${employee.schedule_name || '-'}</td>
                 <td>${employee.schedule_start_time || '-'}</td>
                 <td>${employee.actual_entry_time}</td>
                 <td><span class="${statusClass}">${employee.late_time_formatted}</span></td>
+                <td>${offScheduleBadge}</td>
             </tr>
         `;
     }).join('');

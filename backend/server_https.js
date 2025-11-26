@@ -34,6 +34,15 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Serve favicon with no-cache headers
+app.get('/favicon.svg', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.sendFile(path.join(__dirname, '..', 'favicon.svg'));
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '..')));
 

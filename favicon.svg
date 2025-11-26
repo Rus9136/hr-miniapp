@@ -1,0 +1,35 @@
+<svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366F1"/>
+      <stop offset="100%" style="stop-color:#A855F7"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Фон -->
+  <rect width="512" height="512" rx="102" fill="#1a1a2e"/>
+  
+  <!-- Внешнее кольцо (фон) -->
+  <circle cx="256" cy="256" r="195" stroke="#333333" stroke-width="30" fill="none"/>
+  
+  <!-- Внешнее кольцо (прогресс ~75%) -->
+  <circle cx="256" cy="256" r="195" 
+          stroke="url(#progressGradient)" 
+          stroke-width="30" 
+          fill="none" 
+          stroke-dasharray="920 1225" 
+          stroke-linecap="round" 
+          transform="rotate(-90 256 256)"/>
+  
+  <!-- Внутренний круг с часами -->
+  <circle cx="256" cy="256" r="125" fill="url(#progressGradient)"/>
+  
+  <!-- Центр часов -->
+  <circle cx="256" cy="256" r="14" fill="white"/>
+  
+  <!-- Часовая стрелка -->
+  <line x1="256" y1="256" x2="256" y2="168" stroke="white" stroke-width="20" stroke-linecap="round"/>
+  
+  <!-- Минутная стрелка -->
+  <line x1="256" y1="256" x2="328" y2="296" stroke="white" stroke-width="16" stroke-linecap="round"/>
+</svg>

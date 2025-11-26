@@ -12,48 +12,83 @@ const { getActualPayrollForPeriod, generateDateRange } = require('./helpers');
 /**
  * GET /admin/reports/late-employees
  * Отчёт по опоздавшим сотрудникам
+ * НОВАЯ ЛОГИКА: берём всех отметившихся, проверяем график, показываем "Вне графика"
  */
 router.get('/late-employees', async (req, res) => {
     try {
         const { date, organization, department } = req.query;
-        
+
         // Если дата не указана, используем сегодняшнюю
         const reportDate = date || new Date().toISOString().split('T')[0];
-        
+
         console.log('Getting late employees report for:', reportDate, 'org:', organization, 'dept:', department);
 
-        // Строим SQL запрос с фильтрами
+        // НОВАЯ ЛОГИКА: Начинаем с time_events (все кто отметился на вход)
+        // затем проверяем график и определяем "вне графика"
         let query = `
-            SELECT DISTINCT
+            WITH first_entry AS (
+                -- Получаем первый вход каждого сотрудника за день
+                SELECT DISTINCT ON (employee_number)
+                    employee_number,
+                    event_datetime
+                FROM time_events
+                WHERE event_type = '1'
+                    AND DATE(event_datetime) = $1
+                ORDER BY employee_number, event_datetime ASC
+            ),
+            schedule_for_date AS (
+                -- Проверяем есть ли рабочая смена на указанную дату
+                SELECT
+                    esa.employee_number,
+                    ws.schedule_code,
+                    ws.schedule_name,
+                    ws.work_start_time,
+                    ws.work_end_time,
+                    ws.work_hours,
+                    TRUE as is_scheduled_workday
+                FROM employee_schedule_assignments esa
+                JOIN work_schedules_1c ws ON esa.schedule_code = ws.schedule_code
+                    AND ws.work_date = $1
+                WHERE esa.start_date <= $1
+                    AND (esa.end_date IS NULL OR esa.end_date >= $1)
+                    AND ws.work_start_time IS NOT NULL
+                    AND ws.work_hours > 0
+            ),
+            typical_schedule AS (
+                -- Получаем типичное время начала работы из графика сотрудника
+                -- (для тех, у кого сегодня выходной, но они отметились)
+                SELECT DISTINCT ON (esa.employee_number)
+                    esa.employee_number,
+                    esa.schedule_code,
+                    ws.schedule_name as typical_schedule_name,
+                    ws.work_start_time as typical_start_time
+                FROM employee_schedule_assignments esa
+                JOIN work_schedules_1c ws ON esa.schedule_code = ws.schedule_code
+                WHERE esa.start_date <= $1
+                    AND (esa.end_date IS NULL OR esa.end_date >= $1)
+                    AND ws.work_start_time IS NOT NULL
+                    AND ws.work_hours > 0
+                ORDER BY esa.employee_number, ws.work_date DESC
+            )
+            SELECT
                 e.full_name as employee_name,
                 e.table_number,
                 e.object_code,
                 d.object_name as department_name,
                 d.object_bin as organization,
-                ws.schedule_name,
-                ws.work_start_time as schedule_start_time,
-                ws.work_end_time as schedule_end_time,
-                te.event_datetime as actual_entry_time,
-                esa.start_date,
-                esa.end_date
-            FROM employees e
+                -- Если есть смена на сегодня - берём её данные, иначе типичные
+                COALESCE(sfd.schedule_name, ts.typical_schedule_name) as schedule_name,
+                COALESCE(sfd.work_start_time, ts.typical_start_time) as schedule_start_time,
+                sfd.work_end_time as schedule_end_time,
+                fe.event_datetime as actual_entry_time,
+                -- Флаг: запланирована ли смена на сегодня
+                COALESCE(sfd.is_scheduled_workday, FALSE) as is_scheduled_workday
+            FROM first_entry fe
+            JOIN employees e ON fe.employee_number = e.table_number
             LEFT JOIN departments d ON e.object_code = d.object_code
-            JOIN employee_schedule_assignments esa ON e.table_number = esa.employee_number
-            JOIN work_schedules_1c ws ON esa.schedule_code = ws.schedule_code AND ws.work_date = $1
-            LEFT JOIN (
-                SELECT DISTINCT ON (employee_number, DATE(event_datetime))
-                    employee_number,
-                    event_datetime,
-                    DATE(event_datetime) as event_date
-                FROM time_events
-                WHERE event_type = '1'
-                    AND DATE(event_datetime) = $1
-                ORDER BY employee_number, DATE(event_datetime), event_datetime ASC
-            ) te ON e.table_number = te.employee_number
-            WHERE (esa.start_date <= $1)
-                AND (esa.end_date IS NULL OR esa.end_date >= $1)
-                AND ws.work_start_time IS NOT NULL
-                AND ws.work_hours > 0
+            LEFT JOIN schedule_for_date sfd ON e.table_number = sfd.employee_number
+            LEFT JOIN typical_schedule ts ON e.table_number = ts.employee_number
+            WHERE 1=1
         `;
 
         const queryParams = [reportDate];
@@ -76,23 +111,26 @@ router.get('/late-employees', async (req, res) => {
         query += ` ORDER BY e.full_name`;
 
         const result = await db.query(query, queryParams);
-        
+
+        console.log(`Found ${result.rows.length} employees who checked in on ${reportDate}`);
+
         // Обрабатываем результат для определения опозданий
         const lateEmployees = result.rows.map(row => {
             let status = 'on_time';
             let lateMinutes = 0;
-            let actualEntryFormatted = 'Отсутствие';
+            let actualEntryFormatted = '-';
+            const isOffSchedule = !row.is_scheduled_workday;
 
             if (row.actual_entry_time) {
                 const actualTime = new Date(row.actual_entry_time);
                 const actualTimeStr = actualTime.toTimeString().substring(0, 5); // HH:MM
                 actualEntryFormatted = actualTimeStr;
 
-                // Сравниваем с графиком
+                // Сравниваем с графиком (или типичным временем начала)
                 if (row.schedule_start_time) {
                     const scheduleTime = new Date(`1970-01-01T${row.schedule_start_time}`);
                     const actualTimeForComparison = new Date(`1970-01-01T${actualTimeStr}:00`);
-                    
+
                     const diffMs = actualTimeForComparison.getTime() - scheduleTime.getTime();
                     const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
@@ -101,8 +139,6 @@ router.get('/late-employees', async (req, res) => {
                         lateMinutes = diffMinutes;
                     }
                 }
-            } else {
-                status = 'absent';
             }
 
             return {
@@ -110,19 +146,20 @@ router.get('/late-employees', async (req, res) => {
                 table_number: row.table_number,
                 department_name: row.department_name,
                 organization: row.organization,
-                schedule_name: row.schedule_name,
-                schedule_start_time: row.schedule_start_time,
+                schedule_name: row.schedule_name || '-',
+                schedule_start_time: row.schedule_start_time || '-',
                 actual_entry_time: actualEntryFormatted,
                 status: status,
                 late_minutes: lateMinutes,
-                late_time_formatted: lateMinutes > 0 ? `${lateMinutes} мин` : '-'
+                late_time_formatted: lateMinutes > 0 ? `${lateMinutes} мин` : '-',
+                is_off_schedule: isOffSchedule
             };
         });
 
-        // Фильтруем только опоздавших и отсутствующих
-        const filteredEmployees = lateEmployees.filter(emp => emp.status === 'late' || emp.status === 'absent');
+        // Фильтруем только опоздавших (включая тех, кто вышел вне графика и опоздал)
+        const filteredEmployees = lateEmployees.filter(emp => emp.status === 'late');
 
-        console.log(`Found ${filteredEmployees.length} late/absent employees`);
+        console.log(`Found ${filteredEmployees.length} late employees (including off-schedule)`);
 
         res.json({
             success: true,

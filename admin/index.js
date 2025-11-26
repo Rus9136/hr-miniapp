@@ -29,7 +29,7 @@ function initAdminPanel() {
     setupAdminEventHandlers();
 
     // Load first section
-    switchSection('employees');
+    switchSection('organizations');
 
     // Add debug function to global scope
     window.debugScheduleModule = debugScheduleModule;
@@ -137,10 +137,6 @@ function switchSection(sectionName) {
             });
             break;
 
-        case 'positions':
-            loadPositions();
-            break;
-
         case 'organizations':
             initOrganizationsSection();
             break;
@@ -186,11 +182,6 @@ function switchSection(sectionName) {
             } else {
                 console.error('CRON Scheduler script not loaded');
             }
-            break;
-
-        case 'news':
-            loadAdminNews();
-            initNewsSection();
             break;
     }
 }
@@ -274,7 +265,6 @@ function initSearchInputs() {
 
     const employeesSearch = document.getElementById('employees-search');
     const departmentsSearch = document.getElementById('departments-search');
-    const positionsSearch = document.getElementById('positions-search');
     const employeesCompanyFilter = document.getElementById('employees-company-filter');
     const departmentsCompanyFilter = document.getElementById('departments-company-filter');
 
@@ -299,12 +289,6 @@ function initSearchInputs() {
     if (departmentsCompanyFilter) {
         departmentsCompanyFilter.addEventListener('change', () => {
             filterDepartments();
-        });
-    }
-
-    if (positionsSearch) {
-        positionsSearch.addEventListener('input', (e) => {
-            filterPositions(e.target.value);
         });
     }
 
