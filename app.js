@@ -48,6 +48,44 @@ let isLoadingNews = false;
 let hasMoreNews = true;
 let currentNewsId = null;
 
+// Session management functions
+const SESSION_KEY = 'hr_employee_session';
+
+function saveSession(employee) {
+    try {
+        if (employee) {
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(employee));
+            console.log('💾 Session saved for:', employee.fullName);
+        }
+    } catch (error) {
+        console.error('❌ Failed to save session:', error);
+    }
+}
+
+function loadSession() {
+    try {
+        const data = sessionStorage.getItem(SESSION_KEY);
+        if (data) {
+            const employee = JSON.parse(data);
+            console.log('📂 Session loaded for:', employee.fullName);
+            return employee;
+        }
+    } catch (error) {
+        console.error('❌ Failed to load session:', error);
+        clearSession();
+    }
+    return null;
+}
+
+function clearSession() {
+    try {
+        sessionStorage.removeItem(SESSION_KEY);
+        console.log('🗑️ Session cleared');
+    } catch (error) {
+        console.error('❌ Failed to clear session:', error);
+    }
+}
+
 // Legacy platform detection (for backward compatibility)
 const isInTelegram = window.tgApp ? window.tgApp.isInTelegram : false;
 const currentScreen = { name: 'login', previous: null };
@@ -315,6 +353,7 @@ async function tryTelegramAuth() {
         if (result.success && result.isLinked) {
             // Auto-login successful
             window.currentEmployee = result.employee;
+            saveSession(window.currentEmployee); // Save session for page refresh
             console.log('✅ Telegram auto-login successful:', window.currentEmployee.fullName);
             
             // IMPORTANT: Initialize navigation AFTER successful authentication
@@ -409,6 +448,7 @@ async function linkTelegramAccount(telegramUser) {
         if (result.success) {
             // Linking successful - auto login
             window.currentEmployee = result.employee;
+            saveSession(window.currentEmployee); // Save session for page refresh
             console.log('✅ Telegram account linked and logged in:', window.currentEmployee.fullName);
             
             // IMPORTANT: Initialize navigation AFTER successful authentication
@@ -575,11 +615,12 @@ async function handleRegularLogin(e) {
         }
         
         window.currentEmployee = await response.json();
+        saveSession(window.currentEmployee); // Save session for page refresh
         console.log('✅ Login successful! Current employee:', window.currentEmployee);
-        
+
         // IMPORTANT: Initialize navigation AFTER successful authentication
         initializeNavigation();
-        
+
         // Regular employee - show menu screen
         document.getElementById('menuEmployeeName').textContent = window.currentEmployee.fullName;
         document.getElementById('employeeName').textContent = window.currentEmployee.fullName;
@@ -699,7 +740,8 @@ async function tryIOSAuth() {
         if (result.success) {
             console.log('✅ iOS authentication successful');
             window.currentEmployee = result.employee;
-            
+            saveSession(window.currentEmployee); // Save session for page refresh
+
             // IMPORTANT: Initialize navigation AFTER successful authentication
             initializeNavigation();
             
@@ -733,10 +775,11 @@ async function tryIOSAuth() {
 // Logout functionality for all logout buttons
 function logout() {
     console.log('💪 Logout initiated');
-    
+
     // Clear user data
     window.currentEmployee = null;
-    
+    clearSession(); // Clear saved session
+
     // Remove navigation handlers to prevent unauthorized access
     document.removeEventListener('click', handleBackNavigation);
     
@@ -1497,7 +1540,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Setup global back navigation handler (once only)
     document.addEventListener('click', handleBackNavigation);
     console.log('🔙 Global back navigation handler installed');
-    
+
+    // Try to restore session from sessionStorage (for page refresh)
+    const savedEmployee = loadSession();
+    if (savedEmployee) {
+        console.log('🔄 Restoring session for:', savedEmployee.fullName);
+        window.currentEmployee = savedEmployee;
+
+        // Update UI with restored employee data
+        document.getElementById('menuEmployeeName').textContent = savedEmployee.fullName;
+        document.getElementById('employeeName').textContent = savedEmployee.fullName;
+
+        // Initialize navigation for restored session
+        initializeNavigation();
+
+        // Show menu screen instead of login
+        showScreen('menu', menuScreen);
+        console.log('✅ Session restored successfully');
+        return; // Skip regular initialization
+    }
+
     // Initialize the application (Telegram auth or regular login)
     await initApp();
     
@@ -1966,10 +2028,11 @@ async function unlinkTelegramAccount() {
         if (result.success) {
             // Show success message
             window.tgApp.showAlert('Аккаунт успешно отвязан! Вы будете перенаправлены на экран входа.');
-            
+
             // Clear current employee data
             window.currentEmployee = null;
-            
+            clearSession(); // Clear saved session
+
             // Redirect to login screen after a short delay
             setTimeout(() => {
                 showRegularLoginForm();

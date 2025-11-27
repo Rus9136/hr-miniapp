@@ -19,6 +19,12 @@ function initUploadSection() {
     document.getElementById('sync-departments').addEventListener('click', () => syncData('departments'));
     document.getElementById('sync-positions').addEventListener('click', () => syncData('positions'));
 
+    // CRON manual run button
+    const cronManualRunBtn = document.getElementById('cron-manual-run-btn');
+    if (cronManualRunBtn) {
+        cronManualRunBtn.addEventListener('click', handleManualCronRun);
+    }
+
     // Timesheet upload form
     document.getElementById('timesheet-upload-form').addEventListener('submit', handleTimesheetUpload);
 
@@ -309,45 +315,55 @@ async function loadCronStatusForUploadSection() {
         const nextRunElement = document.getElementById('cron-next-run');
         const statusBadgeElement = document.getElementById('cron-status-badge');
 
-        // Format last run time
-        if (status.lastRun) {
-            const lastRunDate = new Date(status.lastRun);
-            lastRunElement.textContent = formatDateTime(lastRunDate);
-        } else {
-            lastRunElement.textContent = 'Еще не запускался';
+        // Format last run time (API uses lastRunTime)
+        if (lastRunElement) {
+            if (status.lastRunTime) {
+                const lastRunDate = new Date(status.lastRunTime);
+                lastRunElement.textContent = formatDateTime(lastRunDate);
+            } else {
+                lastRunElement.textContent = 'Еще не запускался';
+            }
         }
 
-        // Format next run time
-        if (status.nextRun) {
-            const nextRunDate = new Date(status.nextRun);
-            nextRunElement.textContent = formatDateTime(nextRunDate);
-        } else {
-            nextRunElement.textContent = '—';
+        // Format next run time (API uses nextRunTime)
+        if (nextRunElement) {
+            if (status.nextRunTime) {
+                const nextRunDate = new Date(status.nextRunTime);
+                nextRunElement.textContent = formatDateTime(nextRunDate);
+            } else {
+                nextRunElement.textContent = '—';
+            }
         }
 
         // Update status badge
-        if (status.isRunning) {
-            statusBadgeElement.textContent = 'Выполняется...';
-            statusBadgeElement.className = 'badge running';
-            statusBadgeElement.style.background = '#fff3cd';
-            statusBadgeElement.style.color = '#856404';
-        } else if (status.enabled) {
-            statusBadgeElement.textContent = 'Активен';
-            statusBadgeElement.className = 'badge enabled';
-            statusBadgeElement.style.background = '#d4edda';
-            statusBadgeElement.style.color = '#155724';
-        } else {
-            statusBadgeElement.textContent = 'Отключен';
-            statusBadgeElement.className = 'badge disabled';
-            statusBadgeElement.style.background = '#f8d7da';
-            statusBadgeElement.style.color = '#721c24';
+        if (statusBadgeElement) {
+            if (status.isRunning) {
+                statusBadgeElement.textContent = 'Выполняется...';
+                statusBadgeElement.className = 'badge running';
+                statusBadgeElement.style.background = '#fff3cd';
+                statusBadgeElement.style.color = '#856404';
+            } else if (status.enabled) {
+                statusBadgeElement.textContent = 'Активен';
+                statusBadgeElement.className = 'badge enabled';
+                statusBadgeElement.style.background = '#d4edda';
+                statusBadgeElement.style.color = '#155724';
+            } else {
+                statusBadgeElement.textContent = 'Отключен';
+                statusBadgeElement.className = 'badge disabled';
+                statusBadgeElement.style.background = '#f8d7da';
+                statusBadgeElement.style.color = '#721c24';
+            }
         }
 
         // Load summary to get total events count
         const summaryResponse = await fetch(`${ADMIN_API_BASE_URL}/admin/cron/timesheet/logs/summary?days=7`);
         if (summaryResponse.ok) {
-            const summary = await summaryResponse.json();
-            const totalEvents = summary.reduce((sum, org) => sum + (org.total_events_loaded || 0), 0);
+            const data = await summaryResponse.json();
+            // API returns { summary: [...], period_days: N }
+            const summary = data.summary || data;
+            const totalEvents = Array.isArray(summary) 
+                ? summary.reduce((sum, org) => sum + (parseInt(org.total_events, 10) || 0), 0)
+                : 0;
             const eventsCountElement = document.getElementById('cron-events-count');
             if (eventsCountElement) {
                 eventsCountElement.textContent = totalEvents.toLocaleString('ru-RU') + ' (за последние 7 дней)';
@@ -359,6 +375,58 @@ async function loadCronStatusForUploadSection() {
     }
 }
 
+// Handle manual CRON run
+async function handleManualCronRun(e) {
+    e.preventDefault();
+
+    const button = e.currentTarget;
+    const btnText = button.querySelector('.btn-text');
+    const spinner = button.querySelector('.spinner');
+    const statusBadgeElement = document.getElementById('cron-status-badge');
+
+    // Check if already running
+    if (statusBadgeElement && statusBadgeElement.textContent === 'Выполняется...') {
+        alert('Загрузка уже выполняется. Дождитесь завершения.');
+        return;
+    }
+
+    if (!confirm('Запустить загрузку табелей для всех организаций?\n\nЭто может занять несколько минут.')) {
+        return;
+    }
+
+    button.disabled = true;
+    btnText.style.display = 'none';
+    spinner.style.display = 'inline-block';
+
+    try {
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/cron/timesheet/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert('Загрузка запущена в фоновом режиме.\n\nСтатус обновится автоматически.');
+
+            // Update status after delay
+            setTimeout(() => {
+                loadCronStatusForUploadSection();
+            }, 2000);
+        } else {
+            alert('Ошибка: ' + result.error);
+        }
+
+    } catch (error) {
+        console.error('Error running manual CRON:', error);
+        alert('Ошибка запуска: ' + error.message);
+    } finally {
+        button.disabled = false;
+        btnText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+}
+
 // Export to window for global access
 window.initUploadSection = initUploadSection;
 window.loadOrganizationsForUpload = loadOrganizationsForUpload;
@@ -367,3 +435,4 @@ window.handleTimesheetUpload = handleTimesheetUpload;
 window.pollLoadingProgress = pollLoadingProgress;
 window.updateProgressDisplay = updateProgressDisplay;
 window.loadCronStatusForUploadSection = loadCronStatusForUploadSection;
+window.handleManualCronRun = handleManualCronRun;

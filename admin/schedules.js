@@ -3,6 +3,7 @@
 
 // Local data storage
 let schedulesData = [];
+let organizationsDict = {}; // Dictionary: { bin: name }
 let scheduleRuleIndex = 1;
 let schedulesInitialized = false;
 let currentScheduleCode = null;
@@ -10,6 +11,12 @@ let scheduleCardInitialized = false;
 let scheduleAssignInitialized = false;
 let availableEmployees = [];
 let selectedEmployeeIds = new Set();
+
+// Pagination state
+let schedulesCurrentPage = 1;
+let schedulesTotalPages = 1;
+let schedulesPageSize = 50;
+let schedulesTotal = 0;
 
 // ==================== SCHEDULES LIST ====================
 
@@ -28,28 +35,47 @@ function initSchedulesSection() {
     }, 200);
 }
 
-// Load schedules from 1C
-async function loadSchedules() {
+// Load schedules from 1C with pagination
+async function loadSchedules(page = 1) {
     const tbody = document.getElementById('schedules-tbody');
     tbody.innerHTML = '<tr><td colspan="3" class="loading">Загрузка данных...</td></tr>';
 
     try {
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list`);
+        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/schedules/1c/list?page=${page}&limit=${schedulesPageSize}`);
         if (!response.ok) throw new Error('Failed to load schedules');
 
-        schedulesData = await response.json();
+        const data = await response.json();
 
-        // Load organizations for filter
+        // Store organizations dictionary and schedules
+        organizationsDict = data.organizations || {};
+        schedulesData = data.schedules || [];
+
+        // Update pagination state
+        if (data.pagination) {
+            schedulesCurrentPage = data.pagination.page;
+            schedulesTotalPages = data.pagination.totalPages;
+            schedulesTotal = data.pagination.total;
+        }
+
+        // Load organizations for filter (uses stored dictionary)
         await loadScheduleOrganizations();
 
         displaySchedules(schedulesData);
-        document.getElementById('schedules-total').textContent = schedulesData.length;
+
+        // Update total count display
+        const totalSpan = document.getElementById('schedules-total');
+        if (totalSpan) {
+            totalSpan.textContent = schedulesTotal;
+        }
+
+        // Render pagination controls
+        renderSchedulesPagination();
 
         // Initialize search functionality
         initSchedulesSearch();
     } catch (error) {
         console.error('Error loading schedules:', error);
-        tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
     }
 }
 
@@ -64,22 +90,19 @@ function displaySchedules(schedules) {
         const matchesSearch = !searchValue || schedule.schedule_name.toLowerCase().includes(searchValue);
         let matchesOrg = true;
         if (orgFilter) {
-            const orgs = schedule.organizations || [];
-            if (orgs.length > 0) {
-                matchesOrg = orgs.some(org => org.organization_bin === orgFilter);
-            } else {
-                matchesOrg = schedule.organization_bin === orgFilter;
-            }
+            const orgBins = schedule.org_bins || [];
+            matchesOrg = orgBins.includes(orgFilter);
         }
         return matchesSearch && matchesOrg;
     });
 
-    // Update filtered count
+    // Update filtered count (show current page info)
     const totalSpan = document.getElementById('schedules-total');
     if (totalSpan) {
-        totalSpan.textContent = filteredSchedules.length;
-        if ((searchValue || orgFilter) && filteredSchedules.length !== schedules.length) {
-            totalSpan.innerHTML = `${filteredSchedules.length} <span style="color: #6c757d;">(из ${schedules.length})</span>`;
+        if (searchValue || orgFilter) {
+            totalSpan.innerHTML = `${filteredSchedules.length} <span style="color: #6c757d;">(из ${schedulesTotal})</span>`;
+        } else {
+            totalSpan.textContent = schedulesTotal;
         }
     }
 
@@ -89,20 +112,24 @@ function displaySchedules(schedules) {
     }
 
     tbody.innerHTML = filteredSchedules.map(schedule => {
-        const orgs = schedule.organizations || [];
+        const orgBins = schedule.org_bins || [];
         let orgDisplay = '';
 
-        if (orgs.length > 0) {
+        if (orgBins.length > 0) {
+            // Get organization names from dictionary
+            const orgs = orgBins.map(bin => ({
+                organization_name: organizationsDict[bin] || 'Неизвестно',
+                organization_bin: bin
+            }));
+
             if (orgs.length === 1) {
-                orgDisplay = `<small class="text-muted">${orgs[0].organization_name || 'Не указано'}${orgs[0].organization_bin ? `<br><small>(${orgs[0].organization_bin})</small>` : ''}</small>`;
+                orgDisplay = `<small class="text-muted">${orgs[0].organization_name}<br><small>(${orgs[0].organization_bin})</small></small>`;
             } else if (orgs.length <= 3) {
-                orgDisplay = orgs.map(org => `<div style="margin-bottom: 4px;"><small class="text-muted">${org.organization_name || 'Не указано'}${org.organization_bin ? ` <small>(${org.organization_bin})</small>` : ''}</small></div>`).join('');
+                orgDisplay = orgs.map(org => `<div style="margin-bottom: 4px;"><small class="text-muted">${org.organization_name} <small>(${org.organization_bin})</small></small></div>`).join('');
             } else {
-                orgDisplay = orgs.slice(0, 2).map(org => `<div style="margin-bottom: 4px;"><small class="text-muted">${org.organization_name || 'Не указано'}${org.organization_bin ? ` <small>(${org.organization_bin})</small>` : ''}</small></div>`).join('') +
-                    `<div><small class="text-muted" style="font-style: italic;">и еще ${orgs.length - 2} организаций</small></div>`;
+                orgDisplay = orgs.slice(0, 2).map(org => `<div style="margin-bottom: 4px;"><small class="text-muted">${org.organization_name} <small>(${org.organization_bin})</small></small></div>`).join('') +
+                    `<div><small class="text-muted" style="font-style: italic;">и ещё ${orgs.length - 2} организаций</small></div>`;
             }
-        } else if (schedule.organization_name || schedule.organization_bin) {
-            orgDisplay = `<small class="text-muted">${schedule.organization_name || 'Не указано'}${schedule.organization_bin ? `<br><small>(${schedule.organization_bin})</small>` : ''}</small>`;
         } else {
             orgDisplay = '<small class="text-muted">Не указано</small>';
         }
@@ -119,26 +146,37 @@ function displaySchedules(schedules) {
     }).join('');
 }
 
-// Load organizations for schedules filter
+// Load organizations for schedules filter (uses organizationsDict)
 async function loadScheduleOrganizations() {
     try {
-        const organizations = await OrganizationDropdownManager.getOrganizations();
         const select = document.getElementById('schedules-organization-filter');
 
         if (select) {
+            // Clear and add default option
             select.innerHTML = '<option value="">Все организации</option>';
-            organizations.forEach(org => {
+
+            // Use organizations from the dictionary (already loaded from API)
+            const orgBins = Object.keys(organizationsDict).sort((a, b) => {
+                return (organizationsDict[a] || '').localeCompare(organizationsDict[b] || '');
+            });
+
+            orgBins.forEach(bin => {
+                const name = organizationsDict[bin];
                 const option = document.createElement('option');
-                option.value = org.value;
-                option.textContent = org.text;
+                option.value = bin;
+                option.textContent = `${name} (${bin})`;
                 select.appendChild(option);
             });
 
-            select.addEventListener('change', () => {
-                displaySchedules(schedulesData);
-            });
+            // Only add change handler once
+            if (!select.hasAttribute('data-initialized')) {
+                select.setAttribute('data-initialized', 'true');
+                select.addEventListener('change', () => {
+                    displaySchedules(schedulesData);
+                });
+            }
 
-            console.log('Schedule organizations filter populated with', organizations.length, 'options');
+            console.log('Schedule organizations filter populated with', orgBins.length, 'options');
         }
     } catch (error) {
         console.error('Error loading organizations for schedules filter:', error);
@@ -241,34 +279,56 @@ async function loadScheduleCard1C(scheduleCode) {
 
         const firstSchedule = schedules[0];
 
-        // Show organizations info
+        // Show organizations info - collapsible dropdown
         const orgInfoSection = document.getElementById('schedule-organization-info');
         const orgElement = document.getElementById('schedule-card-organization');
         if (orgInfoSection && orgElement) {
             const organizations = firstSchedule.organizations || [];
 
             if (organizations.length > 0) {
-                let orgsHTML = '';
-                organizations.forEach((org, index) => {
-                    orgsHTML += `
-                        <div class="alert alert-info" style="margin-bottom: ${index < organizations.length - 1 ? '8px' : '0'}; padding: 8px 12px;">
-                            <strong>${org.organization_name || 'Название не указано'}</strong>
-                            ${org.organization_bin ? `<br><small>БИН: ${org.organization_bin}</small>` : ''}
+                const orgListItems = organizations.map(org => `
+                    <div class="org-dropdown-item">
+                        <span class="org-name">${org.organization_name || 'Название не указано'}</span>
+                        ${org.organization_bin ? `<span class="org-bin">БИН: ${org.organization_bin}</span>` : ''}
+                    </div>
+                `).join('');
+                
+                const countText = organizations.length === 1 
+                    ? '1 организация' 
+                    : organizations.length < 5 
+                        ? `${organizations.length} организации` 
+                        : `${organizations.length} организаций`;
+                
+                orgElement.innerHTML = `
+                    <details class="org-collapsible">
+                        <summary class="org-collapsible-header">
+                            <span class="org-count">${countText}</span>
+                            <span class="org-toggle-icon">▼</span>
+                        </summary>
+                        <div class="org-collapsible-content">
+                            ${orgListItems}
                         </div>
-                    `;
-                });
-                orgElement.innerHTML = orgsHTML;
+                    </details>
+                `;
                 orgInfoSection.style.display = 'block';
             } else if (firstSchedule.organization_name || firstSchedule.organization_bin) {
                 orgElement.innerHTML = `
-                    <div class="alert alert-info" style="margin: 0; padding: 8px 12px;">
-                        <strong>${firstSchedule.organization_name || 'Название не указано'}</strong>
-                        ${firstSchedule.organization_bin ? `<br><small>БИН: ${firstSchedule.organization_bin}</small>` : ''}
-                    </div>
+                    <details class="org-collapsible">
+                        <summary class="org-collapsible-header">
+                            <span class="org-count">1 организация</span>
+                            <span class="org-toggle-icon">▼</span>
+                        </summary>
+                        <div class="org-collapsible-content">
+                            <div class="org-dropdown-item">
+                                <span class="org-name">${firstSchedule.organization_name || 'Название не указано'}</span>
+                                ${firstSchedule.organization_bin ? `<span class="org-bin">БИН: ${firstSchedule.organization_bin}</span>` : ''}
+                            </div>
+                        </div>
+                    </details>
                 `;
                 orgInfoSection.style.display = 'block';
             } else {
-                orgElement.innerHTML = '<div class="alert alert-warning" style="margin: 0; padding: 8px 12px;"><em>Информация об организациях недоступна</em></div>';
+                orgElement.innerHTML = '<div class="org-empty">Информация об организациях недоступна</div>';
                 orgInfoSection.style.display = 'block';
             }
         }
@@ -291,10 +351,10 @@ async function loadScheduleCard1C(scheduleCode) {
             checkOutElement.readOnly = false;
         }
 
-        // Hide description field for 1C schedules
-        const descriptionElement = document.getElementById('schedule-card-description');
-        if (descriptionElement) {
-            descriptionElement.closest('.form-group').style.display = 'none';
+        // Hide description section for 1C schedules
+        const descriptionSection = document.getElementById('schedule-description-section');
+        if (descriptionSection) {
+            descriptionSection.style.display = 'none';
         }
 
         // Display work dates from 1C
@@ -979,10 +1039,52 @@ async function handleScheduleAssignment() {
     }
 }
 
+// ==================== PAGINATION ====================
+
+// Render pagination controls
+function renderSchedulesPagination() {
+    const container = document.getElementById('schedules-pagination');
+    if (!container) return;
+
+    // If only one page, hide pagination
+    if (schedulesTotalPages <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    const prevBtn = container.querySelector('#schedules-prev');
+    const nextBtn = container.querySelector('#schedules-next');
+    const pageInfo = container.querySelector('#schedules-page-info');
+
+    if (pageInfo) {
+        pageInfo.textContent = `Страница ${schedulesCurrentPage} из ${schedulesTotalPages}`;
+    }
+
+    if (prevBtn) {
+        prevBtn.disabled = schedulesCurrentPage <= 1;
+        prevBtn.onclick = () => goToSchedulesPage(schedulesCurrentPage - 1);
+    }
+
+    if (nextBtn) {
+        nextBtn.disabled = schedulesCurrentPage >= schedulesTotalPages;
+        nextBtn.onclick = () => goToSchedulesPage(schedulesCurrentPage + 1);
+    }
+}
+
+// Go to specific page
+function goToSchedulesPage(page) {
+    if (page < 1 || page > schedulesTotalPages) return;
+    loadSchedules(page);
+}
+
 // Export to window for global access
 window.initSchedulesSection = initSchedulesSection;
 window.loadSchedules = loadSchedules;
 window.displaySchedules = displaySchedules;
+window.renderSchedulesPagination = renderSchedulesPagination;
+window.goToSchedulesPage = goToSchedulesPage;
 window.openScheduleCard = openScheduleCard;
 window.initScheduleCardSection = initScheduleCardSection;
 window.loadScheduleCard1C = loadScheduleCard1C;

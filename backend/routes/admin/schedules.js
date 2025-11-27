@@ -856,58 +856,85 @@ router.get('/1c', async (req, res) => {
  */
 router.get('/1c/list', async (req, res) => {
     try {
-        const schedules = await db.queryRows(`
-            SELECT
-                ws.schedule_name,
-                ws.schedule_code,
-                COUNT(*) as work_days_count,
-                MIN(ws.work_date) as start_date,
-                MAX(ws.work_date) as end_date,
-                AVG(ws.work_hours) as avg_hours,
-                MAX(ws.created_at) as last_updated
-            FROM work_schedules_1c ws
-            GROUP BY ws.schedule_name, ws.schedule_code
-            ORDER BY ws.schedule_name
-        `);
-        
-        // Get organizations for each schedule
-        const schedulesWithOrgs = await Promise.all(schedules.map(async (schedule) => {
-            // First, try to get organizations from schedule_organizations table
-            let organizations = await db.queryRows(`
-                SELECT DISTINCT
-                    d.object_company as organization_name,
-                    so.organization_bin
-                FROM schedule_organizations so
-                JOIN departments d ON so.organization_bin = d.object_bin
-                WHERE so.schedule_code = $1
-                ORDER BY organization_name, organization_bin
-            `, [schedule.schedule_code]);
+        // Parse pagination parameters
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+        const offset = (page - 1) * limit;
 
-            // Fallback: if no organizations found in schedule_organizations, use old logic
-            if (organizations.length === 0) {
-                organizations = await db.queryRows(`
-                    SELECT
-                        d.object_company as organization_name,
-                        d.object_bin as organization_bin,
-                        COUNT(*) as employee_count
-                    FROM employee_schedule_assignments esa
-                    JOIN employees e ON esa.employee_id = e.id
-                    JOIN departments d ON e.object_code = d.object_code
-                    WHERE esa.schedule_code = $1
-                        AND d.object_bin IS NOT NULL
-                        AND d.object_company IS NOT NULL
-                    GROUP BY d.object_company, d.object_bin
-                    ORDER BY employee_count DESC, organization_name
-                `, [schedule.schedule_code]);
+        // Get total count for pagination
+        const countResult = await db.queryRow(`
+            SELECT COUNT(DISTINCT schedule_code) as total
+            FROM work_schedules_1c
+        `);
+        const total = parseInt(countResult.total);
+        const totalPages = Math.ceil(total / limit);
+
+        // Get unique organizations dictionary (one query for all)
+        const orgsResult = await db.queryRows(`
+            SELECT DISTINCT
+                so.organization_bin,
+                d.object_company as organization_name
+            FROM schedule_organizations so
+            JOIN departments d ON so.organization_bin = d.object_bin
+            WHERE d.object_company IS NOT NULL
+            ORDER BY d.object_company
+        `);
+
+        // Build organizations dictionary: { bin: name }
+        const organizations = {};
+        orgsResult.forEach(org => {
+            organizations[org.organization_bin] = org.organization_name;
+        });
+
+        // Optimized single query with CTE - eliminates N+1 problem
+        const schedules = await db.queryRows(`
+            WITH schedule_list AS (
+                SELECT
+                    ws.schedule_name,
+                    ws.schedule_code,
+                    COUNT(*) as work_days_count,
+                    MIN(ws.work_date) as start_date,
+                    MAX(ws.work_date) as end_date,
+                    AVG(ws.work_hours) as avg_hours,
+                    MAX(ws.created_at) as last_updated
+                FROM work_schedules_1c ws
+                GROUP BY ws.schedule_name, ws.schedule_code
+                ORDER BY ws.schedule_name
+                LIMIT $1 OFFSET $2
+            ),
+            schedule_orgs AS (
+                SELECT
+                    so.schedule_code,
+                    array_agg(DISTINCT so.organization_bin ORDER BY so.organization_bin) as org_bins
+                FROM schedule_organizations so
+                WHERE so.schedule_code IN (SELECT schedule_code FROM schedule_list)
+                GROUP BY so.schedule_code
+            )
+            SELECT
+                sl.schedule_name,
+                sl.schedule_code,
+                sl.work_days_count,
+                sl.start_date,
+                sl.end_date,
+                sl.avg_hours,
+                sl.last_updated,
+                COALESCE(orgs.org_bins, ARRAY[]::varchar[]) as org_bins
+            FROM schedule_list sl
+            LEFT JOIN schedule_orgs orgs ON sl.schedule_code = orgs.schedule_code
+            ORDER BY sl.schedule_name
+        `, [limit, offset]);
+
+        // Return optimized response format
+        res.json({
+            organizations,
+            schedules,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages
             }
-            
-            return {
-                ...schedule,
-                organizations: organizations
-            };
-        }));
-        
-        res.json(schedulesWithOrgs);
+        });
     } catch (error) {
         console.error('Error fetching 1C schedules list:', error);
         res.status(500).json({ error: 'Internal server error' });

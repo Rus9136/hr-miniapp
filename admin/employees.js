@@ -4,9 +4,18 @@
 // Local reference to employees data
 let employeesData = [];
 
-// Load employees
-async function loadEmployees() {
-    console.log('loadEmployees called');
+// Pagination state
+let employeesCurrentPage = 1;
+let employeesTotalPages = 1;
+let employeesPageSize = 50;
+let employeesTotal = 0;
+
+// Debounce timer for search
+let employeesSearchTimeout = null;
+
+// Load employees with pagination and server-side filtering
+async function loadEmployees(page = 1) {
+    console.log('loadEmployees called, page:', page);
     const tbody = document.getElementById('employees-tbody');
     if (!tbody) {
         console.error('employees-tbody not found!');
@@ -15,18 +24,53 @@ async function loadEmployees() {
     tbody.innerHTML = '<tr><td colspan="7" class="loading">Загрузка данных...</td></tr>';
 
     try {
-        console.log('Fetching employees from:', `${ADMIN_API_BASE_URL}/admin/employees`);
-        const response = await fetch(`${ADMIN_API_BASE_URL}/admin/employees`);
+        // Get filter values
+        const search = document.getElementById('employees-search')?.value?.trim() || '';
+        const organization = document.getElementById('employees-company-filter')?.value || '';
+
+        // Build URL with query params
+        const params = new URLSearchParams({
+            page: page.toString(),
+            limit: employeesPageSize.toString()
+        });
+        if (search) params.append('search', search);
+        if (organization) params.append('organization', organization);
+
+        const url = `${ADMIN_API_BASE_URL}/admin/employees?${params}`;
+        console.log('Fetching employees from:', url);
+
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load employees');
 
-        employeesData = await response.json();
+        const data = await response.json();
+
+        // Handle new paginated response format
+        employeesData = data.employees || data;
+
+        // Update pagination state
+        if (data.pagination) {
+            employeesCurrentPage = data.pagination.page;
+            employeesTotalPages = data.pagination.totalPages;
+            employeesTotal = data.pagination.total;
+        }
+
         // Update global state
         if (window.AdminState) {
             window.AdminState.employees = employeesData;
         }
-        console.log('Loaded employees:', employeesData.length);
+
+        console.log('Loaded employees:', employeesData.length, 'of', employeesTotal);
         displayEmployees(employeesData);
-        document.getElementById('employees-total').textContent = employeesData.length;
+
+        // Update total counter
+        const totalEl = document.getElementById('employees-total');
+        if (totalEl) {
+            totalEl.textContent = employeesTotal;
+        }
+
+        // Render pagination
+        renderEmployeesPagination();
+
     } catch (error) {
         console.error('Error loading employees:', error);
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка загрузки данных</td></tr>';
@@ -80,20 +124,55 @@ function displayEmployees(employees) {
     });
 }
 
-// Filter employees by search term and organization
+// Filter employees - now uses server-side filtering with debounce
 function filterEmployees() {
-    const searchTerm = document.getElementById('employees-search').value || '';
-    const selectedBin = document.getElementById('employees-company-filter').value || '';
+    // Debounce search to avoid too many requests
+    if (employeesSearchTimeout) {
+        clearTimeout(employeesSearchTimeout);
+    }
 
-    const filtered = employeesData.filter(emp => {
-        const matchesSearch = emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            emp.table_number.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesBin = !selectedBin || emp.object_bin === selectedBin;
-        return matchesSearch && matchesBin;
-    });
+    employeesSearchTimeout = setTimeout(() => {
+        // Reset to page 1 when filtering
+        loadEmployees(1);
+    }, 300);
+}
 
-    displayEmployees(filtered);
-    document.getElementById('employees-total').textContent = filtered.length;
+// Render pagination controls
+function renderEmployeesPagination() {
+    const container = document.getElementById('employees-pagination');
+    if (!container) return;
+
+    // If only one page, hide pagination
+    if (employeesTotalPages <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    const prevBtn = container.querySelector('#employees-prev');
+    const nextBtn = container.querySelector('#employees-next');
+    const pageInfo = container.querySelector('#employees-page-info');
+
+    if (pageInfo) {
+        pageInfo.textContent = `Страница ${employeesCurrentPage} из ${employeesTotalPages}`;
+    }
+
+    if (prevBtn) {
+        prevBtn.disabled = employeesCurrentPage <= 1;
+        prevBtn.onclick = () => goToEmployeesPage(employeesCurrentPage - 1);
+    }
+
+    if (nextBtn) {
+        nextBtn.disabled = employeesCurrentPage >= employeesTotalPages;
+        nextBtn.onclick = () => goToEmployeesPage(employeesCurrentPage + 1);
+    }
+}
+
+// Go to specific page
+function goToEmployeesPage(page) {
+    if (page < 1 || page > employeesTotalPages) return;
+    loadEmployees(page);
 }
 
 // Open employee modal for editing
@@ -376,6 +455,8 @@ function initEmployeeModal() {
 window.loadEmployees = loadEmployees;
 window.displayEmployees = displayEmployees;
 window.filterEmployees = filterEmployees;
+window.renderEmployeesPagination = renderEmployeesPagination;
+window.goToEmployeesPage = goToEmployeesPage;
 window.openEmployeeModal = openEmployeeModal;
 window.closeEmployeeModal = closeEmployeeModal;
 window.saveEmployee = saveEmployee;

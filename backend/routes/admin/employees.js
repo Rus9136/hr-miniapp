@@ -10,38 +10,91 @@ const apiSync = require('../../utils/apiSync_pg');
 
 /**
  * GET /admin/employees
- * Получение списка всех сотрудников с информацией о подразделении и должности
+ * Получение списка сотрудников с пагинацией и фильтрацией
+ * Query params:
+ *   - page: номер страницы (default: 1)
+ *   - limit: записей на страницу (default: 50)
+ *   - search: поиск по ФИО или табельному номеру
+ *   - organization: фильтр по БИН организации
  */
-router.get('/', (req, res) => {
-    const query = `
-        SELECT 
-            e.*,
-            d.object_name as department_name,
-            p.staff_position_name as position_name,
-            e.object_bin,
-            e.iin,
-            ws.schedule_name as current_schedule
-        FROM employees e
-        LEFT JOIN departments d ON e.object_code = d.object_code
-        LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
-        LEFT JOIN (
-            SELECT DISTINCT ON (esa.employee_number) 
-                esa.employee_number,
-                ws1c.schedule_name
-            FROM employee_schedule_assignments esa
-            LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
-            WHERE esa.end_date IS NULL
-            ORDER BY esa.employee_number, esa.created_at DESC
-        ) ws ON e.table_number = ws.employee_number
-        ORDER BY e.full_name
-    `;
+router.get('/', async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+        const offset = (page - 1) * limit;
+        const search = req.query.search?.trim() || '';
+        const organization = req.query.organization?.trim() || '';
 
-    db.queryRows(query).then(rows => {
-        res.json(rows);
-    }).catch(err => {
+        // Build WHERE conditions
+        const conditions = [];
+        const params = [];
+        let paramIndex = 1;
+
+        if (search) {
+            conditions.push(`(e.full_name ILIKE $${paramIndex} OR e.table_number ILIKE $${paramIndex})`);
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        if (organization) {
+            conditions.push(`e.object_bin = $${paramIndex}`);
+            params.push(organization);
+            paramIndex++;
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // Count total records
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM employees e
+            ${whereClause}
+        `;
+        const countResult = await db.queryRow(countQuery, params);
+        const total = parseInt(countResult.total);
+        const totalPages = Math.ceil(total / limit);
+
+        // Get paginated data
+        const dataQuery = `
+            SELECT
+                e.*,
+                d.object_name as department_name,
+                p.staff_position_name as position_name,
+                e.object_bin,
+                e.iin,
+                ws.schedule_name as current_schedule
+            FROM employees e
+            LEFT JOIN departments d ON e.object_code = d.object_code
+            LEFT JOIN positions p ON e.staff_position_code = p.staff_position_code
+            LEFT JOIN (
+                SELECT DISTINCT ON (esa.employee_number)
+                    esa.employee_number,
+                    ws1c.schedule_name
+                FROM employee_schedule_assignments esa
+                LEFT JOIN work_schedules_1c ws1c ON esa.schedule_code = ws1c.schedule_code
+                WHERE esa.end_date IS NULL
+                ORDER BY esa.employee_number, esa.created_at DESC
+            ) ws ON e.table_number = ws.employee_number
+            ${whereClause}
+            ORDER BY e.full_name
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+
+        const employees = await db.queryRows(dataQuery, [...params, limit, offset]);
+
+        res.json({
+            employees,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages
+            }
+        });
+    } catch (err) {
         console.error('Error fetching employees:', err);
         res.status(500).json({ error: 'Internal server error' });
-    });
+    }
 });
 
 /**

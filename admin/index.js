@@ -175,14 +175,6 @@ function switchSection(sectionName) {
         case 'upload':
             initUploadSection();
             break;
-
-        case 'cron-scheduler':
-            if (typeof initCronSchedulerSection === 'function') {
-                initCronSchedulerSection();
-            } else {
-                console.error('CRON Scheduler script not loaded');
-            }
-            break;
     }
 }
 
