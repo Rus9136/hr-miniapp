@@ -576,9 +576,12 @@ async function handleRegularLogin(e) {
                 return;
             }
             
+            // Save admin session for page refresh
+            saveSession(window.currentEmployee);
+
             // Initialize navigation for admin
             initializeNavigation();
-            
+
             // Switch to admin panel
             const adminScreen = document.getElementById('adminScreen');
             showScreen('admin', adminScreen);
@@ -1547,12 +1550,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('🔄 Restoring session for:', savedEmployee.fullName);
         window.currentEmployee = savedEmployee;
 
-        // Update UI with restored employee data
-        document.getElementById('menuEmployeeName').textContent = savedEmployee.fullName;
-        document.getElementById('employeeName').textContent = savedEmployee.fullName;
-
         // Initialize navigation for restored session
         initializeNavigation();
+
+        // Check if this is admin session
+        if (savedEmployee.tableNumber === 'admin12qw') {
+            console.log('🔄 Restoring ADMIN session');
+            const adminScreen = document.getElementById('adminScreen');
+            showScreen('admin', adminScreen);
+
+            // Reinitialize admin panel
+            if (window.initAdminPanel) {
+                window.initAdminPanel();
+            }
+            console.log('✅ Admin session restored successfully');
+            return;
+        }
+
+        // Regular employee - update UI and show menu
+        document.getElementById('menuEmployeeName').textContent = savedEmployee.fullName;
+        document.getElementById('employeeName').textContent = savedEmployee.fullName;
 
         // Show menu screen instead of login
         showScreen('menu', menuScreen);

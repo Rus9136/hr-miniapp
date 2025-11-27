@@ -9,7 +9,7 @@ const apiSync = require('../utils/apiSync_pg');
 
 // Конфигурация из переменных окружения
 const CRON_ENABLED = process.env.CRON_TIMESHEET_ENABLED === 'true';
-const CRON_SCHEDULE = process.env.CRON_TIMESHEET_SCHEDULE || '0 9,21 * * *'; // Каждые 12 часов: 09:00 и 21:00
+const CRON_SCHEDULE = process.env.CRON_TIMESHEET_SCHEDULE || '0 5,10 * * *'; // 10:00 и 15:00 по Asia/Almaty (05:00 и 10:00 UTC)
 const CRON_DAYS_BACK = parseInt(process.env.CRON_TIMESHEET_DAYS_BACK || '2', 10); // Загружать последние 2 дня
 
 let cronTask = null;
