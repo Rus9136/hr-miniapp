@@ -138,9 +138,11 @@ class MultiAgentSystem {
             NarrativeAgent: {
                 name: 'NarrativeAgent',
                 description: 'Бизнес-консультант для управляющего',
-                data_fields: ['all_data', 'agent_results'],
+                data_fields: ['all_data', 'agent_results', 'department_info'],
                 default_prompt: `Ты — бизнес-консультант для управляющего рестораном.
 Составь итоговый отчёт и резюме на основе аналитики по продажам, персоналу, отзывам и рекомендациям.
+
+Информация о подразделении: {department_info}
 
 В начале — краткое резюме, затем подробности по разделам: продажи, персонал, отзывы, шаги по улучшению.`
             }
@@ -169,68 +171,134 @@ class MultiAgentSystem {
             return null;
         };
         
+        // Сначала извлекаем plan_vs_fact для получения actual_sales
+        const planVsFactData = extractData('plan_vs_fact');
+
+        // Создаем карту фактических продаж по датам из plan_vs_fact
+        const actualSalesMap = {};
+        if (planVsFactData && Array.isArray(planVsFactData)) {
+            planVsFactData.forEach(item => {
+                if (item.date && item.actual_sales !== undefined) {
+                    actualSalesMap[item.date] = item.actual_sales;
+                }
+            });
+            console.log(`[MultiAgent] 📊 Загружено ${Object.keys(actualSalesMap).length} фактических продаж из plan_vs_fact`);
+        }
+
         // Сжимаем прогнозы (оставляем только ключевые поля)
         const forecastData = extractData('forecast');
         if (forecastData && Array.isArray(forecastData)) {
-            compressed.forecast = forecastData.slice(0, 10).map(item => ({
-                date: item.date,
-                // Исправление: MCP API возвращает predicted_sales, а не plan/fact
-                plan: item.predicted_sales ? Math.round(item.predicted_sales / 1000) + 'k' : 'N/A',
-                fact: item.actual_sales ? Math.round(item.actual_sales / 1000) + 'k' : 'N/A'
-            }));
+            compressed.forecast = forecastData.slice(0, 10).map(item => {
+                // Берем actual_sales из plan_vs_fact если нет в forecast
+                const actualSales = item.actual_sales !== undefined
+                    ? item.actual_sales
+                    : actualSalesMap[item.date];
+
+                return {
+                    date: item.date,
+                    plan: item.predicted_sales ? Math.round(item.predicted_sales / 1000) + 'k' : 'N/A',
+                    // Используем actual_sales из forecast или из plan_vs_fact
+                    fact: actualSales !== undefined ? Math.round(actualSales / 1000) + 'k' : 'N/A'
+                };
+            });
+
+            // Логируем статистику
+            const withFact = compressed.forecast.filter(f => f.fact !== 'N/A').length;
+            console.log(`[MultiAgent] 📊 Forecast: ${compressed.forecast.length} дней, из них ${withFact} с фактическими данными`);
         }
-        
+
         // Сжимаем данные план/факт
-        const planVsFactData = extractData('plan_vs_fact');
         if (planVsFactData && Array.isArray(planVsFactData)) {
             compressed.plan_vs_fact = planVsFactData.slice(0, 10).map(item => ({
                 date: item.date,
-                // MCP API возвращает predicted_sales и actual_sales
                 plan: item.predicted_sales ? Math.round(item.predicted_sales / 1000) + 'k' : 'N/A',
                 fact: item.actual_sales ? Math.round(item.actual_sales / 1000) + 'k' : 'N/A',
                 deviation: item.error_percentage || item.deviation || 0
             }));
         }
-        
+
         // Сжимаем данные по ФОТ
         const payrollData = extractData('payroll');
         if (payrollData && Array.isArray(payrollData)) {
-            compressed.payroll = payrollData.slice(0, 20).map(item => ({
-                name: item.employee_name ? item.employee_name.split(' ')[0] : 'N/A',
-                shifts: item.shifts || 0,
-                payroll: Math.round((item.total_payroll || 0) / 1000) + 'k'
-            }));
+            compressed.payroll = payrollData.slice(0, 20).map(item => {
+                // MCP API возвращает payroll_total, а не total_payroll!
+                const totalPayroll = item.payroll_total || item.total_payroll || 0;
+
+                return {
+                    name: item.employee_name ? item.employee_name.split(' ')[0] : 'N/A',
+                    // shifts - это массив смен, передаем его полностью для анализа
+                    shifts: Array.isArray(item.shifts) ? item.shifts : [],
+                    // Месячный ФОТ сотрудника
+                    payroll: Math.round(totalPayroll / 1000) + 'k'
+                };
+            });
+
+            // Логируем статистику
+            const totalFOT = payrollData.reduce((sum, item) => sum + (item.payroll_total || item.total_payroll || 0), 0);
+            console.log(`[MultiAgent] 💰 Payroll: ${compressed.payroll.length} сотрудников, общий ФОТ: ${Math.round(totalFOT / 1000)}k₸`);
         }
         
         // Сжимаем почасовые продажи
         const hourlySalesData = extractData('hourly_sales');
-        if (hourlySalesData && (Array.isArray(hourlySalesData) || (hourlySalesData.weekdays && hourlySalesData.weekends))) {
+        if (hourlySalesData) {
             compressed.hourly_sales = [];
-            
-            // Обработка нового формата с weekdays/weekends
-            if (hourlySalesData.weekdays && Array.isArray(hourlySalesData.weekdays)) {
-                compressed.hourly_sales.push(...hourlySalesData.weekdays.slice(0, 12).map(item => ({
+
+            // Функция для определения дня недели по дате (Asia/Almaty)
+            const getDayInfo = (dateStr) => {
+                if (!dateStr) return { day: 'unknown', isWeekend: false };
+                const date = new Date(dateStr + 'T12:00:00+05:00'); // Asia/Almaty UTC+5
+                const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return {
+                    day: days[dayOfWeek],
+                    isWeekend: dayOfWeek === 0 || dayOfWeek === 6 // Суббота или воскресенье
+                };
+            };
+
+            // Обработка записи почасовых продаж
+            const processHourlySalesItem = (item) => {
+                const dayInfo = getDayInfo(item.date);
+                return {
+                    date: item.date || null,
+                    day: dayInfo.day,
                     h: item.hour,
-                    type: 'weekday',
-                    sales: item.sales ? Math.round(item.sales / 1000) + 'k' : '0k'
-                })));
-            }
-            
-            if (hourlySalesData.weekends && Array.isArray(hourlySalesData.weekends)) {
-                compressed.hourly_sales.push(...hourlySalesData.weekends.slice(0, 12).map(item => ({
-                    h: item.hour,
-                    type: 'weekend',
-                    sales: item.sales ? Math.round(item.sales / 1000) + 'k' : '0k'
-                })));
-            }
-            
-            // Обработка старого формата (fallback)
+                    type: dayInfo.isWeekend ? 'weekend' : 'weekday',
+                    sales: item.sales_amount ? Math.round(item.sales_amount / 1000) + 'k' : '0k'
+                };
+            };
+
+            // НОВЫЙ ФОРМАТ: простой массив с данными по каждому дню
             if (Array.isArray(hourlySalesData)) {
-                compressed.hourly_sales = hourlySalesData.slice(0, 24).map(item => ({
-                    h: item.hour,
-                    wd: Math.round((item.weekday_avg || 0) / 1000) + 'k',
-                    we: Math.round((item.weekend_avg || 0) / 1000) + 'k'
-                }));
+                // Сортируем по дате и часу, берем все записи (не ограничиваем)
+                const sortedData = hourlySalesData
+                    .sort((a, b) => {
+                        if (a.date !== b.date) return a.date.localeCompare(b.date);
+                        return a.hour - b.hour;
+                    });
+
+                compressed.hourly_sales = sortedData.map(processHourlySalesItem);
+            }
+            // СТАРЫЙ ФОРМАТ (fallback): объект с weekdays/weekends
+            else if (hourlySalesData.weekdays || hourlySalesData.weekends) {
+                if (hourlySalesData.weekdays && Array.isArray(hourlySalesData.weekdays)) {
+                    compressed.hourly_sales.push(...hourlySalesData.weekdays.map(processHourlySalesItem));
+                }
+                if (hourlySalesData.weekends && Array.isArray(hourlySalesData.weekends)) {
+                    const existing = new Set(compressed.hourly_sales.map(i => `${i.date}-${i.h}`));
+                    const weekendItems = hourlySalesData.weekends
+                        .map(processHourlySalesItem)
+                        .filter(item => !existing.has(`${item.date}-${item.h}`));
+                    compressed.hourly_sales.push(...weekendItems);
+                }
+            }
+
+            // Логируем статистику по hourly_sales
+            const uniqueDates = [...new Set(compressed.hourly_sales.map(i => i.date).filter(d => d))];
+            console.log(`[MultiAgent] ⏰ Hourly sales: ${compressed.hourly_sales.length} записей за ${uniqueDates.length} дней`);
+            if (uniqueDates.length === 1) {
+                console.warn(`[MultiAgent] ⚠️ ВНИМАНИЕ: Почасовые продажи доступны только за 1 день (${uniqueDates[0]}). MCP API не вернул данные за весь период.`);
+            } else if (uniqueDates.length > 1) {
+                console.log(`[MultiAgent] ✅ Почасовые продажи за период: ${uniqueDates[0]} - ${uniqueDates[uniqueDates.length - 1]}`);
             }
         }
         
@@ -243,10 +311,25 @@ class MultiAgentSystem {
                 // Проверяем и text, и comment поля, увеличиваем лимит символов
                 text: (item.text || item.comment || '').substring(0, 300) // Увеличено до 300 символов
             }));
-            
+
             console.log(`[MultiAgent] 📊 Обработано отзывов: ${compressed.reviews.length} из ${reviewsData.length} доступных`);
         }
-        
+
+        // Обработка department_info для NarrativeAgent
+        const departmentInfoData = extractData('department_info');
+        if (departmentInfoData) {
+            compressed.department_info = {
+                name: departmentInfoData.object_name || 'N/A',
+                company: departmentInfoData.object_company || 'N/A',
+                hall_area: departmentInfoData.hall_area || null,
+                kitchen_area: departmentInfoData.kitchen_area || null,
+                seats_count: departmentInfoData.seats_count || null
+            };
+            console.log(`[MultiAgent] 🏢 Department info: ${compressed.department_info.name} (${compressed.department_info.company})`);
+        } else {
+            console.warn(`[MultiAgent] ⚠️ department_info отсутствует в MCP данных`);
+        }
+
         // КРИТИЧЕСКОЕ сжатие результатов агентов для NarrativeAgent
         if (data.agent_results) {
             compressed.agent_results = {};
