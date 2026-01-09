@@ -40,6 +40,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
             onload="console.log('📊 Chart.js loaded:', typeof Chart)"
             onerror="console.warn('⚠️ Chart.js failed to load')"></script>
+    <!-- SheetJS (xlsx) for Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+            onload="console.log('📊 SheetJS loaded:', typeof XLSX)"
+            onerror="console.warn('⚠️ SheetJS failed to load')"></script>
 </head>
 <body>
     <!-- Экран входа -->
@@ -513,7 +517,6 @@
                         <table class="admin-table">
                             <thead>
                                 <tr>
-                                    <th>Табельный номер</th>
                                     <th>ФИО</th>
                                     <th>Подразделение</th>
                                     <th>Должность</th>
@@ -590,7 +593,7 @@
                                     <th>Название</th>
                                     <th>ID IIKO</th>
                                     <th>Подразделений</th>
-                                    <th>Статус</th>
+                                    <th>Загрузка событий</th>
                                     <th style="width: 100px;">Действия</th>
                                 </tr>
                             </thead>
@@ -675,6 +678,9 @@
                                             <span class="spinner" style="display: none;">⏳</span>
                                         </button>
                                         <button id="clear-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                        <button id="export-late-employees-btn" class="btn btn--success btn--sm" style="margin-left: 10px;" disabled>
+                                            📥 Экспорт в Excel
+                                        </button>
                                     </div>
                                     <span class="total-count">Найдено: <span id="report-total">0</span> сотрудников</span>
                                 </div>
@@ -683,6 +689,7 @@
                                         <thead>
                                             <tr>
                                                 <th>Сотрудник</th>
+                                                <th>Организация</th>
                                                 <th>Подразделение</th>
                                                 <th>График</th>
                                                 <th>Время входа по графику</th>
@@ -711,6 +718,9 @@
                                             <span class="spinner" style="display: none;">⏳</span>
                                         </button>
                                         <button id="clear-off-schedule-report-btn" class="btn btn--outline btn--sm">Очистить</button>
+                                        <button id="export-off-schedule-btn" class="btn btn--success btn--sm" style="margin-left: 10px;" disabled>
+                                            📥 Экспорт в Excel
+                                        </button>
                                     </div>
                                     <span class="total-count">Найдено: <span id="off-schedule-total">0</span> сотрудников</span>
                                 </div>
@@ -1611,6 +1621,14 @@
                         </label>
                     </div>
 
+                    <div class="form-group">
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" id="org-load-events">
+                            <span class="checkbox-label-text">Загружать события</span>
+                        </label>
+                        <small class="form-text">Автоматическая загрузка событий входа/выхода по расписанию</small>
+                    </div>
+
                     <div class="form-actions">
                         <button type="button" id="saveOrganizationBtn" class="btn btn--primary">
                             Сохранить
@@ -1699,6 +1717,6 @@
     <script src="admin/upload.js?v=modular-v1.0&ts=20251125"></script>
     <script src="admin/organizations.js?v=modular-v1.0&ts=20251126"></script>
     <script src="admin/index.js?v=modular-v1.0&ts=20251125"></script>
-    <script src="ai-recommendations.js?v=OPENAI-FIX-v1.0&ts=20250715-1700"></script>
+    <script src="ai-recommendations.js?v=network-fix-v1.2&ts=20251128_2"></script>
 </body>
 </html>

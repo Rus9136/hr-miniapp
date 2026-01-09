@@ -12,6 +12,8 @@ let revenueToPayrollTabInitialized = false;
 // ==================== DATA STORAGE ====================
 let adminTimeEventsData = [];
 let revenueToPayrollChart = null;
+let lateEmployeesData = [];
+let offScheduleData = [];
 
 // ==================== MAIN REPORTS SECTION INIT ====================
 
@@ -267,10 +269,12 @@ function initLateEmployeesTab() {
     const generateBtn = document.getElementById('generate-report-btn');
     const clearBtn = document.getElementById('clear-report-btn');
     const orgFilter = document.getElementById('report-organization-filter');
+    const exportBtn = document.getElementById('export-late-employees-btn');
 
     if (generateBtn) generateBtn.addEventListener('click', generateLateEmployeesReport);
     if (clearBtn) clearBtn.addEventListener('click', clearReportFilters);
     if (orgFilter) orgFilter.addEventListener('change', onReportOrganizationChange);
+    if (exportBtn) exportBtn.addEventListener('click', exportLateEmployeesToExcel);
 
     lateEmployeesTabInitialized = true;
     clearReportTable();
@@ -349,7 +353,7 @@ async function generateLateEmployeesReport() {
     if (generateBtn) generateBtn.disabled = true;
 
     const tbody = document.getElementById('reports-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading">Формирование отчета...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading">Формирование отчета...</td></tr>';
 
     const params = new URLSearchParams();
     const date = document.getElementById('report-date-filter')?.value;
@@ -365,15 +369,23 @@ async function generateLateEmployeesReport() {
         if (!response.ok) throw new Error('Failed to generate late employees report');
 
         const result = await response.json();
-        displayLateEmployeesReport(result.data);
-        
+        lateEmployeesData = result.data || [];
+        displayLateEmployeesReport(lateEmployeesData);
+
         const totalEl = document.getElementById('report-total');
         if (totalEl) totalEl.textContent = result.total_count;
+
+        // Управление кнопкой экспорта
+        const exportBtn = document.getElementById('export-late-employees-btn');
+        if (exportBtn) exportBtn.disabled = lateEmployeesData.length === 0;
     } catch (error) {
         console.error('Error generating late employees report:', error);
-        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">Ошибка формирования отчета</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #dc3545;">Ошибка формирования отчета</td></tr>';
         const totalEl = document.getElementById('report-total');
         if (totalEl) totalEl.textContent = '0';
+        lateEmployeesData = [];
+        const exportBtn = document.getElementById('export-late-employees-btn');
+        if (exportBtn) exportBtn.disabled = true;
     } finally {
         if (spinner) spinner.style.display = 'none';
         if (btnText) btnText.textContent = 'Сформировать отчет';
@@ -386,7 +398,7 @@ function displayLateEmployeesReport(employees) {
     if (!tbody) return;
 
     if (!employees || employees.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #28a745;">Опоздавших сотрудников не найдено</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #28a745;">Опоздавших сотрудников не найдено</td></tr>';
         return;
     }
 
@@ -398,6 +410,7 @@ function displayLateEmployeesReport(employees) {
         return `
             <tr>
                 <td>${employee.employee_name}</td>
+                <td>${employee.organization_name || '-'}</td>
                 <td>${employee.department_name}</td>
                 <td>${employee.schedule_name || '-'}</td>
                 <td>${employee.schedule_start_time || '-'}</td>
@@ -411,7 +424,7 @@ function displayLateEmployeesReport(employees) {
 
 function clearReportTable() {
     const tbody = document.getElementById('reports-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #6c757d;">Выберите дату и нажмите "Сформировать отчет"</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #6c757d;">Выберите дату и нажмите "Сформировать отчет"</td></tr>';
     
     const totalEl = document.getElementById('report-total');
     if (totalEl) totalEl.textContent = '0';
@@ -422,13 +435,18 @@ function clearReportFilters() {
     const dateFilter = document.getElementById('report-date-filter');
     const orgFilter = document.getElementById('report-organization-filter');
     const deptFilter = document.getElementById('report-department-filter');
-    
+
     if (dateFilter) dateFilter.value = today;
     if (orgFilter) orgFilter.value = '';
     if (deptFilter) deptFilter.value = '';
-    
+
     loadDepartmentsForReports();
     clearReportTable();
+
+    // Очищаем данные экспорта
+    lateEmployeesData = [];
+    const exportBtn = document.getElementById('export-late-employees-btn');
+    if (exportBtn) exportBtn.disabled = true;
 }
 
 // ==================== TAB: OFF-SCHEDULE (Вне графика) ====================
@@ -440,9 +458,11 @@ function initOffScheduleTab() {
 
     const generateBtn = document.getElementById('load-off-schedule-report-btn');
     const clearBtn = document.getElementById('clear-off-schedule-report-btn');
+    const exportBtn = document.getElementById('export-off-schedule-btn');
 
     if (generateBtn) generateBtn.addEventListener('click', loadOffScheduleReport);
     if (clearBtn) clearBtn.addEventListener('click', clearOffScheduleReport);
+    if (exportBtn) exportBtn.addEventListener('click', exportOffScheduleToExcel);
 
     const dateInput = document.getElementById('off-schedule-date');
     if (dateInput) {
@@ -498,10 +518,18 @@ async function loadOffScheduleReport() {
         if (!response.ok) throw new Error('Failed to load report');
 
         const result = await response.json();
+        offScheduleData = result.records || [];
         displayOffScheduleReport(result);
+
+        // Управление кнопкой экспорта
+        const exportBtn = document.getElementById('export-off-schedule-btn');
+        if (exportBtn) exportBtn.disabled = offScheduleData.length === 0;
     } catch (error) {
         console.error('Error loading off-schedule report:', error);
         alert('Ошибка при загрузке отчета: ' + error.message);
+        offScheduleData = [];
+        const exportBtn = document.getElementById('export-off-schedule-btn');
+        if (exportBtn) exportBtn.disabled = true;
     } finally {
         if (generateBtn) generateBtn.disabled = false;
         if (spinner) spinner.style.display = 'none';
@@ -549,6 +577,11 @@ function clearOffScheduleReport() {
     if (totalSpan) totalSpan.textContent = '0';
     if (orgFilter) orgFilter.value = '';
     if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+    // Очищаем данные экспорта
+    offScheduleData = [];
+    const exportBtn = document.getElementById('export-off-schedule-btn');
+    if (exportBtn) exportBtn.disabled = true;
 }
 
 // ==================== TAB: PAYROLL OVERTIME (Перелимит ФОТ) ====================
@@ -1048,6 +1081,140 @@ function clearRevenueToPayrollReport() {
     if (dateTo) dateTo.value = today.toISOString().split('T')[0];
 }
 
+// ==================== EXCEL EXPORT FUNCTIONS ====================
+
+/**
+ * Экспорт отчёта "Опоздания" в Excel
+ */
+function exportLateEmployeesToExcel() {
+    console.log('exportLateEmployeesToExcel called, data length:', lateEmployeesData?.length);
+
+    if (typeof XLSX === 'undefined') {
+        alert('Библиотека Excel не загружена. Попробуйте обновить страницу.');
+        console.error('XLSX library not loaded');
+        return;
+    }
+
+    if (!lateEmployeesData || lateEmployeesData.length === 0) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+
+    try {
+        const headers = [
+            'Сотрудник',
+            'Организация',
+            'Подразделение',
+            'График',
+            'Время входа по графику',
+            'Время фактического входа',
+            'Время опоздания',
+            'Статус графика'
+        ];
+
+        const rows = lateEmployeesData.map(emp => [
+            emp.employee_name || '',
+            emp.organization_name || '-',
+            emp.department_name || '',
+            emp.schedule_name || '-',
+            emp.schedule_start_time || '-',
+            emp.actual_entry_time || '',
+            emp.late_time_formatted || '',
+            emp.is_off_schedule ? 'Вне графика' : 'По графику'
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+        // Устанавливаем ширину колонок
+        ws['!cols'] = [
+            { wch: 30 }, // Сотрудник
+            { wch: 25 }, // Организация
+            { wch: 25 }, // Подразделение
+            { wch: 20 }, // График
+            { wch: 20 }, // Время входа по графику
+            { wch: 25 }, // Время фактического входа
+            { wch: 18 }, // Время опоздания
+            { wch: 15 }  // Статус графика
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Опоздания');
+
+        const date = document.getElementById('report-date-filter')?.value || 'отчет';
+        XLSX.writeFile(wb, `Опоздания_${date}.xlsx`);
+        console.log('Excel file exported successfully');
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        alert('Ошибка при экспорте: ' + error.message);
+    }
+}
+
+/**
+ * Экспорт отчёта "Вне графика" в Excel
+ */
+function exportOffScheduleToExcel() {
+    console.log('exportOffScheduleToExcel called, data length:', offScheduleData?.length);
+
+    if (typeof XLSX === 'undefined') {
+        alert('Библиотека Excel не загружена. Попробуйте обновить страницу.');
+        console.error('XLSX library not loaded');
+        return;
+    }
+
+    if (!offScheduleData || offScheduleData.length === 0) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+
+    try {
+        const headers = [
+            'Дата',
+            'Сотрудник',
+            'Должность',
+            'Организация',
+            'Подразделение',
+            'График работы',
+            'Значение графика',
+            'Время входа'
+        ];
+
+        const rows = offScheduleData.map(rec => [
+            rec.date || '',
+            rec.employeeName || '',
+            rec.positionName || '',
+            rec.organizationName || '',
+            rec.departmentName || '',
+            rec.scheduleName || '',
+            rec.scheduleType || '',
+            rec.entryTime || ''
+        ]);
+
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+        // Устанавливаем ширину колонок
+        ws['!cols'] = [
+            { wch: 12 }, // Дата
+            { wch: 30 }, // Сотрудник
+            { wch: 25 }, // Должность
+            { wch: 25 }, // Организация
+            { wch: 25 }, // Подразделение
+            { wch: 20 }, // График работы
+            { wch: 18 }, // Значение графика
+            { wch: 12 }  // Время входа
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Вне графика');
+
+        const date = document.getElementById('off-schedule-date')?.value || 'отчет';
+        XLSX.writeFile(wb, `Вне_графика_${date}.xlsx`);
+        console.log('Excel file exported successfully');
+    } catch (error) {
+        console.error('Error exporting to Excel:', error);
+        alert('Ошибка при экспорте: ' + error.message);
+    }
+}
+
 // ==================== EXPORTS ====================
 
 // Main section init
@@ -1072,12 +1239,14 @@ window.clearReportFilters = clearReportFilters;
 window.loadOrganizationsForReports = loadOrganizationsForReports;
 window.loadDepartmentsForReports = loadDepartmentsForReports;
 window.onReportOrganizationChange = onReportOrganizationChange;
+window.exportLateEmployeesToExcel = exportLateEmployeesToExcel;
 
 // Off-Schedule tab
 window.initOffScheduleTab = initOffScheduleTab;
 window.loadOffScheduleReport = loadOffScheduleReport;
 window.displayOffScheduleReport = displayOffScheduleReport;
 window.clearOffScheduleReport = clearOffScheduleReport;
+window.exportOffScheduleToExcel = exportOffScheduleToExcel;
 
 // Payroll Overtime tab
 window.initPayrollOvertimeTab = initPayrollOvertimeTab;
@@ -1090,5 +1259,11 @@ window.initRevenueToPayrollTab = initRevenueToPayrollTab;
 window.loadRevenueToPayrollReport = loadRevenueToPayrollReport;
 window.renderRevenueToPayrollReport = renderRevenueToPayrollReport;
 window.clearRevenueToPayrollReport = clearRevenueToPayrollReport;
+
+
+
+
+
+
 
 
